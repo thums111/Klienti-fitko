@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Fitko – evidence</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    --bg:#0f1115; --card:#1a1d24; --card2:#262a36; --text:#f2f4f8; --muted:#8b93a7;
+    --accent:#ff6b35; --accent2:#ffb627; --ok:#3ddc97; --danger:#ff4d6d; --r:18px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Roboto,sans-serif; }
+  body { min-height:100dvh; overscroll-behavior:none; }
+  button { font-family:inherit; cursor:pointer; }
+  .app { max-width:600px; margin:0 auto;
+    padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 110px); }
+
+  header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  header h1 { font-size:25px; font-weight:800; }
+  header h1 span { color:var(--accent); }
+  .icon-btn { background:var(--card); border:none; color:var(--text); width:44px; height:44px; border-radius:14px; font-size:20px; }
+
+  /* Záložky */
+  .tabs { display:grid; grid-template-columns:repeat(3,1fr); background:var(--card); border-radius:16px; padding:4px; margin-bottom:16px;
+    position:sticky; top:calc(env(safe-area-inset-top) + 6px); z-index:5; }
+  .tab { border:none; background:none; color:var(--muted); padding:12px 0; border-radius:12px; font-size:15px; font-weight:700; }
+  .tab.active { background:var(--accent); color:#fff; }
+  .page { display:none; } .page.active { display:block; }
+
+  /* Karty */
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .stat { background:var(--card); border-radius:var(--r); padding:14px 16px; }
+  .stat .num { font-size:24px; font-weight:800; line-height:1.15; }
+  .stat .lbl { font-size:13px; color:var(--muted); margin-top:3px; }
+  .stat.hl { background:linear-gradient(135deg,var(--accent),var(--accent2)); }
+  .stat.hl .lbl { color:rgba(255,255,255,.85); }
+  .stat.debt { background:rgba(255,77,109,.14); }
+  .stat.debt .num { color:var(--danger); }
+  .stat.wide { grid-column:span 2; }
+
+  .month-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .month-nav h2 { font-size:18px; text-transform:capitalize; }
+  .month-nav button { background:var(--card); border:none; color:var(--text); width:40px; height:40px; border-radius:12px; font-size:18px; }
+
+  .sec-title { font-size:16px; font-weight:700; margin:18px 4px 10px; display:flex; justify-content:space-between; align-items:center; }
+  .sec-title small { color:var(--muted); font-weight:500; font-size:13px; }
+
+  .item { display:flex; align-items:center; gap:12px; background:var(--card); border-radius:16px; padding:12px 14px; margin-bottom:8px; }
+  .item .main { flex:1; min-width:0; }
+  .item .t1 { font-weight:700; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .t2 { font-size:13px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .right { text-align:right; }
+  .item .price { font-weight:800; font-size:16px; }
+  .avatar { width:42px; height:42px; border-radius:14px; background:var(--card2); display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:17px; color:var(--accent2); flex-shrink:0; }
+  .badge { display:inline-block; border:none; border-radius:999px; padding:5px 10px; font-size:12px; font-weight:800; margin-top:4px; }
+  .badge.paid { background:rgba(61,220,151,.15); color:var(--ok); }
+  .badge.owe { background:rgba(255,77,109,.15); color:var(--danger); }
+  .debt-amt { color:var(--danger); font-weight:800; }
+  .small-btn { background:var(--ok); color:#0f1115; border:none; border-radius:12px; padding:9px 12px; font-weight:800; font-size:13px; }
+  .empty-msg { text-align:center; color:var(--muted); padding:24px 10px; background:var(--card); border-radius:16px; }
+
+  .filters { display:flex; gap:8px; margin-bottom:12px; }
+  .filters select { flex:1; }
+
+  .fab { position:fixed; left:16px; right:16px; bottom:calc(env(safe-area-inset-bottom) + 18px); max-width:568px; margin:0 auto;
+    height:62px; border:none; border-radius:20px; background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#fff; font-size:19px; font-weight:800; box-shadow:0 10px 30px rgba(255,107,53,.35); z-index:6; }
+
+  /* Spodní panely */
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:10; }
+  .overlay.open { display:block; }
+  .sheet { position:fixed; left:0; right:0; bottom:0; background:var(--card); z-index:11; border-radius:24px 24px 0 0;
+    padding:20px 16px calc(env(safe-area-inset-bottom) + 20px); max-width:600px; margin:0 auto;
+    transform:translateY(110%); transition:transform .25s ease; max-height:92dvh; overflow-y:auto; }
+  .sheet.open { transform:translateY(0); }
+  .sheet h3 { font-size:21px; margin-bottom:14px; }
+  .row { display:flex; gap:10px; margin-bottom:12px; } .row > * { flex:1; min-width:0; }
+  .field { margin-bottom:12px; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+  input, select, textarea { width:100%; background:var(--card2); border:1px solid transparent; color:var(--text); border-radius:14px;
+    padding:13px 14px; font-size:16px; font-family:inherit; color-scheme:dark; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); }
+  textarea { resize:none; height:72px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { background:var(--card2); border:2px solid transparent; color:var(--text); border-radius:999px; padding:10px 16px; font-size:15px; font-weight:600; }
+  .chip.sel { border-color:var(--accent); background:rgba(255,107,53,.15); }
+  .chip.sel.green { border-color:var(--ok); background:rgba(61,220,151,.15); }
+  .chip.sel.red { border-color:var(--danger); background:rgba(255,77,109,.15); }
+  .btn { display:block; width:100%; height:54px; border:none; border-radius:16px; font-size:17px; font-weight:700; margin-top:8px; text-align:center; line-height:54px; text-decoration:none; }
+  .btn.primary { background:var(--accent); color:#fff; }
+  .btn.ghost { background:var(--card2); color:var(--text); }
+  .btn.green { background:var(--ok); color:#0f1115; }
+  .btn.danger { background:rgba(255,77,109,.15); color:var(--danger); }
+  .hint { font-size:13px; color:var(--muted); line-height:1.5; margin:4px 2px 10px; }
+  .detail-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
+  .detail-stats div { background:var(--card2); border-radius:14px; padding:10px; text-align:center; }
+  .detail-stats b { display:block; font-size:18px; }
+  .detail-stats small { font-size:12px; color:var(--muted); }
+  .detail-stats .red b { color:var(--danger); }
+
+  .toast { position:fixed; left:50%; top:calc(env(safe-area-inset-top) + 14px); transform:translateX(-50%) translateY(-160%);
+    background:var(--ok); color:#0f1115; font-weight:700; padding:12px 20px; border-radius:14px; transition:transform .25s; z-index:30; }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>💪 Fitko <span>evidence</span></h1>
+    <button class="icon-btn" id="btnSettings" aria-label="Nastavení">⚙️</button>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-page="pOverview">Přehled</button>
+    <button class="tab" data-page="pVisits">Návštěvy</button>
+    <button class="tab" data-page="pClients">Klienti</button>
+  </div>
+
+  <!-- PŘEHLED -->
+  <section class="page active" id="pOverview">
+    <div class="month-nav">
+      <button id="mPrev">‹</button><h2 id="mTitle"></h2><button id="mNext">›</button>
+    </div>
+    <div class="stats">
+      <div class="stat hl"><div class="num" id="sEarned">0</div><div class="lbl">vybráno za měsíc</div></div>
+      <div class="stat"><div class="num" id="sCount">0</div><div class="lbl">návštěv za měsíc</div></div>
+      <div class="stat"><div class="num" id="sHours">0</div><div class="lbl">odcvičeno za měsíc</div></div>
+      <div class="stat"><div class="num" id="sClients">0</div><div class="lbl">různých klientů</div></div>
+      <div class="stat debt wide"><div class="num" id="sDebt">0 Kč</div><div class="lbl">dluží celkem všichni klienti</div></div>
+    </div>
+
+    <div class="sec-title">Dnes <small id="todayLbl"></small></div>
+    <div id="todayList"></div>
+
+    <div class="sec-title">Kdo dluží</div>
+    <div id="debtorList"></div>
+  </section>
+
+  <!-- NÁVŠTĚVY -->
+  <section class="page" id="pVisits">
+    <div class="filters">
+      <select id="filterClient"><option value="">Všichni klienti</option></select>
+    </div>
+    <div class="chips" id="filterPay" style="margin-bottom:14px">
+      <button class="chip sel" data-f="all">Vše</button>
+      <button class="chip" data-f="owe">Jen dlužné</button>
+      <button class="chip" data-f="paid">Jen zaplacené</button>
+    </div>
+    <div id="visitList"></div>
+  </section>
+
+  <!-- KLIENTI -->
+  <section class="page" id="pClients">
+    <input id="searchClient" placeholder="🔍 Hledat klienta…" style="margin-bottom:12px">
+    <div id="clientList"></div>
+  </section>
+</div>
+
+<button class="fab" id="fab">+ Nová návštěva</button>
+
+<div class="overlay" id="overlay"></div>
+
+<!-- Formulář návštěvy -->
+<div class="sheet" id="sheetVisit">
+  <h3 id="visitTitle">Nová návštěva</h3>
+  <div class="field"><label>Klient</label><select id="vClient"></select></div>
+  <div class="row">
+    <div><label>Datum</label><input type="date" id="vDate"></div>
+    <div><label>Čas</label><input type="time" id="vTime"></div>
+  </div>
+  <div class="row">
+    <div><label>Doba cvičení (min)</label><input type="number" inputmode="numeric" id="vDuration" min="0" step="5"></div>
+    <div><label>Cena (Kč)</label><input type="number" inputmode="numeric" id="vPrice" min="0" step="10"></div>
+  </div>
+  <div class="field"><label>Platba</label>
+    <div class="chips" id="vPaid">
+      <button class="chip green" data-v="1">✅ Zaplaceno</button>
+      <button class="chip red" data-v="0">⏳ Dluží</button>
+    </div>
+  </div>
+  <div class="field" id="vMethodWrap"><label>Způsob platby</label>
+    <div class="chips" id="vMethod">
+      <button class="chip" data-v="Hotově">💵 Hotově</button>
+      <button class="chip" data-v="Převod">🏦 Převod</button>
+      <button class="chip" data-v="Karta">💳 Karta</button>
+    </div>
+  </div>
+  <div class="field"><label>Poznámka (co se cvičilo, váhy…)</label><textarea id="vNote"></textarea></div>
+  <button class="btn primary" id="vSave">Uložit</button>
+  <button class="btn danger" id="vDelete">Smazat návštěvu</button>
+  <button class="btn ghost" data-close>Zrušit</button>
+</div>
+
+<!-- Formulář klienta -->
+<div class="sheet" id="sheetClient">
+  <h3 id="clientTitle">Nový klient</h3>
+  <div class="field"><label>Jméno a příjmení</label><input id="cName" autocomplete="off"></div>
+  <div class="field"><label>Telefon</label><input type="tel" id="cPhone"></div>
+  <div class="row">
+    <div><label>Běžná cena (Kč)</label><input type="number" inputmode="numeric" id="cPrice" min="0" step="10"></div>
+    <div><label>Běžná doba (min)</label><input type="number" inputmode="numeric" id="cDuration" min="0" step="5"></div>
+  </div>
+  <p class="hint">Cena a doba se pak automaticky předvyplní u každé nové návštěvy tohoto klienta.</p>
+  <div class="field"><label>Poznámka (cíl, zdravotní omezení…)</label><textarea id="cNote"></textarea></div>
+  <button class="btn primary" id="cSave">Uložit klienta</button>
+  <button class="btn ghost" data-close>Zrušit</button>
+</div>
+
+<!-- Detail klienta -->
+<div class="sheet" id="sheetDetail">
+  <h3 id="dName"></h3>
+  <p class="hint" id="dInfo"></p>
+  <div class="detail-stats" id="dStats"></div>
+  <a class="btn ghost" id="dCall">📞 Zavolat</a>
+  <button class="btn green" id="dPayAll">Zaplatil vše</button>
+  <button class="btn primary" id="dAddVisit">+ Návštěva pro tohoto klienta</button>
+  <div class="sec-title">Historie návštěv</div>
+  <div id="dHistory"></div>
+  <button class="btn ghost" id="dEdit">✏️ Upravit klienta</button>
+  <button class="btn danger" id="dDelete">Smazat klienta</button>
+  <button class="btn ghost" data-close>Zavřít</button>
+</div>
+
+<!-- Nastavení -->
+<div class="sheet" id="sheetSettings">
+  <h3>Data a záloha</h3>
+  <p class="hint">Všechno je uložené jen v prohlížeči tohoto mobilu. Pravidelně si stahuj zálohu – kdyby se vymazala data prohlížeče, nahraješ ji zpět.</p>
+  <button class="btn primary" id="btnExport">⬇️ Stáhnout zálohu (JSON)</button>
+  <button class="btn ghost" id="btnImport">⬆️ Nahrát zálohu</button>
+  <button class="btn ghost" id="btnCsv">📊 Export návštěv pro Excel (CSV)</button>
+  <input type="file" id="fileImport" accept=".json,application/json" hidden>
+  <button class="btn danger" id="btnClear">🗑️ Smazat všechna data</button>
+  <button class="btn ghost" data-close>Zavřít</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =========================================================
+// 1) DATA – uložení v mobilu (localStorage)
+// =========================================================
+const KEY = 'fitko_evidence_v2';
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && Array.isArray(d.clients) && Array.isArray(d.visits)) return d;
+  } catch (e) {}
+  return { clients: [], visits: [] };
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch (e) { toast('Nepodařilo se uložit!', true); }
+}
+let db = load();
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+// =========================================================
+// 2) POMOCNÉ FUNKCE
+// =========================================================
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const MONTHS = ['leden','únor','březen','duben','květen','červen','červenec','srpen','září','říjen','listopad','prosinec'];
+const DOW = ['ne','po','út','st','čt','pá','so'];
+const money = n => (Number(n) || 0).toLocaleString('cs-CZ') + ' Kč';
+const fmtDate = s => { const d = parse(s); return `${DOW[d.getDay()]} ${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; };
+function dur(min) {
+  min = Number(min) || 0;
+  const h = Math.floor(min / 60), m = min % 60;
+  if (!h) return `${m} min`;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const client = id => db.clients.find(c => c.id === id);
+const clientName = id => client(id)?.name || '(smazaný klient)';
+const initials = n => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+const debtOf = cid => db.visits.filter(v => v.clientId === cid && !v.paid).reduce((s, v) => s + (Number(v.price) || 0), 0);
+const sortVisits = arr => [...arr].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+
+// Jeden řádek návštěvy – používá se na více místech
+function visitRow(v, showClient = true) {
+  return `<div class="item" data-visit="${v.id}">
+    <div class="main">
+      <div class="t1">${showClient ? esc(clientName(v.clientId)) : fmtDate(v.date)}</div>
+      <div class="t2">${showClient ? fmtDate(v.date) + ' · ' : ''}${esc(v.time || '')} · ${dur(v.duration)}${v.note ? ' · ' + esc(v.note) : ''}</div>
+    </div>
+    <div class="right">
+      <div class="price">${money(v.price)}</div>
+      <button class="badge ${v.paid ? 'paid' : 'owe'}" data-toggle="${v.id}">${v.paid ? '✓ ' + esc(v.method || 'zaplaceno') : 'dluží'}</button>
+    </div>
+  </div>`;
+}
+
+// =========================================================
+// 3) PŘEHLED
+// =========================================================
+let viewMonth = new Date(); viewMonth.setDate(1);
+
+function renderOverview() {
+  const prefix = `${viewMonth.getFullYear()}-${pad(viewMonth.getMonth() + 1)}`;
+  $('mTitle').textContent = `${MONTHS[viewMonth.getMonth()]} ${viewMonth.getFullYear()}`;
+  const mv = db.visits.filter(v => v.date.startsWith(prefix));
+
+  $('sEarned').textContent = money(mv.filter(v => v.paid).reduce((s, v) => s + (Number(v.price) || 0), 0));
+  $('sCount').textContent = mv.length;
+  $('sHours').textContent = dur(mv.reduce((s, v) => s + (Number(v.duration) || 0), 0));
+  $('sClients').textContent = new Set(mv.map(v => v.clientId)).size;
+  $('sDebt').textContent = money(db.visits.filter(v => !v.paid).reduce((s, v) => s + (Number(v.price) || 0), 0));
+
+  // Dnešní návštěvy
+  const today = ymd(new Date());
+  $('todayLbl').textContent = fmtDate(today);
+  const tv = sortVisits(db.visits.filter(v => v.date === today)).reverse();
+  $('todayList').innerHTML = tv.length ? tv.map(v => visitRow(v)).join('')
+    : '<div class="empty-msg">Dnes zatím žádná návštěva.</div>';
+
+  // Dlužníci
+  const debtors = db.clients.map(c => ({ c, debt: debtOf(c.id) })).filter(x => x.debt > 0).sort((a, b) => b.debt - a.debt);
+  $('debtorList').innerHTML = debtors.length ? debtors.map(({ c, debt }) => {
+    const n = db.visits.filter(v => v.clientId === c.id && !v.paid).length;
+    return `<div class="item" data-client="${c.id}">
+      <div class="avatar">${esc(initials(c.name))}</div>
+      <div class="main"><div class="t1">${esc(c.name)}</div><div class="t2">${n}× nezaplaceno</div></div>
+      <div class="right"><div class="debt-amt">${money(debt)}</div>
+        <button class="small-btn" data-payall="${c.id}" style="margin-top:4px">Zaplatil</button></div>
+    </div>`;
+  }).join('') : '<div class="empty-msg">Nikdo nic nedluží 🎉</div>';
+}
+
+// =========================================================
+// 4) NÁVŠTĚVY
+// =========================================================
+let payFilter = 'all';
+
+function renderVisits() {
+  const sel = $('filterClient'), cur = sel.value;
+  const sortedClients = [...db.clients].sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+  sel.innerHTML = '<option value="">Všichni klienti</option>' +
+    sortedClients.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  sel.value = client(cur) ? cur : '';
+
+  let list = db.visits;
+  if (sel.value) list = list.filter(v => v.clientId === sel.value);
+  if (payFilter === 'owe') list = list.filter(v => !v.paid);
+  if (payFilter === 'paid') list = list.filter(v => v.paid);
+  list = sortVisits(list);
+
+  if (!list.length) { $('visitList').innerHTML = '<div class="empty-msg">Žádné návštěvy.</div>'; return; }
+
+  // seskupení po měsících
+  let html = '', lastMonth = '';
+  list.forEach(v => {
+    const m = v.date.slice(0, 7);
+    if (m !== lastMonth) {
+      const mv = list.filter(x => x.date.startsWith(m));
+      const sum = mv.reduce((s, x) => s + (Number(x.price) || 0), 0);
+      const d = parse(v.date);
+      html += `<div class="sec-title" style="text-transform:capitalize">${MONTHS[d.getMonth()]} ${d.getFullYear()} <small>${mv.length}× · ${money(sum)}</small></div>`;
+      lastMonth = m;
+    }
+    html += visitRow(v);
+  });
+  $('visitList').innerHTML = html;
+}
+
+// =========================================================
+// 5) KLIENTI
+// =========================================================
+function renderClients() {
+  const q = $('searchClient').value.trim().toLowerCase();
+  const list = db.clients.filter(c => c.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+  if (!db.clients.length) {
+    $('clientList').innerHTML = '<div class="empty-msg">Zatím žádní klienti.<br>Přidej prvního tlačítkem dole.</div>'; return;
+  }
+  $('clientList').innerHTML = list.map(c => {
+    const vs = db.visits.filter(v => v.clientId === c.id);
+    const last = sortVisits(vs)[0];
+    const debt = debtOf(c.id);
+    return `<div class="item" data-client="${c.id}">
+      <div class="avatar">${esc(initials(c.name))}</div>
+      <div class="main"><div class="t1">${esc(c.name)}</div>
+        <div class="t2">${vs.length}× návštěva${last ? ' · naposledy ' + fmtDate(last.date) : ''}</div></div>
+      <div class="right">${debt ? `<div class="debt-amt">${money(debt)}</div>` : '<span class="badge paid">OK</span>'}</div>
+    </div>`;
+  }).join('') || '<div class="empty-msg">Nikdo neodpovídá hledání.</div>';
+}
+
+function renderAll() {
+  renderOverview(); renderVisits(); renderClients();
+  if (detailId && $('sheetDetail').classList.contains('open')) renderDetail();
+}
+
+// =========================================================
+// 6) ZÁLOŽKY A HLAVNÍ TLAČÍTKO
+// =========================================================
+let currentPage = 'pOverview';
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === t.dataset.page));
+  currentPage = t.dataset.page;
+  $('fab').textContent = currentPage === 'pClients' ? '+ Nový klient' : '+ Nová návštěva';
+  window.scrollTo(0, 0);
+}));
+$('fab').addEventListener('click', () => currentPage === 'pClients' ? openClientForm() : openVisitForm());
+
+$('mPrev').addEventListener('click', () => { viewMonth.setMonth(viewMonth.getMonth() - 1); renderOverview(); });
+$('mNext').addEventListener('click', () => { viewMonth.setMonth(viewMonth.getMonth() + 1); renderOverview(); });
+$('filterClient').addEventListener('change', renderVisits);
+$('filterPay').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  payFilter = b.dataset.f;
+  $('filterPay').querySelectorAll('.chip').forEach(c => c.classList.toggle('sel', c === b));
+  renderVisits();
+});
+$('searchClient').addEventListener('input', renderClients);
+
+// =========================================================
+// 7) PANELY (otevírání / zavírání)
+// =========================================================
+function openSheet(id) {
+  document.querySelectorAll('.sheet').forEach(s => s.classList.remove('open'));
+  $('overlay').classList.add('open');
+  $(id).classList.add('open');
+  $(id).scrollTop = 0;
+}
+function closeSheets() {
+  $('overlay').classList.remove('open');
+  document.querySelectorAll('.sheet').forEach(s => s.classList.remove('open'));
+}
+$('overlay').addEventListener('click', closeSheets);
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeSheets));
+
+// Klikání v seznamech: přepnutí platby, zaplatil vše, otevření návštěvy / klienta
+document.body.addEventListener('click', e => {
+  const tog = e.target.closest('[data-toggle]');
+  if (tog) {
+    const v = db.visits.find(x => x.id === tog.dataset.toggle);
+    v.paid = !v.paid;
+    if (v.paid && !v.method) v.method = 'Hotově';
+    save(); renderAll(); toast(v.paid ? 'Označeno jako zaplacené' : 'Označeno jako dluh');
+    return;
+  }
+  const pa = e.target.closest('[data-payall]');
+  if (pa) { payAll(pa.dataset.payall); return; }
+  const vi = e.target.closest('[data-visit]');
+  if (vi) { openVisitForm(vi.dataset.visit); return; }
+  const ci = e.target.closest('[data-client]');
+  if (ci) { openDetail(ci.dataset.client); return; }
+});
+
+function payAll(cid) {
+  const debt = debtOf(cid);
+  if (!debt) return;
+  if (!confirm(`${clientName(cid)} zaplatil(a) celý dluh ${money(debt)}?`)) return;
+  db.visits.forEach(v => { if (v.clientId === cid && !v.paid) { v.paid = true; v.method = v.method || 'Hotově'; } });
+  save(); renderAll(); toast('Dluh vyrovnán ✓');
+}
+
+// =========================================================
+// 8) FORMULÁŘ NÁVŠTĚVY
+// =========================================================
+let editVisitId = null, vPaid = true, vMethod = 'Hotově';
+
+function setChips(wrapId, value) {
+  $(wrapId).querySelectorAll('.chip').forEach(c => c.classList.toggle('sel', c.dataset.v === String(value)));
+}
+function updatePayUI() {
+  setChips('vPaid', vPaid ? '1' : '0');
+  setChips('vMethod', vMethod);
+  $('vMethodWrap').style.display = vPaid ? '' : 'none';
+}
+$('vPaid').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; vPaid = b.dataset.v === '1'; updatePayUI(); });
+$('vMethod').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; vMethod = b.dataset.v; updatePayUI(); });
+
+// při výběru klienta předvyplnit jeho běžnou cenu a dobu
+$('vClient').addEventListener('change', () => {
+  if (editVisitId) return;
+  const c = client($('vClient').value);
+  if (c) { $('vPrice').value = c.price || ''; $('vDuration').value = c.duration || ''; }
+});
+
+function openVisitForm(id = null, presetClient = null) {
+  if (!db.clients.length) {
+    toast('Nejdřív přidej klienta', true);
+    openClientForm(); return;
+  }
+  editVisitId = id;
+  const sorted = [...db.clients].sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+  $('vClient').innerHTML = sorted.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+
+  if (id) {
+    const v = db.visits.find(x => x.id === id);
+    $('visitTitle').textContent = 'Upravit návštěvu';
+    if (!client(v.clientId)) $('vClient').insertAdjacentHTML('afterbegin', `<option value="${v.clientId}">(smazaný klient)</option>`);
+    $('vClient').value = v.clientId;
+    $('vDate').value = v.date; $('vTime').value = v.time || '';
+    $('vDuration').value = v.duration ?? ''; $('vPrice').value = v.price ?? '';
+    $('vNote').value = v.note || '';
+    vPaid = !!v.paid; vMethod = v.method || 'Hotově';
+    $('vDelete').style.display = '';
+  } else {
+    const now = new Date();
+    $('visitTitle').textContent = 'Nová návštěva';
+    // předvybrat klienta: zadaného, nebo naposledy zapsaného
+    const lastClient = sortVisits(db.visits)[0]?.clientId;
+    $('vClient').value = presetClient || (client(lastClient) ? lastClient : sorted[0].id);
+    const c = client($('vClient').value);
+    $('vDate').value = ymd(now);
+    $('vTime').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    $('vDuration').value = c?.duration || 60; $('vPrice').value = c?.price || '';
+    $('vNote').value = '';
+    vPaid = true; vMethod = 'Hotově';
+    $('vDelete').style.display = 'none';
+  }
+  updatePayUI();
+  openSheet('sheetVisit');
+}
+
+$('vSave').addEventListener('click', () => {
+  if (!$('vDate').value) { toast('Vyplň datum', true); return; }
+  const data = {
+    clientId: $('vClient').value,
+    date: $('vDate').value,
+    time: $('vTime').value,
+    duration: Number($('vDuration').value) || 0,
+    price: Number($('vPrice').value) || 0,
+    paid: vPaid,
+    method: vPaid ? vMethod : '',
+    note: $('vNote').value.trim()
+  };
+  if (editVisitId) Object.assign(db.visits.find(v => v.id === editVisitId), data);
+  else db.visits.push({ id: newId(), ...data });
+  save(); closeSheets(); renderAll();
+  toast(editVisitId ? 'Návštěva upravena' : 'Návštěva uložena 💪');
+});
+
+$('vDelete').addEventListener('click', () => {
+  if (!confirm('Opravdu smazat tuto návštěvu?')) return;
+  db.visits = db.visits.filter(v => v.id !== editVisitId);
+  save(); closeSheets(); renderAll(); toast('Smazáno');
+});
+
+// =========================================================
+// 9) FORMULÁŘ KLIENTA
+// =========================================================
+let editClientId = null;
+function openClientForm(id = null) {
+  editClientId = id;
+  const c = id ? client(id) : {};
+  $('clientTitle').textContent = id ? 'Upravit klienta' : 'Nový klient';
+  $('cName').value = c.name || ''; $('cPhone').value = c.phone || '';
+  $('cPrice').value = c.price ?? ''; $('cDuration').value = c.duration ?? 60;
+  $('cNote').value = c.note || '';
+  openSheet('sheetClient');
+}
+$('cSave').addEventListener('click', () => {
+  const name = $('cName').value.trim();
+  if (!name) { toast('Vyplň jméno', true); return; }
+  const data = { name, phone: $('cPhone').value.trim(), price: Number($('cPrice').value) || 0,
+    duration: Number($('cDuration').value) || 0, note: $('cNote').value.trim() };
+  if (editClientId) Object.assign(client(editClientId), data);
+  else db.clients.push({ id: newId(), ...data });
+  save(); closeSheets(); renderAll(); toast('Klient uložen');
+});
+
+// =========================================================
+// 10) DETAIL KLIENTA
+// =========================================================
+let detailId = null;
+function openDetail(id) { detailId = id; renderDetail(); openSheet('sheetDetail'); }
+function renderDetail() {
+  const c = client(detailId); if (!c) { closeSheets(); return; }
+  const vs = sortVisits(db.visits.filter(v => v.clientId === c.id));
+  const debt = debtOf(c.id);
+  const paidSum = vs.filter(v => v.paid).reduce((s, v) => s + (Number(v.price) || 0), 0);
+  const minutes = vs.reduce((s, v) => s + (Number(v.duration) || 0), 0);
+  $('dName').textContent = c.name;
+  $('dInfo').innerHTML = [c.phone && '📞 ' + esc(c.phone), c.price && 'běžně ' + money(c.price) + ' / ' + dur(c.duration), c.note && esc(c.note)]
+    .filter(Boolean).join('<br>') || 'Bez dalších údajů';
+  $('dStats').innerHTML = `
+    <div><b>${vs.length}</b><small>návštěv</small></div>
+    <div><b>${dur(minutes)}</b><small>celkem</small></div>
+    <div class="${debt ? 'red' : ''}"><b>${money(debt)}</b><small>dluží</small></div>
+    <div style="grid-column:span 3"><b>${money(paidSum)}</b><small>zaplaceno celkem</small></div>`;
+  $('dCall').style.display = c.phone ? '' : 'none';
+  $('dCall').href = 'tel:' + (c.phone || '').replace(/\s+/g, '');
+  $('dPayAll').style.display = debt ? '' : 'none';
+  $('dPayAll').textContent = `✅ Zaplatil vše (${money(debt)})`;
+  $('dHistory').innerHTML = vs.length ? vs.map(v => visitRow(v, false)).join('') : '<div class="empty-msg">Zatím žádné návštěvy.</div>';
+}
+$('dPayAll').addEventListener('click', () => payAll(detailId));
+$('dAddVisit').addEventListener('click', () => openVisitForm(null, detailId));
+$('dEdit').addEventListener('click', () => openClientForm(detailId));
+$('dDelete').addEventListener('click', () => {
+  const n = db.visits.filter(v => v.clientId === detailId).length;
+  if (!confirm(`Smazat klienta ${clientName(detailId)}${n ? ` i s jeho ${n} návštěvami` : ''}? Nejde to vrátit.`)) return;
+  db.visits = db.visits.filter(v => v.clientId !== detailId);
+  db.clients = db.clients.filter(c => c.id !== detailId);
+  save(); closeSheets(); renderAll(); toast('Klient smazán');
+});
+
+// =========================================================
+// 11) ZÁLOHA A EXPORT
+// =========================================================
+$('btnSettings').addEventListener('click', () => openSheet('sheetSettings'));
+
+function download(name, content, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('btnExport').addEventListener('click', () => {
+  download(`fitko-zaloha-${ymd(new Date())}.json`, JSON.stringify(db, null, 2), 'application/json');
+  toast('Záloha stažena');
+});
+$('btnCsv').addEventListener('click', () => {
+  const q = s => '"' + String(s ?? '').replace(/"/g, '""') + '"';
+  const rows = [['Klient','Datum','Čas','Doba (min)','Cena (Kč)','Zaplaceno','Způsob platby','Poznámka']];
+  sortVisits(db.visits).reverse().forEach(v => rows.push([clientName(v.clientId), v.date, v.time, v.duration, v.price, v.paid ? 'ano' : 'ne', v.method, v.note]));
+  // středník + BOM, aby to české Excel otevřel správně
+  download(`fitko-navstevy-${ymd(new Date())}.csv`, '\uFEFF' + rows.map(r => r.map(q).join(';')).join('\r\n'), 'text/csv');
+  toast('CSV staženo');
+});
+$('btnImport').addEventListener('click', () => $('fileImport').click());
+$('fileImport').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!Array.isArray(d.clients) || !Array.isArray(d.visits)) throw 0;
+      const cIds = new Set(db.clients.map(c => c.id)), vIds = new Set(db.visits.map(v => v.id));
+      let nc = 0, nv = 0;
+      d.clients.forEach(c => { if (c.id && c.name && !cIds.has(c.id)) { db.clients.push(c); nc++; } });
+      d.visits.forEach(v => { if (v.id && v.date && !vIds.has(v.id)) { db.visits.push(v); nv++; } });
+      save(); renderAll(); closeSheets();
+      toast(`Nahráno: ${nc} klientů, ${nv} návštěv`);
+    } catch (err) { toast('Neplatný soubor zálohy', true); }
+    e.target.value = '';
+  };
+  r.readAsText(file);
+});
+$('btnClear').addEventListener('click', () => {
+  if (!confirm('Opravdu smazat VŠECHNY klienty a návštěvy?')) return;
+  if (!confirm('Fakt? Bez zálohy to nepůjde vrátit.')) return;
+  db = { clients: [], visits: [] }; save(); renderAll(); closeSheets();
+});
+
+// =========================================================
+// 12) OZNÁMENÍ (toast)
+// =========================================================
+let toastTimer;
+function toast(msg, err) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.background = err ? 'var(--danger)' : 'var(--ok)';
+  t.style.color = err ? '#fff' : '#0f1115';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+renderAll();
+
+// =========================================================
+// 13) PWA – offline režim a trvalé úložiště
+// =========================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+// požádá prohlížeč, aby data aplikace nemazal při nedostatku místa
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+</script>
+</body>
+</html>
