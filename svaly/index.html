@@ -1,0 +1,1252 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1F5C73">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
+<title>Svaly v pohybu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: motion-lab stage (grid backdrop in cm) beside a live muscle-load readout; tabata timer band on top of the stage; stacks on phones */
+:root{
+  --bg:#EDF0EE; --surface:#F8FAF9; --ink:#18211F; --muted:#5A6764; --line:#CDD5D2;
+  --accent:#1F5C73; --grid:#DCE3E0; --machine:#8C9A97;
+  --limb:#C9D0CD; --limb-far:#B3BCB9;
+  --m0:#BCA6A0; --m1:#E39A2D; --m2:#C62F25;
+  --f-display:"Saira Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11181A; --surface:#182124; --ink:#E2E8E6; --muted:#93A19D; --line:#2B373A;
+  --accent:#6FB3CC; --grid:#1D282B; --machine:#56666A;
+  --limb:#3B494B; --limb-far:#2D383A;
+  --m0:#6B5855; --m1:#E8A23A; --m2:#F0533F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11181A; --surface:#182124; --ink:#E2E8E6; --muted:#93A19D; --line:#2B373A;
+  --accent:#6FB3CC; --grid:#1D282B; --machine:#56666A;
+  --limb:#3B494B; --limb-far:#2D383A;
+  --m0:#6B5855; --m1:#E8A23A; --m2:#F0533F; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body.tb-run .picker,body.tb-run .tb-setup .tb-row.cfg,body.tb-run .seqtxt{display:none}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1160px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px}
+header h1{font-family:var(--f-display);font-weight:700;font-size:clamp(2rem,6vw,3rem);line-height:1;letter-spacing:.01em;margin:0;text-transform:uppercase}
+header p{margin:.4rem 0 0;color:var(--muted);max-width:60ch}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--surface)}
+.seg button{font:600 1rem/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;border:none;background:none;color:var(--muted);padding:.55rem 1rem;border-radius:999px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+button:focus-visible,input:focus-visible,select:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.picker{display:grid;gap:10px}
+.group{display:grid;grid-template-columns:7.5rem minmax(0,1fr);gap:8px;align-items:start}
+@media (max-width:600px){.group{grid-template-columns:minmax(0,1fr);gap:4px}}
+.group h3{margin:0;padding-top:.45rem;font:600 .72rem/1.2 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{position:relative;font:600 .98rem/1 var(--f-display);letter-spacing:.05em;text-transform:uppercase;padding:.5rem .8rem;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.chip .n{display:inline-grid;place-items:center;min-width:1.25rem;height:1.25rem;margin-left:.4rem;border-radius:999px;background:var(--bg);color:var(--accent);font:500 .72rem/1 var(--f-mono)}
+.chip.in-seq{border-color:var(--accent)}
+
+.tb-setup{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:12px}
+.tb-row{display:flex;flex-wrap:wrap;align-items:end;gap:10px 14px}
+.preset{font:500 .85rem/1 var(--f-mono);padding:.45rem .65rem;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.preset[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.field{display:grid;gap:2px}
+.field label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.field input{width:5.2rem;font:500 1rem var(--f-mono);padding:.4rem .5rem;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.total{font:500 .95rem var(--f-mono);color:var(--muted);padding-bottom:.45rem}
+.total b{color:var(--ink);font-weight:500}
+.btn{font:600 1rem/1 var(--f-display);letter-spacing:.08em;text-transform:uppercase;padding:.7rem 1.2rem;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);cursor:pointer}
+.btn.ghost{background:none;color:var(--accent)}
+.check{display:flex;align-items:center;gap:6px;font-size:.9rem;color:var(--muted);padding-bottom:.6rem}
+.seqtxt{margin:0;font-size:.88rem;color:var(--muted)}
+.seqtxt b{color:var(--ink);font-weight:500}
+
+.layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:820px){.layout{grid-template-columns:minmax(0,1fr)}}
+
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;min-width:0}
+.band{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 14px;background:var(--line);color:var(--ink)}
+.band.work{background:var(--m2);color:var(--bg)}
+.band.rest{background:var(--accent);color:var(--bg)}
+.band.prep{background:var(--m1);color:var(--bg)}
+.band .ph{font:700 1.1rem/1 var(--f-display);letter-spacing:.1em;text-transform:uppercase}
+.band .sub{font-size:.85rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.band .tm{font:500 2rem/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.prog{height:4px;background:var(--line)}
+.prog i{display:block;height:100%;width:0;background:var(--ink);opacity:.55}
+
+.canvas-box{position:relative;aspect-ratio:4/3;max-width:100%}
+canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;left:12px;top:12px;right:12px;display:flex;flex-wrap:wrap;gap:6px;pointer-events:none}
+.pill{font:600 .8rem/1 var(--f-body);letter-spacing:.03em;padding:.4rem .6rem;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--ink)}
+.pill.ecc{border-color:var(--m1)}
+.pill.con{border-color:var(--m2)}
+.pill b{font-weight:600;color:var(--muted);margin-right:.3em}
+.viewtag{position:absolute;right:12px;bottom:10px;font:500 .7rem var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+.ctrl{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line)}
+.ctrl .play{width:44px;height:44px;border-radius:50%;border:none;background:var(--accent);color:var(--bg);cursor:pointer;display:grid;place-items:center;flex:none}
+.ctrl .play svg{width:18px;height:18px;fill:currentColor}
+.scrub{flex:1 1 160px;min-width:0;display:grid;gap:2px}
+.scrub label,.speed label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.speed{display:grid;gap:2px}
+select{font:500 .9rem var(--f-body);padding:.35rem .5rem;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+
+.angles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line)}
+.angles div{padding:10px 14px;display:grid;min-width:0}
+.angles div+div{border-left:1px solid var(--line)}
+.angles span{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.angles strong{font:500 1.35rem/1.2 var(--f-mono);font-variant-numeric:tabular-nums}
+
+.panel{display:grid;gap:14px;min-width:0}
+.panel h2{font:700 1.4rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.03em;margin:0}
+.list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:7px 10px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+.row:hover{background:var(--surface)}
+.row[aria-pressed="true"]{background:var(--surface);border-color:var(--accent)}
+.row .nm{font-weight:500;min-width:0}
+.row .tag{font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-left:.4em;white-space:nowrap}
+.row .pc{font:500 .9rem var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;min-width:3.5ch}
+.bar{grid-column:1/-1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:3px}
+
+.summary{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:10px}
+.summary p{margin:0;color:var(--muted);font-size:.88rem}
+.legend{display:grid;gap:4px}
+.legend .ramp{height:8px;border-radius:4px;background:linear-gradient(90deg,var(--m0),var(--m1),var(--m2))}
+.legend .lb{display:flex;justify-content:space-between;font:500 .75rem var(--f-mono);color:var(--muted)}
+.cue{margin:0;padding:12px 14px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 10px 10px 0;max-width:65ch}
+.cue b{display:block;font:700 .95rem/1.2 var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+.note{margin:0;font-size:.8rem;color:var(--muted);max-width:65ch}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Svaly v pohybu</h1>
+      <p>Vyber cvik nebo si poskládej tabatu a sleduj, které svaly pracují v každé fázi pohybu. Klepnutím na sval v seznamu ho zvýrazníš na postavě.</p>
+    </div>
+    <div class="seg" role="group" aria-label="Režim">
+      <button id="modeView" aria-pressed="true">Cviky</button>
+      <button id="modeTab" aria-pressed="false">Tabata</button>
+    </div>
+  </header>
+
+  <section class="tb-setup" id="tbSetup" hidden>
+    <div class="tb-row cfg" id="presets" aria-label="Předvolby intervalů"></div>
+    <div class="tb-row cfg">
+      <div class="field"><label for="tbWork">Práce (s)</label><input id="tbWork" type="number" min="5" max="600" step="5" value="20"></div>
+      <div class="field"><label for="tbRest">Pauza (s)</label><input id="tbRest" type="number" min="0" max="600" step="5" value="10"></div>
+      <div class="field"><label for="tbRounds">Kola</label><input id="tbRounds" type="number" min="1" max="60" step="1" value="8"></div>
+      <div class="total">Celkem <b id="tbTotal">4:00</b></div>
+    </div>
+    <div class="tb-row">
+      <button class="btn" id="tbStart">Start</button>
+      <button class="btn ghost" id="tbReset">Od začátku</button>
+      <label class="check"><input type="checkbox" id="tbSound" checked> Zvukové signály</label>
+    </div>
+    <p class="seqtxt" id="seqTxt"></p>
+  </section>
+
+  <div class="picker" id="picker"></div>
+
+  <div class="layout">
+    <section class="stage">
+      <div class="band" id="band" hidden>
+        <span class="ph" id="bandPh">Připrav se</span>
+        <span class="sub" id="bandSub"></span>
+        <span class="tm" id="bandTm">0:05</span>
+      </div>
+      <div class="prog" id="prog" hidden><i></i></div>
+      <div class="canvas-box">
+        <canvas id="cv" aria-label="Animace cviku se zvýrazněnými svaly"></canvas>
+        <div class="hud">
+          <span class="pill" id="phase">Výchozí poloha</span>
+          <span class="pill" id="info"></span>
+        </div>
+        <span class="viewtag" id="viewTag">Pohled z boku</span>
+      </div>
+      <div class="ctrl" id="ctrl">
+        <button class="play" id="play" aria-label="Pozastavit"></button>
+        <div class="scrub">
+          <label for="scrub">Průběh pohybu</label>
+          <input type="range" id="scrub" min="0" max="1000" value="0">
+        </div>
+        <div class="speed">
+          <label for="speed">Tempo</label>
+          <select id="speed">
+            <option value="0.35">Pomalu</option>
+            <option value="1" selected>Normálně</option>
+            <option value="1.6">Rychle</option>
+          </select>
+        </div>
+      </div>
+      <div class="angles">
+        <div><span id="aL0">Koleno</span><strong id="aV0">–</strong></div>
+        <div><span id="aL1">Kyčel</span><strong id="aV1">–</strong></div>
+        <div><span id="aL2">Loket</span><strong id="aV2">–</strong></div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <section class="summary" id="summary" hidden>
+        <h2>Souhrn tréninku</h2>
+        <p id="sumTxt"></p>
+        <ol class="list" id="sumList"></ol>
+      </section>
+      <h2>Zatížení svalů</h2>
+      <ol class="list" id="list"></ol>
+      <div class="legend">
+        <div class="ramp"></div>
+        <div class="lb"><span>0 %</span><span>50 %</span><span>100 %</span></div>
+      </div>
+      <p class="cue" id="cue"></p>
+      <p class="note">Hodnoty jsou orientační odhad relativního zapojení svalů podle typických EMG studií, ne přesné měření. U strojů se zatížení střídá mezi pravou a levou stranou; seznam ukazuje silnější stranu.</p>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+// ================= matematika =================
+const DEG = Math.PI / 180;
+const V = (x, y) => ({x, y});
+const add = (a, b) => V(a.x + b.x, a.y + b.y);
+const sub = (a, b) => V(a.x - b.x, a.y - b.y);
+const mul = (a, k) => V(a.x * k, a.y * k);
+const len = a => Math.hypot(a.x, a.y);
+const norm = a => mul(a, 1 / (len(a) || 1));
+const lerp = (a, b, t) => a + (b - a) * t;
+const lerpV = (a, b, t) => V(lerp(a.x, b.x, t), lerp(a.y, b.y, t));
+const H = deg => V(Math.cos(deg * DEG), Math.sin(deg * DEG));          // 0 = doprava, 90 = nahoru
+const upDir = deg => V(Math.sin(deg * DEG), Math.cos(deg * DEG));      // od svislice nahoru, + = dopředu
+const downDir = deg => V(Math.sin(deg * DEG), -Math.cos(deg * DEG));   // od svislice dolů, + = dopředu
+const rotCW = v => V(v.y, -v.x);
+const clamp01 = v => Math.max(0, Math.min(1, v));
+const ease = x => { x = clamp01(x); return x * x * (3 - 2 * x); };
+const r = (a, b, p, k = 1) => a + (b - a) * Math.pow(p, k);
+const angLerp = (a, b, k) => a + ((((b - a) % 360) + 540) % 360 - 180) * k;
+function bumpC(x, c, w, per = 1) { let m = (((x - c) % per) + per) % per; if (m > per / 2) m -= per; const d = Math.abs(m); return d >= w ? 0 : Math.pow(Math.cos(d / w * Math.PI / 2), 2); }
+function win(p, a, b) { return (p < a || p > b) ? 0 : Math.sin(Math.PI * (p - a) / (b - a)); }
+function ik(A, B, L1, L2, s) {
+  const d = sub(B, A); let D = len(d); const u = mul(d, 1 / D);
+  D = Math.min(Math.max(D, Math.abs(L1 - L2) + 0.01), L1 + L2 - 0.01);
+  const a = (L1 * L1 - L2 * L2 + D * D) / (2 * D), h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+  return add(add(A, mul(u, a)), mul(V(-u.y, u.x), s * h));
+}
+function angleAt(a, b, c) { const u = sub(a, b), v = sub(c, b); return Math.round(Math.acos(Math.max(-1, Math.min(1, (u.x * v.x + u.y * v.y) / (len(u) * len(v))))) / DEG); }
+const headFrom = (sh, dir) => { const neck = add(sh, mul(dir, 7)); return {neck, head: add(neck, mul(dir, 12))}; };
+const footHeel = (ankle, fd) => add(add(ankle, mul(fd, -5)), mul(rotCW(fd), 4));
+
+// ================= svaly =================
+const MUSCLE_NAMES = {
+  quads:'Čtyřhlavý sval stehenní', glutes:'Hýžďové svaly', hams:'Hamstringy (zadní stehno)', adductors:'Přitahovače stehna',
+  calves:'Lýtka', abs:'Břišní svaly (přímý)', obliques:'Šikmé břišní svaly', erectors:'Vzpřimovače páteře',
+  lats:'Široký sval zádový', chest:'Prsní sval', delts:'Deltový sval', biceps:'Biceps', triceps:'Triceps', forearms:'Předloktí (úchop)'
+};
+const SIDE_IDS = ['quads','glutes','hams','calves','abs','erectors','lats','chest','delts','biceps','triceps','forearms'];
+const FRONT_IDS = [...SIDE_IDS, 'adductors', 'obliques'];
+const SIDE_SHAPES = [
+  {id:'glutes',   seg:'thigh', t0:-0.2, t1:0.32, off:-6.5, w:15},
+  {id:'quads',    seg:'thigh', t0:0.12, t1:0.9,  off:3.2,  w:9},
+  {id:'hams',     seg:'thigh', t0:0.25, t1:0.88, off:-3.5, w:8},
+  {id:'calves',   seg:'shin',  t0:0.08, t1:0.55, off:-2.6, w:8},
+  {id:'abs',      seg:'torso', t0:0.08, t1:0.6,  off:-7,   w:8},
+  {id:'chest',    seg:'torso', t0:0.66, t1:0.92, off:-7.5, w:10},
+  {id:'erectors', seg:'torso', t0:0.04, t1:0.62, off:8,    w:7},
+  {id:'lats',     seg:'torso', t0:0.45, t1:0.86, off:6.5,  w:10},
+  {id:'delts',    seg:'uarm',  t0:-0.12,t1:0.38, off:0,    w:11},
+  {id:'biceps',   seg:'uarm',  t0:0.3,  t1:0.88, off:2,    w:6},
+  {id:'triceps',  seg:'uarm',  t0:0.28, t1:0.88, off:-2.2, w:6.5},
+  {id:'forearms', seg:'farm',  t0:0.05, t1:0.6,  off:0.6,  w:6.5},
+];
+const FRONT_LIMB_SHAPES = [
+  {id:'glutes',    seg:'thigh', t0:-0.18, t1:0.18, offIn:-6,  w:7},
+  {id:'quads',     seg:'thigh', t0:0.12,  t1:0.88, offIn:-0.8,w:10},
+  {id:'adductors', seg:'thigh', t0:0.04,  t1:0.5,  offIn:4.5, w:6},
+  {id:'calves',    seg:'shin',  t0:0.1,   t1:0.5,  offIn:-2.8,w:5.5},
+  {id:'delts',     seg:'uarm',  t0:-0.12, t1:0.32, offIn:0,   w:11},
+  {id:'biceps',    seg:'uarm',  t0:0.3,   t1:0.85, offIn:0,   w:6},
+  {id:'forearms',  seg:'farm',  t0:0.05,  t1:0.6,  offIn:0,   w:6},
+];
+const FRONT_TORSO_SHAPES = [
+  {id:'abs',      t0:0.06, t1:0.55, offs:[0],      w:11},
+  {id:'obliques', t0:0.1,  t1:0.5,  offs:[-9, 9],  w:5.5},
+  {id:'chest',    t0:0.66, t1:0.9,  offs:[-7, 7],  w:11},
+  {id:'lats',     t0:0.52, t1:0.78, offs:[-13.5, 13.5], w:5},
+];
+const VISIBLE = {
+  side: new Set(SIDE_SHAPES.map(m => m.id)),
+  front: new Set([...FRONT_LIMB_SHAPES, ...FRONT_TORSO_SHAPES].map(m => m.id))
+};
+const LIMB = new Set(['glutes','quads','hams','calves','adductors','delts','biceps','triceps','forearms']);
+
+// ================= pózy: pomocné stavebnice =================
+// kinematika ze zadaných úhlů (FK) + automatické položení na zem
+const ANG_KEYS = ['T','Th','Sh','F','U','Fa','Th2','Sh2','F2','U2','Fa2','Hd'];
+function fk(k) {
+  const hip = V(k.hip[0], k.hip[1]);
+  const leg = (Th, Sh, F) => { const knee = add(hip, mul(H(Th), 46)), ankle = add(knee, mul(H(Sh), 45)), fd = H(F); return {knee, ankle, toe: add(ankle, mul(fd, 20)), heel: footHeel(ankle, fd)}; };
+  const shoulder = add(hip, mul(H(k.T), 52));
+  const arm = (U, Fa) => { const elbow = add(shoulder, mul(H(U), 30)), wrist = add(elbow, mul(H(Fa), 27)); return {elbow, wrist, hand: add(wrist, mul(H(Fa), 8))}; };
+  const L = leg(k.Th, k.Sh, k.F), L2 = leg(k.Th2, k.Sh2, k.F2), A = arm(k.U, k.Fa), A2 = arm(k.U2, k.Fa2);
+  const P = {hip, ...L, shoulder, ...A, ...headFrom(shoulder, H(k.T + (k.Hd || 0))), farLeg: L2, farArm: A2};
+  groundIt(P, k.air || 0);
+  return P;
+}
+const RAD = {toe:1, heel:2, ankle:4, knee:6, hip:10, shoulder:9, elbow:4, wrist:3, hand:2, head:11};
+function eachPt(P, fn) { for (const k in P) { const v = P[k]; if (!v) continue; if (typeof v.x === 'number') fn(v, k); else if (typeof v === 'object') for (const j in v) if (v[j] && typeof v[j].x === 'number') fn(v[j], j); } }
+function groundIt(P, air) {
+  let m = 1e9; eachPt(P, (q, n) => { if (RAD[n] != null) m = Math.min(m, q.y - RAD[n]); });
+  const dy = air - m; eachPt(P, q => { q.y += dy; });
+}
+function normKey(k) { const o = {Hd: 0, air: 0, ...k}; o.Th2 ??= o.Th; o.Sh2 ??= o.Sh; o.F2 ??= o.F; o.U2 ??= o.U; o.Fa2 ??= o.Fa; return o; }
+function keyInterp(keys, p, angular) {
+  let i = keys.length - 1;
+  for (let j = 0; j < keys.length; j++) if (keys[j][0] <= p) i = j;
+  const [t0, a] = keys[i], nxt = keys[(i + 1) % keys.length], t1 = i + 1 < keys.length ? nxt[0] : nxt[0] + 1, b = nxt[1];
+  const k = ease((p - t0) / (t1 - t0)), o = {};
+  for (const key in a) {
+    const A = a[key], B = b[key] ?? A;
+    if (Array.isArray(A)) o[key] = A.map((v, n) => lerp(v, B[n], k));
+    else o[key] = angular && ANG_KEYS.includes(key) ? angLerp(A, B, k) : lerp(A, B, k);
+  }
+  return o;
+}
+function actKeys(keys, ids) {
+  const full = keys.map(([t, a]) => { const o = {}; for (const id of ids) o[id] = a[id] ?? 0.05; return [t, o]; });
+  return p => keyInterp(full, p, false);
+}
+function fill(ids, a) { const o = {}; for (const id of ids) o[id] = a[id] ?? 0.05; return o; }
+
+function squatSag(d) {
+  const ankle = V(0, 8), hip = V(lerp(-3, -31, d), lerp(97, 47, d));
+  return {ankle, hip, knee: ik(ankle, hip, 45, 46, -1), lean: lerp(4, 42, d)};
+}
+const PU_TOP = 16.5;
+const PU_WX = -20 * Math.sin(PU_TOP * DEG) + 143 * Math.cos(PU_TOP * DEG);
+function pushupPose(thDeg) {
+  const th = thDeg * DEG, d = V(Math.cos(th), Math.sin(th)), n = V(-Math.sin(th), Math.cos(th));
+  const toe = V(0, 0), ankle = V(-20 * Math.sin(th), 20 * Math.cos(th));
+  const knee = add(ankle, mul(d, 45)), hip = add(knee, mul(d, 46)), shoulder = add(hip, mul(d, 52));
+  const heel = add(add(ankle, mul(n, 4)), mul(d, -2));
+  const wrist = V(PU_WX + 2, 4), elbow = ik(shoulder, wrist, 30, 27, -1), hand = V(wrist.x + 8, 1.5);
+  return {hip, knee, ankle, heel, toe, shoulder, elbow, wrist, hand, ...headFrom(shoulder, norm(add(d, mul(n, .2))))};
+}
+function legFrom(hip, Th, Sh, F) {
+  const knee = add(hip, mul(H(Th), 46)), ankle = add(knee, mul(H(Sh), 45)), fd = H(F);
+  return {knee, ankle, toe: add(ankle, mul(fd, 20)), heel: footHeel(ankle, fd)};
+}
+function bikeLeg(hip, crank, R, th) {
+  const pedal = add(crank, V(R * Math.sin(th), R * Math.cos(th)));
+  const ankle = add(pedal, V(-6, 6));
+  return {pedal, ankle, toe: add(pedal, V(11, -1)), heel: add(ankle, V(-6, -2)), knee: ik(ankle, hip, 45, 46, -1)};
+}
+function bikeAct(A) { // A = úhel kliky ve stupních od horní úvrati
+  return {quads:.1 + .75 * bumpC(A, 80, 80, 360), glutes:.1 + .6 * bumpC(A, 110, 70, 360), hams:.1 + .5 * bumpC(A, 170, 70, 360), calves:.1 + .45 * bumpC(A, 130, 70, 360)};
+}
+
+// front view: frontální rovina, x = do stran
+function frontPose({d = 0, footW = 15, arms = 10, air = 0, kneeOut = 4}) {
+  const s = squatSag(d);
+  const legMax = 90;
+  const hipY = Math.min(s.hip.y, 8 + Math.sqrt(Math.max(0, legMax * legMax - (footW - 9) ** 2)));
+  const kneeY = d > 0.02 ? s.knee.y : lerp(8, hipY, 45 / 91);
+  const shY = hipY + 52 * Math.cos(s.lean * DEG);
+  const neckBase = V(0, shY), pelvis = V(0, hipY);
+  const side = sg => {
+    const hip = V(sg * 9, hipY), ankle = V(sg * footW, 8), knee = V(sg * ((9 + footW) / 2 + kneeOut * d), kneeY), toe = V(sg * (footW + 4), 1.5);
+    const sh = V(sg * 16, shY), dir = V(sg * Math.sin(arms * DEG), -Math.cos(arms * DEG));
+    const el = add(sh, mul(dir, 30)), wr = add(el, mul(dir, 27));
+    return {hip, knee, ankle, toe, sh, el, wr, hand: add(wr, mul(dir, 8))};
+  };
+  const P = {view:'front', L: side(-1), R: side(1), pelvis, neckBase, neck: V(0, shY + 7), head: V(0, shY + 19),
+    kneeAng: angleAt(s.hip, s.knee, s.ankle), hipAng: angleAt(add(s.hip, upDir(s.lean)), s.hip, s.knee), armAng: Math.round(arms)};
+  if (air) eachPt(P, q => { q.y += air; });
+  return P;
+}
+function sidePlankPose(drop, sway) {
+  const th = (18 + sway) * DEG, u = V(-Math.cos(th), Math.sin(th));
+  const ankleC = V(70, 6), hip0 = add(ankleC, mul(u, 91)), neckB = add(hip0, mul(u, 52));
+  const hipC = add(hip0, V(0, -drop)), kneeC = lerpV(ankleC, hipC, 45 / 91);
+  const tu = norm(sub(neckB, hipC)), n = V(tu.y, -tu.x); // n = horní strana
+  const bot = {hip: sub(hipC, mul(n, 7)), knee: sub(kneeC, mul(n, 5)), ankle: sub(ankleC, mul(n, 3)), sh: sub(neckB, mul(n, 16))};
+  bot.toe = add(bot.ankle, V(4, -3));
+  bot.el = V(bot.sh.x, 4); bot.wr = add(bot.el, V(8, -1)); bot.hand = add(bot.wr, V(5, 0));
+  const top = {hip: add(hipC, mul(n, 7)), knee: add(kneeC, mul(n, 5)), ankle: add(ankleC, mul(n, 3)), sh: add(neckB, mul(n, 16))};
+  top.toe = add(top.ankle, V(4, -3));
+  top.el = add(top.sh, V(0, 30)); top.wr = add(top.el, V(0, 27)); top.hand = add(top.wr, V(0, 8));
+  const neck = add(neckB, mul(tu, 7));
+  return {view:'front', L: bot, R: top, pelvis: hipC, neckBase: neckB, neck, head: add(neck, mul(tu, 12)), tilt: Math.round(18 + sway), drop};
+}
+
+// ================= stroje (kreslení) =================
+const M = {}; // naplní se v render (barvy)
+function mLine(a, b, w, col) { line(a, b, w, col || C.machine); }
+function mCircle(c, R, fill, stroke, lw) {
+  const s = S(c); ctx.beginPath(); ctx.arc(s.x, s.y, R * fit.sc, 0, Math.PI * 2);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = (lw || 2) * fit.sc; ctx.stroke(); }
+}
+
+// ================= katalog cviků =================
+const STAND = {hip:[0,98], T:90, Th:-90, Sh:-90, F:-24, U:-90, Fa:-90};
+const BIKE = {hip: V(-5, 105), crank: V(28, 30), R: 17};
+
+const EX = {
+  // ---------- STROJE ----------
+  airbike: {
+    name:'Airbike', group:'Stroje', view:'side', mode:'cyc', period:.85, ground:true,
+    cue:['Airbike', 'Tlač a táhni rukama současně se šlapáním, záda drž rovná a ramena dole. Při sprintu zrychli kadenci, ne jen sílu.'],
+    pose(p) {
+      const th = p * 2 * Math.PI, hip = BIKE.hip;
+      const L = bikeLeg(hip, BIKE.crank, BIKE.R, th), L2 = bikeLeg(hip, BIKE.crank, BIKE.R, th + Math.PI);
+      const shoulder = add(hip, mul(upDir(27), 52));
+      const grip = a => add(V(45, 58), mul(upDir(6 - 12 * Math.cos(a)), 66));
+      const wrist = grip(th), wrist2 = grip(th + Math.PI);
+      const elbow = ik(shoulder, wrist, 30, 27, -1), elbow2 = ik(shoulder, wrist2, 30, 27, -1);
+      return {hip, ...L, shoulder, elbow, wrist, hand: add(wrist, V(2, 6)), ...headFrom(shoulder, upDir(12)),
+        farLeg: L2, farArm: {elbow: elbow2, wrist: wrist2, hand: add(wrist2, V(2, 6))}, crankTh: th};
+    },
+    alt:true,
+    act(p) {
+      const A = p * 360, push = bumpC(A, 90, 95, 360), pull = bumpC(A, 270, 95, 360);
+      return fill(SIDE_IDS, {...bikeAct(A), chest:.08 + .55 * push, triceps:.1 + .5 * push, delts:.2 + .35 * push + .25 * pull,
+        lats:.1 + .55 * pull, biceps:.1 + .5 * pull, forearms:.4, abs:.45, erectors:.3});
+    },
+    label: p => (p < .5 ? {text:'Bližší noha tlačí, ruka tlačí', cls:'con'} : {text:'Bližší noha se vrací, ruka táhne', cls:'con'}),
+    info: m => `${Math.round(60 / (.85 / m))} ot./min`,
+    bounds: [V(-30, 0), V(115, 160), V(-40, 100)],
+    machine(P, layer) {
+      const th = P.crankTh;
+      if (layer === 'back') {
+        mLine(V(-30, 0), V(110, 0), 4); mLine(V(-20, 2), V(-12, 92), 5); mLine(V(-12, 60), V(78, 45), 5);
+        mLine(V(-26, 98), V(4, 98), 6, C.ink);                                   // sedlo
+        mCircle(V(78, 48), 30, C.grid, C.machine, 2.5);                            // ventilátor
+        for (let i = 0; i < 8; i++) { const a = th * 2.2 + i * Math.PI / 4; mLine(V(78, 48), add(V(78, 48), V(28 * Math.cos(a), 28 * Math.sin(a))), 1.2); }
+        mLine(V(45, 58), add(V(45, 58), mul(upDir(6 - 12 * Math.cos(th + Math.PI)), 70)), 3.5);   // vzdálenější rukojeť
+        mLine(BIKE.crank, P.farLeg.pedal, 3, C.ink); mLine(add(P.farLeg.pedal, V(-4, 0)), add(P.farLeg.pedal, V(8, 0)), 3, C.ink);
+      } else if (layer === 'mid') {
+        mCircle(BIKE.crank, 5, C.machine);
+        mLine(BIKE.crank, P.pedal, 3.5, C.ink); mLine(add(P.pedal, V(-4, 0)), add(P.pedal, V(8, 0)), 3.5, C.ink);
+        mLine(V(45, 58), add(V(45, 58), mul(upDir(6 - 12 * Math.cos(th)), 70)), 4, C.ink);        // bližší rukojeť
+      }
+    }
+  },
+  rotoped: {
+    name:'Rotoped', group:'Stroje', view:'side', mode:'cyc', period:.75, ground:true,
+    cue:['Cyklotrenažér', 'Sedlo nastav tak, aby v dolní poloze zůstalo koleno mírně pokrčené (asi 25–35°). Šlapej plynule dokola, ne jen tlakem dolů.'],
+    pose(p) {
+      const th = p * 2 * Math.PI, hip = BIKE.hip;
+      const L = bikeLeg(hip, BIKE.crank, BIKE.R, th), L2 = bikeLeg(hip, BIKE.crank, BIKE.R, th + Math.PI);
+      const shoulder = add(hip, mul(upDir(35), 52)), wrist = V(60, 120);
+      const elbow = ik(shoulder, wrist, 30, 27, -1);
+      return {hip, ...L, shoulder, elbow, wrist, hand: add(wrist, V(8, 0)), ...headFrom(shoulder, upDir(18)), farLeg: L2, crankTh: th};
+    },
+    alt:true,
+    act: p => fill(SIDE_IDS, {...bikeAct(p * 360), abs:.25, erectors:.3, delts:.15, biceps:.12, triceps:.15, forearms:.2, lats:.1}),
+    label: p => (p < .5 ? {text:'Bližší noha: tlak dolů', cls:'con'} : {text:'Bližší noha: návrat nahoru', cls:''}),
+    info: m => `${Math.round(60 / (.75 / m))} ot./min`,
+    bounds: [V(-35, 0), V(110, 160)],
+    machine(P, layer) {
+      if (layer === 'back') {
+        mLine(V(-30, 0), V(100, 0), 4); mLine(V(-20, 2), V(-12, 92), 5); mLine(V(-12, 60), V(70, 30), 5);
+        mLine(V(70, 30), V(64, 118), 5); mLine(V(56, 120), V(72, 120), 5, C.ink);
+        mCircle(V(78, 30), 20, C.grid, C.machine, 3);
+        mLine(V(-26, 98), V(4, 98), 6, C.ink);
+        mLine(BIKE.crank, P.farLeg.pedal, 3, C.ink); mLine(add(P.farLeg.pedal, V(-4, 0)), add(P.farLeg.pedal, V(8, 0)), 3, C.ink);
+      } else if (layer === 'mid') {
+        mCircle(BIKE.crank, 5, C.machine);
+        mLine(BIKE.crank, P.pedal, 3.5, C.ink); mLine(add(P.pedal, V(-4, 0)), add(P.pedal, V(8, 0)), 3.5, C.ink);
+      }
+    }
+  },
+  pas: {
+    name:'Běžecký pás', group:'Stroje', view:'side', mode:'cyc', period:.72, ground:true,
+    cue:['Běh na pásu', 'Dopadej pod těžiště, ne patou daleko před tělo. Lehký předklon z kotníků, ruce se pohybují dopředu a dozadu, ne přes tělo.'],
+    pose(p) {
+      const run = ph => {
+        const k = keyInterp(RUN_KEYS, ph, false), a = k.a, sh = a - k.k;
+        const shH = -90 + sh;
+        return {Th: -90 + a, Sh: shH, F: shH + 90 - 24 + k.g};
+      };
+      const a1 = run(p), a2 = run((p + .5) % 1), hip0 = V(0, 0);
+      const L = legFrom(hip0, a1.Th, a1.Sh, a1.F), L2 = legFrom(hip0, a2.Th, a2.Sh, a2.F);
+      const minY = Math.min(L.toe.y - 1, L.heel.y - 2, L2.toe.y - 1, L2.heel.y - 2);
+      const hip = V(0, 12 - minY);
+      const sh = q => add(q, hip);
+      for (const o of [L, L2]) for (const k in o) o[k] = sh(o[k]);
+      const shoulder = add(hip, mul(upDir(8), 52));
+      const alpha1 = keyInterp(RUN_KEYS, p, false).a, alpha2 = keyInterp(RUN_KEYS, (p + .5) % 1, false).a;
+      const arm = al => { const ua = downDir(-(al - 7) * 1.1), elbow = add(shoulder, mul(ua, 30)), fa = downDir(-(al - 7) * 1.1 + 88), wrist = add(elbow, mul(fa, 27)); return {elbow, wrist, hand: add(wrist, mul(fa, 6))}; };
+      const A = arm(alpha2), A2 = arm(alpha1); // ruka jde proti noze stejné strany
+      return {hip, ...L, shoulder, ...A, ...headFrom(shoulder, upDir(5)), farLeg: L2, farArm: A2, beltP: p};
+    },
+    alt:true,
+    act: p => fill(SIDE_IDS, {quads:.15 + .75 * bumpC(p, .06, .14), glutes:.15 + .65 * bumpC(p, .04, .16), hams:.15 + .6 * bumpC(p, .9, .14) + .3 * bumpC(p, .15, .1),
+      calves:.1 + .8 * bumpC(p, .27, .14), abs:.35, erectors:.35, delts:.25, biceps:.15, triceps:.1, forearms:.1, lats:.2, chest:.1}),
+    label: p => (p < .4 ? {text:'Bližší noha: opora a odraz', cls:'con'} : {text:'Bližší noha: švih vpřed', cls:''}),
+    info: m => `${Math.round(120 / (.72 / m))} kroků/min`,
+    bounds: [V(-85, 0), V(95, 175)],
+    machine(P, layer) {
+      if (layer !== 'back') return;
+      mLine(V(-80, 3), V(-80, 0), 4); mLine(V(70, 3), V(70, 0), 4);
+      ctx.fillStyle = C.machine; const a = S(V(-82, 11)), b = S(V(74, 4)); ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
+      mCircle(V(-80, 7.5), 4, C.grid, C.machine, 1.5); mCircle(V(72, 7.5), 4, C.grid, C.machine, 1.5);
+      // pohyblivé značky na pásu
+      ctx.strokeStyle = C.grid; ctx.lineWidth = 1.5 * fit.sc;
+      const off = (P.beltP * 100) % 25;
+      for (let x = 70 - off; x > -80; x -= 25) { const s1 = S(V(x, 11)), s2 = S(V(x - 6, 11)); ctx.beginPath(); ctx.moveTo(s1.x, s1.y - 1); ctx.lineTo(s2.x, s2.y - 1); ctx.stroke(); }
+      mLine(V(66, 10), V(82, 122), 5); mLine(V(82, 118), V(42, 112), 4);
+      ctx.fillStyle = C.machine; const c1 = S(V(74, 140)), c2 = S(V(96, 122)); ctx.fillRect(c1.x, c1.y, c2.x - c1.x, c2.y - c1.y);
+    }
+  },
+  veslo: {
+    name:'Veslovací trenažér', group:'Stroje', view:'side', mode:'cyc', period:2.3, ground:true,
+    cue:['Veslování', 'Pořadí v záběru: nohy – trup – ruce, při návratu obráceně: ruce – trup – nohy. Asi 60 % síly jde z nohou, ne z rukou.'],
+    pose(p) {
+      const Lg = p < .25 ? ease(p / .25) : p < .6 ? 1 : 1 - ease((p - .6) / .4);
+      const B = p < .12 ? 28 : p < .32 ? lerp(28, -20, ease((p - .12) / .2)) : p < .47 ? -20 : p < .62 ? lerp(-20, 28, ease((p - .47) / .15)) : 28;
+      const Ar = p < .25 ? 0 : p < .4 ? ease((p - .25) / .15) : p < .5 ? 1 - ease((p - .4) / .1) : 0;
+      const hip = V(lerp(-8, -52, Lg), 32), ankle = V(33, 30), fd = H(55);
+      const toe = add(ankle, mul(fd, 20)), heel = add(ankle, V(-3, -6));
+      const knee = ik(ankle, hip, 45, 46, -1);
+      const tu = upDir(B), shoulder = add(hip, mul(tu, 52)), fwd = rotCW(tu);
+      const wS = add(shoulder, mul(downDir(68), 56)), wP = add(add(shoulder, mul(tu, -20)), mul(fwd, 9));
+      const wrist = lerpV(wS, wP, Ar), elbow = ik(shoulder, wrist, 30, 27, -1);
+      return {hip, knee, ankle, heel, toe, shoulder, elbow, wrist, hand: add(wrist, mul(fwd, 6)), ...headFrom(shoulder, upDir(B * .6)), rowP: p};
+    },
+    act(p) {
+      const drive = win(p, 0, .28), swing = win(p, .1, .34), arms = win(p, .22, .42), recov = win(p, .45, .65), slide = win(p, .6, 1);
+      return fill(SIDE_IDS, {quads:.1 + .85 * drive, glutes:.1 + .7 * drive, hams:.1 + .35 * drive + .3 * swing + .15 * slide, calves:.15 + .35 * drive,
+        erectors:.2 + .55 * swing + .2 * drive, abs:.25 + .35 * recov + .15 * swing, lats:.1 + .8 * arms + .15 * swing, biceps:.08 + .75 * arms,
+        delts:.12 + .45 * arms, forearms:.45 + .2 * arms, triceps:.08, chest:.05});
+    },
+    label(p) {
+      if (p < .25) return {text:'Záběr: odraz nohama', cls:'con'};
+      if (p < .32) return {text:'Záběr: záklon trupu', cls:'con'};
+      if (p < .42) return {text:'Záběr: přítah rukama', cls:'con'};
+      if (p < .5) return {text:'Návrat: ruce vpřed', cls:''};
+      if (p < .62) return {text:'Návrat: předklon trupu', cls:''};
+      return {text:'Návrat: přísun do přípravy', cls:''};
+    },
+    info: m => `${Math.round(60 / (2.3 / m))} temp/min`,
+    bounds: [V(-95, 0), V(122, 140)],
+    machine(P, layer) {
+      if (layer === 'back') {
+        mLine(V(-88, 22), V(-88, 0), 4); mLine(V(-88, 21), V(92, 21), 5); mLine(V(104, 24), V(110, 0), 5);
+        mLine(V(27, 22), V(48, 48), 5, C.ink);                     // opěra nohou
+        mCircle(V(98, 45), 22, C.grid, C.machine, 3);                // setrvačník
+        mLine(V(98, 67), V(84, 104), 3); ctx.fillStyle = C.machine; const c1 = S(V(76, 116)), c2 = S(V(94, 100)); ctx.fillRect(c1.x, c1.y, c2.x - c1.x, c2.y - c1.y);
+        mLine(P.hand, V(90, 50), 1.2, C.muted);                     // řetěz
+        const s1 = S(V(P.hip.x - 13, 27)), s2 = S(V(P.hip.x + 13, 22)); ctx.fillStyle = C.ink; ctx.fillRect(s1.x, s1.y, s2.x - s1.x, s2.y - s1.y);
+      } else if (layer === 'front') {
+        mLine(add(P.hand, V(0, -5)), add(P.hand, V(0, 5)), 3, C.ink);  // madlo
+      }
+    }
+  },
+
+  // ---------- VLASTNÍ VÁHA ----------
+  drep: {
+    name:'Dřep', group:'Vlastní váha', view:'side', mode:'rep', ground:true, concUp:false, peakLabel:'Výdrž dole',
+    cue:['Dřep', 'Kolena míří ve směru špiček, paty zůstávají na zemi a záda neutrální. Do hloubky jdi tak daleko, jak udržíš rovná záda.'],
+    pose(p) {
+      const s = squatSag(p), td = upDir(s.lean), shoulder = add(s.hip, mul(td, 52)), ad = downDir(lerp(82, 92, p));
+      const elbow = add(shoulder, mul(ad, 30)), wrist = add(elbow, mul(ad, 27));
+      return {hip:s.hip, knee:s.knee, ankle:s.ankle, heel:V(-7, 1), toe:V(19, 0), shoulder, elbow, wrist, hand:add(wrist, mul(ad, 8)), ...headFrom(shoulder, upDir(lerp(3, 22, p)))};
+    },
+    act: p => fill(SIDE_IDS, {quads:r(.25,.9,p), glutes:r(.15,.85,p,1.6), hams:r(.1,.4,p), calves:r(.2,.35,p), abs:r(.3,.55,p), erectors:r(.2,.6,p), delts:.25, forearms:.08, lats:.1})
+  },
+  vyskok: {
+    name:'Výskok z dřepu', group:'Vlastní váha', view:'side', mode:'cyc', period:2.2, ground:true,
+    cue:['Výskok z dřepu', 'Odraz je výbušný z celé nohy přes špičky, ruce švihem pomáhají nahoru. Dopadni měkce na přední část chodidla a pokrč kolena.'],
+    pose(p) {
+      let d = 0, lift = 0, toe01 = 0, arm = 0, k;
+      if (p < .35) { k = ease(p / .35); d = k; arm = lerp(0, -40, k); }
+      else if (p < .47) { k = ease((p - .35) / .12); d = 1 - k; arm = lerp(-40, 170, k); toe01 = clamp01((p - .42) / .05); }
+      else if (p < .67) { k = (p - .47) / .2; toe01 = 1; arm = 170; lift = 24 * Math.sin(Math.PI * k); }
+      else if (p < .8) { k = ease((p - .67) / .13); toe01 = 1 - k; d = .45 * k; arm = lerp(170, 20, k); }
+      else { k = ease((p - .8) / .2); d = .45 * (1 - k); arm = lerp(20, 0, k); }
+      const toe = V(19, lift), fd = H(lerp(-24, -72, toe01)), ankle = sub(toe, mul(fd, 20)), heel = footHeel(ankle, fd);
+      const hip = V(lerp(-3, -31, d) + (ankle.x - .7) * .6, lerp(97, 47, d) + (ankle.y - 8));
+      const knee = ik(ankle, hip, 45, 46, -1), shoulder = add(hip, mul(upDir(lerp(4, 42, d)), 52)), ad = downDir(arm);
+      const elbow = add(shoulder, mul(ad, 30)), wrist = add(elbow, mul(ad, 27));
+      return {hip, knee, ankle, heel, toe, shoulder, elbow, wrist, hand:add(wrist, mul(ad, 8)), ...headFrom(shoulder, upDir(lerp(3, 22, d)))};
+    },
+    act: actKeys([
+      [0,   {quads:.25, glutes:.15, hams:.1, calves:.2, abs:.3, erectors:.2, delts:.2}],
+      [.35, {quads:.75, glutes:.6, hams:.3, calves:.3, abs:.45, erectors:.5, delts:.25}],
+      [.43, {quads:1, glutes:.95, hams:.5, calves:.75, abs:.5, erectors:.6, delts:.45}],
+      [.5,  {quads:.5, glutes:.5, hams:.35, calves:.95, abs:.4, erectors:.4, delts:.4}],
+      [.6,  {quads:.15, glutes:.15, hams:.1, calves:.2, abs:.3, erectors:.2, delts:.25}],
+      [.72, {quads:.85, glutes:.6, hams:.35, calves:.8, abs:.45, erectors:.45, delts:.2}],
+      [.82, {quads:.6, glutes:.45, hams:.25, calves:.35, abs:.35, erectors:.35, delts:.15}],
+    ], SIDE_IDS),
+    label(p) {
+      if (p < .35) return {text:'Spouštění do dřepu', cls:'ecc'};
+      if (p < .47) return {text:'Odraz', cls:'con'};
+      if (p < .67) return {text:'Ve vzduchu', cls:''};
+      if (p < .8) return {text:'Dopad a tlumení', cls:'ecc'};
+      return {text:'Vzpřímení', cls:'con'};
+    }
+  },
+  podrep: {
+    name:'Podřep s rozpažením', group:'Vlastní váha', view:'front', mode:'rep', ground:true, concUp:false, peakLabel:'Výdrž v podřepu',
+    cue:['Podřep s rozpažením', 'Při spouštění do podřepu zvedni ruce do upažení (vodorovně se zemí). Ramena drž dole od uší, kolena nad špičkami.'],
+    pose: p => frontPose({d: p * .6, footW: 17, arms: lerp(12, 90, p)}),
+    act: p => fill(FRONT_IDS, {quads:r(.2,.7,p), glutes:r(.15,.55,p), adductors:r(.15,.4,p), hams:r(.1,.3,p), calves:.2, abs:.35, obliques:.25,
+      erectors:r(.2,.4,p), delts:r(.12,.8,p), lats:.15, biceps:.1, triceps:.12, forearms:.1, chest:.1}),
+    angles: P => [['Koleno', P.kneeAng + '°'], ['Kyčel', P.hipAng + '°'], ['Upažení', P.armAng + '°']]
+  },
+  vypad: {
+    name:'Výpad', group:'Vlastní váha', view:'side', mode:'rep', ground:true, concUp:false, peakLabel:'Výdrž dole',
+    cue:['Výpad', 'Trup zůstává vzpřímený, přední koleno nad kotníkem, zadní koleno klesá těsně k zemi. Odrážej se přes patu přední nohy.'],
+    pose(p) {
+      const ankle = V(30, 8), hip = V(lerp(-10, -9, p), lerp(88, 50, p)), knee = ik(ankle, hip, 45, 46, -1);
+      const bAnkle = V(-56, 14), bKnee = ik(bAnkle, hip, 45, 46, -1);
+      const shoulder = add(hip, mul(upDir(3), 52)), elbow = add(shoulder, mul(downDir(5), 30)), wrist = add(elbow, mul(downDir(12), 27));
+      return {hip, knee, ankle, heel:V(23, 1), toe:V(49, 0), shoulder, elbow, wrist, hand:add(wrist, mul(downDir(12), 8)), ...headFrom(shoulder, upDir(3)),
+        farLeg:{knee:bKnee, ankle:bAnkle, heel:V(-61, 18), toe:V(-40, 0)}};
+    },
+    farLegScale:.55,
+    act: p => fill(SIDE_IDS, {quads:r(.25,.92,p), glutes:r(.2,.9,p,1.4), hams:r(.15,.45,p), calves:r(.25,.4,p), abs:.4, erectors:.35, lats:.1})
+  },
+  klik: {
+    name:'Klik', group:'Vlastní váha', view:'side', mode:'rep', ground:true, concUp:false, peakLabel:'Výdrž dole',
+    cue:['Klik', 'Tělo drž jako prkno od hlavy po paty, lokty míří šikmo dozadu (asi 45° od těla). Hrudník jde až těsně nad zem.'],
+    pose: p => pushupPose(lerp(PU_TOP, 2.5, p)),
+    act: p => fill(SIDE_IDS, {chest:r(.35,.95,p), triceps:r(.45,.85,p), delts:r(.35,.8,p), abs:.6, glutes:.3, quads:.3, biceps:.12, lats:.2, forearms:.25, erectors:.2, hams:.1, calves:.15})
+  },
+  lehsedy: {
+    name:'Lehsedy', group:'Vlastní váha', view:'side', mode:'cyc', period:3.6, ground:true,
+    cue:['Lehsedy (burpees)', 'Dřep a ruce na zem, odskok do prkna, klik, přískok nohou k rukám a výskok s rukama nahoru. V prkně nenech propadnout bedra.'],
+    keys: [
+      [0,   STAND],
+      [.14, {hip:[-34,51], T:20, Th:0, Sh:-105, F:-10, U:-95, Fa:-95, Hd:10}],
+      [.28, {hip:[-40,47], T:15, Th:-165, Sh:-165, F:-75, U:-90, Fa:-90}],
+      [.38, {hip:[-36,26], T:3, Th:-177, Sh:-177, F:-87, U:-160, Fa:-35}],
+      [.48, {hip:[-40,47], T:15, Th:-165, Sh:-165, F:-75, U:-90, Fa:-90}],
+      [.6,  {hip:[-34,51], T:20, Th:0, Sh:-105, F:-10, U:-95, Fa:-95, Hd:10}],
+      [.72, {hip:[0,96], T:88, Th:-92, Sh:-90, F:-24, U:60, Fa:70}],
+      [.82, {hip:[0,98], T:90, Th:-88, Sh:-92, F:-65, U:95, Fa:95, air:16}],
+      [.92, {hip:[-6,90], T:80, Th:-80, Sh:-100, F:-24, U:-60, Fa:-60}],
+    ],
+    act: actKeys([
+      [0,   {quads:.2, glutes:.15, hams:.1, calves:.2, abs:.3, erectors:.25, delts:.15, lats:.1}],
+      [.14, {quads:.6, glutes:.5, hams:.3, calves:.25, abs:.4, erectors:.45, delts:.3, chest:.15, triceps:.2, lats:.15, forearms:.2}],
+      [.28, {quads:.35, glutes:.3, hams:.2, calves:.3, abs:.7, erectors:.3, delts:.55, chest:.4, triceps:.45, lats:.2, forearms:.3}],
+      [.38, {quads:.3, glutes:.3, hams:.15, calves:.2, abs:.65, erectors:.3, delts:.75, chest:.9, triceps:.8, biceps:.15, lats:.25, forearms:.3}],
+      [.48, {quads:.35, glutes:.3, hams:.2, calves:.3, abs:.7, erectors:.3, delts:.6, chest:.6, triceps:.7, lats:.2, forearms:.3}],
+      [.6,  {quads:.55, glutes:.45, hams:.3, calves:.35, abs:.75, erectors:.4, delts:.45, chest:.25, triceps:.3, lats:.15, forearms:.2}],
+      [.72, {quads:.85, glutes:.8, hams:.45, calves:.5, abs:.4, erectors:.55, delts:.35, lats:.1}],
+      [.82, {quads:.6, glutes:.55, hams:.35, calves:.9, abs:.35, erectors:.35, delts:.4}],
+      [.92, {quads:.75, glutes:.55, hams:.3, calves:.7, abs:.4, erectors:.35, delts:.2}],
+    ], SIDE_IDS),
+    label(p) {
+      const L = [[.14,'Dřep, ruce na zem','ecc'],[.28,'Odskok do prkna',''],[.38,'Klik dolů','ecc'],[.48,'Klik nahoru','con'],[.6,'Přískok nohou k rukám','con'],[.72,'Vztyk','con'],[.86,'Výskok','con'],[1,'Dopad','ecc']];
+      for (const [e, t, c] of L) if (p < e) return {text:t, cls:c};
+      return {text:'Výchozí poloha', cls:''};
+    }
+  },
+  horolezec: {
+    name:'Horolezec', group:'Vlastní váha', view:'side', mode:'cyc', period:.85, ground:true,
+    cue:['Horolezec', 'Ramena nad dlaněmi, boky v linii s tělem. Kolena přitahuj k hrudníku střídavě a rychle, bedra drž pevně, aby se nehoupala.'],
+    pose(p) {
+      const P = pushupPose(PU_TOP);
+      const leg = c => legFrom(P.hip, angLerp(-163.5, -25, c), angLerp(-163.5, -170, c), angLerp(-73.5, -80, c));
+      const c1 = (1 - Math.cos(2 * Math.PI * p)) / 2, c2 = (1 - Math.cos(2 * Math.PI * (p + .5))) / 2;
+      const L = leg(c1), L2 = leg(c2);
+      return {...P, ...L, farLeg: L2};
+    },
+    alt:true,
+    act(p) { const c = (1 - Math.cos(2 * Math.PI * p)) / 2;
+      return fill(SIDE_IDS, {quads:.2 + .5 * c, abs:.65 + .15 * c, glutes:.2 + .25 * (1 - c), hams:.1 + .2 * (1 - c), calves:.15 + .25 * (1 - c),
+        delts:.55, chest:.35, triceps:.4, lats:.2, forearms:.3, erectors:.2, biceps:.1}); },
+    label: p => (p >= .25 && p < .75 ? {text:'Bližší koleno k hrudníku', cls:'con'} : {text:'Vzdálenější koleno k hrudníku', cls:'con'})
+  },
+  panak: {
+    name:'Skákací panák', group:'Vlastní váha', view:'front', mode:'cyc', period:1, ground:true,
+    cue:['Skákací panák', 'Doskakuj na přední část chodidel s mírně pokrčenými koleny. Ruce jdou do vzpažení a zpět bokem, trup zůstává zpevněný.'],
+    pose(p) {
+      const o = (1 - Math.cos(2 * Math.PI * p)) / 2, air = 7 * Math.abs(Math.sin(2 * Math.PI * p));
+      const land = 1 - Math.abs(Math.sin(2 * Math.PI * p));
+      const P = frontPose({d: .1 * land, footW: lerp(9, 36, o), arms: lerp(10, 172, o), air, kneeOut: 0});
+      P.air = air; P.spread = Math.round(2 * Math.atan((lerp(9, 36, o) - 9) / 88) / DEG);
+      return P;
+    },
+    act(p) { const o = (1 - Math.cos(2 * Math.PI * p)) / 2, land = 1 - Math.abs(Math.sin(2 * Math.PI * p));
+      return fill(FRONT_IDS, {calves:.3 + .5 * land, delts:.2 + .55 * o, glutes:.2 + .5 * o, adductors:.2 + .45 * (1 - o), quads:.3 + .2 * land, abs:.35, obliques:.2,
+        lats:.15 + .3 * (1 - o), erectors:.25, hams:.15, triceps:.1, chest:.1}); },
+    label: p => (p < .5 ? {text:'Roznožení a vzpažení', cls:'con'} : {text:'Snožení a připažení', cls:'con'}),
+    angles: P => [['Roznožení', P.spread + '°'], ['Vzpažení', P.armAng + '°'], ['Výskok', Math.round(P.air) + ' cm']]
+  },
+  most: {
+    name:'Hýžďový most', group:'Vlastní váha', view:'side', mode:'rep', ground:true, concUp:true, peakLabel:'Výdrž nahoře', startLabel:'Pánev na zemi',
+    cue:['Hýžďový most', 'Tlač přes paty a zvedni pánev do linie ramena – kolena. Nahoře stiskni hýždě a nezaklánej bedra.'],
+    pose(p) {
+      const shoulder = V(0, 10), hip = add(shoulder, mul(H(lerp(0, 28, p)), 52)), ankle = V(88, 8);
+      return {hip, knee: ik(ankle, hip, 45, 46, -1), ankle, heel:V(82, 2), toe:V(107, 1), shoulder, elbow:V(29, 4), wrist:V(56, 3), hand:V(63, 2), neck:V(-7, 10), head:V(-19, 11)};
+    },
+    act: p => fill(SIDE_IDS, {glutes:r(.2,.95,p), hams:r(.15,.55,p), erectors:r(.2,.55,p), abs:.25, quads:r(.15,.3,p), calves:.1, triceps:.1, delts:.08})
+  },
+  zkrac: {
+    name:'Zkracovačky', group:'Vlastní váha', view:'side', mode:'rep', ground:true, concUp:true, peakLabel:'Výdrž nahoře', startLabel:'Leh na zádech',
+    cue:['Zkracovačky', 'Odlep od země jen lopatky, bedra zůstávají přitisknutá. Vydechni při zvedání a nepřitahuj hlavu rukama.'],
+    pose(p) {
+      const hip = V(50, 10), T = lerp(180, 155, p), shoulder = add(hip, mul(H(T), 52));
+      const ankle = V(98, 8), knee = ik(ankle, hip, 45, 46, -1), ad = norm(sub(knee, shoulder));
+      const elbow = add(shoulder, mul(ad, 30)), wrist = add(elbow, mul(ad, 27));
+      const neck = add(shoulder, mul(H(T - 10 * p), 7));
+      return {hip, knee, ankle, heel:V(92, 2), toe:V(117, 1), shoulder, elbow, wrist, hand:add(wrist, mul(ad, 8)), neck, head:add(neck, mul(H(T - 18 * p), 12))};
+    },
+    act: p => fill(SIDE_IDS, {abs:r(.2,.92,p), erectors:.1, quads:.1, hams:.1, glutes:.1, delts:r(.1,.25,p), chest:.1, lats:.08})
+  },
+
+  // ---------- PLANK ----------
+  plankP: {
+    name:'Plank na předloktí', group:'Plank', view:'side', mode:'static', period:4, ground:true,
+    cue:['Plank na předloktí', 'Lokty pod rameny, tělo v jedné linii. Stáhni břicho a hýždě, jako bys chtěl přitáhnout lokty ke špičkám.'],
+    pose: p => fk(normKey({hip:[0,0], T:5.2 + .5 * Math.sin(2 * Math.PI * p), Th:-174.8, Sh:-174.8, F:-84.8, U:-90, Fa:0, Hd:5})),
+    act: p => fill(SIDE_IDS, {abs:.75 + .03 * Math.sin(2 * Math.PI * p), delts:.5, glutes:.35, quads:.35, erectors:.25, chest:.3, triceps:.1, biceps:.15, lats:.25, forearms:.25, hams:.15, calves:.15})
+  },
+  plankD: {
+    name:'Plank na dlaních', group:'Plank', view:'side', mode:'static', period:4, ground:true,
+    cue:['Plank na dlaních', 'Dlaně pod rameny, lokty propnuté, ale nezamknuté. Lopatky lehce od sebe, pánev v linii s tělem.'],
+    pose: p => pushupPose(PU_TOP + .4 * Math.sin(2 * Math.PI * p)),
+    act: p => fill(SIDE_IDS, {abs:.65 + .03 * Math.sin(2 * Math.PI * p), delts:.5, triceps:.45, chest:.4, glutes:.3, quads:.35, erectors:.25, lats:.2, forearms:.3, biceps:.1, hams:.1, calves:.15})
+  },
+  plankN: {
+    name:'Plank se zdvihem nohy', group:'Plank', view:'side', mode:'cyc', period:3, ground:true,
+    cue:['Plank se zdvihem nohy', 'Nohu zvedej jen tak vysoko, aby se pánev nepřetočila ani neprohnula. Pohyb jde z hýždě, ne z beder.'],
+    pose(p) {
+      const cn = p < .5 ? Math.sin(2 * Math.PI * p) : 0, cf = p >= .5 ? Math.sin(2 * Math.PI * (p - .5)) : 0;
+      return fk(normKey({hip:[0,0], T:5.2, Th:-174.8 - 20 * cn, Sh:-174.8 - 20 * cn, F:-84.8 - 15 * cn, Th2:-174.8 - 20 * cf, Sh2:-174.8 - 20 * cf, F2:-84.8 - 15 * cf, U:-90, Fa:0, Hd:5}));
+    },
+    alt:true,
+    act(p) { const c = p < .5 ? Math.sin(2 * Math.PI * p) : 0;
+      return fill(SIDE_IDS, {glutes:.3 + .6 * c, hams:.2 + .45 * c, erectors:.35 + .15 * c, abs:.78, quads:.35, delts:.5, chest:.3, lats:.25, forearms:.25, biceps:.15, calves:.15}); },
+    label: p => (p < .5 ? {text:'Zdvih bližší nohy', cls:'con'} : {text:'Zdvih vzdálenější nohy', cls:'con'})
+  },
+  bocni: {
+    name:'Boční plank', group:'Plank', view:'front', mode:'static', period:4, ground:true,
+    cue:['Boční plank', 'Loket přesně pod ramenem, tělo v rovné linii od hlavy k patám. Tlač bok nahoru a nenechej ho klesat k zemi.'],
+    pose: p => sidePlankPose(0, .4 * Math.sin(2 * Math.PI * p)),
+    act: () => fill(FRONT_IDS, {obliques:.85, abs:.5, glutes:.6, adductors:.45, delts:.65, lats:.35, triceps:.15, quads:.25, erectors:.35, calves:.1, forearms:.2, chest:.15, hams:.15}),
+    angles: P => [['Sklon těla', P.tilt + '°'], ['Pokles pánve', Math.round(P.drop) + ' cm'], ['Loket', '90°']]
+  },
+  bocniD: {
+    name:'Boční plank – zdvihy pánve', group:'Plank', view:'front', mode:'rep', ground:true, concUp:false, peakLabel:'Pánev dole', startLabel:'Pánev v linii',
+    cue:['Boční plank se zdvihy pánve', 'Pomalu spusť bok k zemi a silou šikmých svalů ho vrať zpět do rovné linie. Rameno drž stabilní nad loktem.'],
+    pose: p => sidePlankPose(14 * p, 0),
+    act: p => fill(FRONT_IDS, {obliques:r(.65,.9,p), glutes:r(.45,.7,p), adductors:.4, abs:.5, delts:.65, lats:.35, quads:.25, erectors:.35, forearms:.2, triceps:.15, chest:.15}),
+    angles: P => [['Sklon těla', P.tilt + '°'], ['Pokles pánve', Math.round(P.drop) + ' cm'], ['Loket', '90°']]
+  },
+
+  // ---------- S NÁČINÍM ----------
+  tah: {
+    name:'Mrtvý tah', group:'S náčiním', view:'side', mode:'rep', ground:true, concUp:false, peakLabel:'Výdrž dole',
+    cue:['Rumunský mrtvý tah', 'Pohyb vychází z kyčlí: zadek jde dozadu, kolena jen lehce pokrčená, osa vede těsně podél nohou. Záda celou dobu rovná.'],
+    pose(p) {
+      const ankle = V(0, 8), hip = V(lerp(-2, -34, p), lerp(96, 82, p)), knee = ik(ankle, hip, 45, 46, -1);
+      const shoulder = add(hip, mul(upDir(lerp(3, 68, p)), 52)), ad = downDir(lerp(0, -10, p));
+      const elbow = add(shoulder, mul(ad, 30)), wrist = add(elbow, mul(ad, 27));
+      return {hip, knee, ankle, heel:V(-7, 1), toe:V(19, 0), shoulder, elbow, wrist, hand:add(wrist, mul(ad, 7)), ...headFrom(shoulder, upDir(lerp(3, 55, p)))};
+    },
+    plate: P => add(P.wrist, V(0, -2)),
+    act: p => fill(SIDE_IDS, {hams:r(.25,.95,p), glutes:r(.3,.8,p), erectors:r(.45,.9,p), lats:r(.3,.6,p), forearms:.7, abs:.5, quads:r(.2,.15,p), calves:.25, delts:.2, biceps:.1, triceps:.1})
+  },
+  shyb: {
+    name:'Shyb', group:'S náčiním', view:'side', mode:'rep', ground:false, concUp:true, peakLabel:'Výdrž nahoře', startLabel:'Vis',
+    cue:['Shyb', 'Začni stažením lopatek dolů, pak táhni lokty k bokům, dokud brada nepřejde nad hrazdu. Spouštěj se pomalu do plného visu.'],
+    pose(p) {
+      const wrist = V(0, 228), shoulder = V(lerp(-4, -9, p), lerp(171, 213, p)), elbow = ik(shoulder, wrist, 30, 27, -1);
+      const hip = sub(shoulder, mul(upDir(lerp(0, 8, p)), 52)), knee = add(hip, mul(downDir(lerp(4, 14, p)), 46)), ankle = add(knee, mul(downDir(-22), 45));
+      return {hip, knee, ankle, toe:add(ankle, V(13, -15)), heel:add(ankle, V(-4, 3)), shoulder, elbow, wrist, hand:V(2, 233), ...headFrom(shoulder, upDir(lerp(0, -6, p)))};
+    },
+    bounds: [V(-32, 240), V(40, 240)],
+    machine(P, layer) { if (layer === 'back') { mLine(V(-32, 231), V(40, 231), 3.2, C.muted); mLine(V(-32, 231), V(-32, 243), 3, C.machine); mLine(V(40, 231), V(40, 243), 3, C.machine); } },
+    act: p => fill(SIDE_IDS, {lats:r(.45,.95,p), biceps:r(.3,.9,p), forearms:.8, delts:r(.2,.55,p), abs:r(.3,.55,p), triceps:.15, chest:.15, erectors:.2, glutes:.1, quads:.1, hams:.1})
+  },
+};
+const RUN_KEYS = [
+  [0,   {a:24, k:15, g:0}],
+  [.12, {a:8, k:38, g:0}],
+  [.3,  {a:-12, k:25, g:-10}],
+  [.4,  {a:-20, k:30, g:-35}],
+  [.55, {a:-8, k:100, g:-20}],
+  [.72, {a:25, k:95, g:0}],
+  [.88, {a:34, k:35, g:5}],
+];
+// keyframové pózy: předpočítej normalizaci
+for (const ex of Object.values(EX)) if (ex.keys) { const ks = ex.keys.map(([t, k]) => [t, normKey(k)]); ex.pose = p => fk(keyInterp(ks, p, true)); }
+const GROUPS = ['Stroje', 'Vlastní váha', 'Plank', 'S náčiním'];
+
+// ================= stav =================
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let exKey = 'airbike', t = 0, playing = !reduce, speed = 1, last = null, hl = null, fit = null;
+let mode = 'view';
+const store = {get(k, d) { try { const v = localStorage.getItem('svaly:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('svaly:' + k, JSON.stringify(v)); } catch (e) {} }};
+const tab = {work: 20, rest: 10, rounds: 8, seq: ['drep', 'klik', 'horolezec', 'lehsedy'], running: false, phase: 'idle', round: 0, remain: 0, sums: {}, workTime: 0, sound: true, ...store.get('tab', {})};
+tab.running = false; tab.phase = 'idle'; tab.seq = (tab.seq || []).filter(k => EX[k]);
+
+const REP_CYCLE = 4;
+const cycleLen = ex => ex.mode === 'rep' ? REP_CYCLE : ex.period;
+function repPhase(tt) {
+  if (tt < .4) return {p: ease(tt / .4), ph: 'down'};
+  if (tt < .5) return {p: 1, ph: 'holdB'};
+  if (tt < .85) return {p: 1 - ease((tt - .5) / .35), ph: 'up'};
+  return {p: 0, ph: 'holdT'};
+}
+
+// ================= barvy =================
+let C = {};
+function readTokens() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ['bg','surface','ink','muted','line','accent','grid','machine','limb','limb-far','m0','m1','m2']) C[k] = cs.getPropertyValue('--' + k).trim();
+  C.rgb = ['m0','m1','m2'].map(k => hexRgb(C[k]));
+  C.mono = cs.getPropertyValue('--f-mono').trim() || 'monospace';
+}
+function hexRgb(h) { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function heat(a) {
+  a = clamp01(a); const [c0, c1, c2] = C.rgb; let A, B, k;
+  if (a < .5) { A = c0; B = c1; k = a / .5; } else { A = c1; B = c2; k = (a - .5) / .5; }
+  return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], k))).join(',')})`;
+}
+readTokens();
+const retheme = () => { readTokens(); render(); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
+new MutationObserver(retheme).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+
+// ================= plátno =================
+let W = 0, Hh = 0, dpr = 1;
+function resize() {
+  const b = cv.getBoundingClientRect(); dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  W = b.width; Hh = b.height; cv.width = Math.round(W * dpr); cv.height = Math.round(Hh * dpr);
+  computeFit(); render();
+}
+new ResizeObserver(resize).observe(cv);
+
+function computeFit() {
+  if (!W) return;
+  const ex = EX[exKey]; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  const take = q => { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); };
+  for (let i = 0; i <= 24; i++) {
+    const P = ex.pose(i / 24); eachPt(P, take);
+    if (ex.plate) { const c = ex.plate(P); take(add(c, V(-22, -22))); take(add(c, V(22, 22))); }
+  }
+  (ex.bounds || []).forEach(take);
+  if (ex.ground) y0 = Math.min(y0, 0);
+  const pad = 16; x0 -= pad; x1 += pad; y0 -= pad; y1 += pad + 14;
+  const sc = Math.min(W / (x1 - x0), Hh / (y1 - y0));
+  fit = {sc, ox: (W - (x1 - x0) * sc) / 2 - x0 * sc, oy: Hh - (Hh - (y1 - y0) * sc) / 2 + y0 * sc};
+}
+const S = q => V(fit.ox + q.x * fit.sc, fit.oy - q.y * fit.sc);
+
+function line(a, b, w, col) {
+  const A = S(a), B = S(b);
+  ctx.strokeStyle = col; ctx.lineWidth = w * fit.sc; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+}
+function blob(center, u, halfLen, halfW, a, id, alphaMul) {
+  const Cs = S(center), ang = Math.atan2(-u.y, u.x), dim = hl && hl !== id;
+  ctx.save(); ctx.translate(Cs.x, Cs.y); ctx.rotate(ang);
+  ctx.globalAlpha = alphaMul * (dim ? .28 : 1);
+  ctx.fillStyle = heat(a);
+  if (a > .6 && !dim) { ctx.shadowColor = heat(a); ctx.shadowBlur = (a - .6) * 30; }
+  ctx.beginPath(); ctx.ellipse(0, 0, Math.max(1, halfLen * fit.sc), Math.max(1, halfW * fit.sc), 0, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  if (hl === id && alphaMul === 1) { ctx.globalAlpha = 1; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]); }
+  ctx.restore();
+}
+function segMuscle(m, A, B, a, alphaMul, off) {
+  const d = sub(B, A), L = len(d); if (L < .001) return;
+  const u = mul(d, 1 / L), pp = V(-u.y, u.x);
+  const c = add(add(A, mul(u, (m.t0 + m.t1) / 2 * L)), mul(pp, off ?? m.off));
+  blob(c, u, (m.t1 - m.t0) / 2 * L, m.w / 2, a, m.id, alphaMul);
+}
+
+function drawBackdrop(ex) {
+  ctx.fillStyle = C.surface; ctx.fillRect(0, 0, W, Hh);
+  const step = 10 * fit.sc;
+  ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = ((fit.ox % step) + step) % step; x < W; x += step) { ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, Hh); }
+  for (let y = ((fit.oy % step) + step) % step; y < Hh; y += step) { ctx.moveTo(0, y + .5); ctx.lineTo(W, y + .5); }
+  ctx.stroke();
+  ctx.fillStyle = C.muted; ctx.font = `500 10px ${C.mono}`; ctx.textAlign = 'right';
+  for (let cm = 0; cm <= 250; cm += 50) { const y = fit.oy - cm * fit.sc; if (y < 40 || y > Hh - 4) continue; ctx.fillText(cm + ' cm', W - 8, y - 4); }
+  if (ex.ground) {
+    const gy = fit.oy;
+    ctx.strokeStyle = C.muted; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = C.line; ctx.beginPath();
+    for (let x = -20; x < W + 20; x += 9) { ctx.moveTo(x, gy + 1); ctx.lineTo(x - 8, gy + 9); }
+    ctx.stroke();
+  }
+}
+
+// ---------- boční pohled ----------
+const near = (a, b) => a && b && Math.abs(a.x - b.x) + Math.abs(a.y - b.y) < .6;
+function drawLegSide(L, hip, col, act, alpha) {
+  line(hip, L.knee, 15, col); line(L.knee, L.ankle, 11, col); line(L.ankle, L.toe, 6, col); line(L.ankle, L.heel, 7, col);
+  for (const m of SIDE_SHAPES) if (m.seg === 'thigh') segMuscle(m, hip, L.knee, act[m.id], alpha); else if (m.seg === 'shin') segMuscle(m, L.knee, L.ankle, act[m.id], alpha);
+}
+function drawArmSide(A, sh, col, act, alpha) {
+  line(sh, A.elbow, 9, col); line(A.elbow, A.wrist, 7.5, col); line(A.wrist, A.hand, 6, col);
+  for (const m of SIDE_SHAPES) if (m.seg === 'uarm') segMuscle(m, sh, A.elbow, act[m.id], alpha); else if (m.seg === 'farm') segMuscle(m, A.elbow, A.wrist, act[m.id], alpha);
+}
+function renderSide(ex, P, act, farAct) {
+  if (ex.machine) ex.machine(P, 'back');
+  const off = V(-2.5, 1.5);
+  let fa = P.farArm, fsh = P.shoulder;
+  if (!fa || (near(fa.elbow, P.elbow) && near(fa.wrist, P.wrist))) { fa = {elbow: add(P.elbow, off), wrist: add(P.wrist, off), hand: add(P.hand, off)}; fsh = add(P.shoulder, off); }
+  drawArmSide(fa, fsh, C['limb-far'], farAct, .5);
+  let fl = P.farLeg, fhip = P.hip;
+  if (!fl || (near(fl.knee, P.knee) && near(fl.ankle, P.ankle))) { fl = {knee: add(P.knee, off), ankle: add(P.ankle, off), heel: add(P.heel, off), toe: add(P.toe, off)}; fhip = add(P.hip, off); }
+  drawLegSide(fl, fhip, C['limb-far'], farAct, .5);
+  line(P.hip, P.shoulder, 23, C.limb); line(P.shoulder, P.neck, 8, C.limb);
+  for (const m of SIDE_SHAPES) if (m.seg === 'torso') segMuscle(m, P.hip, P.shoulder, act[m.id], 1);
+  const Hs = S(P.head); ctx.fillStyle = C.limb; ctx.beginPath(); ctx.arc(Hs.x, Hs.y, 11 * fit.sc, 0, Math.PI * 2); ctx.fill();
+  drawLegSide(P, P.hip, C.limb, act, 1);
+  if (ex.machine) ex.machine(P, 'mid');
+  if (ex.plate) {
+    const c = S(ex.plate(P)), R = 22 * fit.sc;
+    ctx.save(); ctx.globalAlpha = .18; ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(c.x, c.y, R, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = .9; ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.stroke(); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(c.x, c.y, R * .72, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+  }
+  drawArmSide(P, P.shoulder, C.limb, act, 1);
+  if (ex.machine) ex.machine(P, 'front');
+}
+
+// ---------- čelní pohled ----------
+function renderFront(ex, P, act) {
+  const tu = norm(sub(P.neckBase, P.pelvis)), n = V(tu.y, -tu.x), TL = len(sub(P.neckBase, P.pelvis));
+  const limb = (Sd, refLeg, refArm) => {
+    line(Sd.hip, Sd.knee, 15, C.limb); line(Sd.knee, Sd.ankle, 11, C.limb); line(Sd.ankle, Sd.toe, 6, C.limb);
+    for (const m of FRONT_LIMB_SHAPES) {
+      if (m.seg !== 'thigh' && m.seg !== 'shin') continue;
+      const A = m.seg === 'thigh' ? Sd.hip : Sd.knee, B = m.seg === 'thigh' ? Sd.knee : Sd.ankle, u = norm(sub(B, A)), pp = V(-u.y, u.x);
+      const sgn = (pp.x * (refLeg.x - A.x) + pp.y * (refLeg.y - A.y)) >= 0 ? 1 : -1;
+      segMuscle(m, A, B, act[m.id], 1, m.offIn * sgn);
+    }
+  };
+  const arm = Sd => {
+    line(Sd.sh, Sd.el, 9, C.limb); line(Sd.el, Sd.wr, 7.5, C.limb); line(Sd.wr, Sd.hand, 6, C.limb);
+    for (const m of FRONT_LIMB_SHAPES) {
+      if (m.seg === 'uarm') segMuscle(m, Sd.sh, Sd.el, act[m.id], 1, 0);
+      if (m.seg === 'farm') segMuscle(m, Sd.el, Sd.wr, act[m.id], 1, 0);
+    }
+  };
+  limb(P.L, P.pelvis); limb(P.R, P.pelvis);
+  // trup
+  const q = [sub(P.pelvis, mul(n, 12)), add(P.pelvis, mul(n, 12)), add(P.neckBase, mul(n, 16)), sub(P.neckBase, mul(n, 16))].map(S);
+  ctx.fillStyle = C.limb; ctx.strokeStyle = C.limb; ctx.lineWidth = 8 * fit.sc; ctx.lineJoin = 'round';
+  ctx.beginPath(); q.forEach((s, i) => i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y)); ctx.closePath(); ctx.fill(); ctx.stroke();
+  line(P.neckBase, P.neck, 9, C.limb);
+  for (const m of FRONT_TORSO_SHAPES) for (const o of m.offs) {
+    const c = add(add(P.pelvis, mul(tu, (m.t0 + m.t1) / 2 * TL)), mul(n, o));
+    blob(c, tu, (m.t1 - m.t0) / 2 * TL, m.w / 2, act[m.id], m.id, 1);
+  }
+  arm(P.L); arm(P.R);
+  const Hs = S(P.head); ctx.fillStyle = C.limb; ctx.beginPath(); ctx.arc(Hs.x, Hs.y, 11 * fit.sc, 0, Math.PI * 2); ctx.fill();
+}
+
+// ---------- výpočet stavu ----------
+function stateAt(ex, tt) {
+  let p, ph = null, conc = false, label;
+  if (ex.mode === 'rep') {
+    ({p, ph} = repPhase(tt));
+    conc = (ph === 'up' && !ex.concUp) || (ph === 'down' && ex.concUp);
+    if (ph === 'holdB') label = {text: ex.peakLabel, cls: ''};
+    else if (ph === 'holdT') label = {text: ex.startLabel || 'Výchozí poloha', cls: ''};
+    else if (conc) label = {text: 'Koncentrická fáze · ' + (ex.concUp ? 'zvedání' : 'návrat nahoru'), cls: 'con'};
+    else label = {text: 'Excentrická fáze · ' + (ex.concUp ? 'spouštění' : 'spouštění dolů'), cls: 'ecc'};
+  } else {
+    p = tt;
+    label = ex.label ? ex.label(p) : {text: 'Izometrická výdrž', cls: ''};
+    conc = label.cls === 'con';
+  }
+  const base = ex.act(p), act = {};
+  for (const k in base) act[k] = clamp01(base[k] + (ex.mode === 'rep' && conc ? .07 : 0));
+  let farAct = act;
+  if (ex.alt) { farAct = {...act}; const f = ex.act((p + .5) % 1); for (const k of LIMB) if (k in f) farAct[k] = f[k]; }
+  if (ex.farLegScale) { farAct = {...act}; for (const k of ['quads','glutes','hams','calves']) farAct[k] = act[k] * ex.farLegScale; }
+  const shown = {};
+  for (const k in act) shown[k] = LIMB.has(k) ? Math.max(act[k], farAct[k] ?? 0) : act[k];
+  return {p, label, act, farAct, shown};
+}
+
+function render() {
+  if (!fit || !W) return;
+  const ex = EX[exKey];
+  const st = stateAt(ex, t);
+  const P = ex.pose(st.p);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawBackdrop(ex);
+  if (ex.view === 'front') renderFront(ex, P, st.act); else renderSide(ex, P, st.act, st.farAct);
+  updateUI(ex, st, P);
+}
+
+// ================= UI =================
+const $ = id => document.getElementById(id);
+const list = $('list'), phaseEl = $('phase'), infoEl = $('info'), scrub = $('scrub'), playBtn = $('play');
+const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
+
+// výběr cviků
+const chipEls = {};
+for (const g of GROUPS) {
+  const wrap = document.createElement('div'); wrap.className = 'group';
+  wrap.innerHTML = `<h3>${g}</h3>`;
+  const chips = document.createElement('div'); chips.className = 'chips';
+  for (const [k, ex] of Object.entries(EX)) if (ex.group === g) {
+    const b = document.createElement('button'); b.className = 'chip'; b.id = 'chip-' + k;
+    b.addEventListener('click', () => onChip(k));
+    chips.appendChild(b); chipEls[k] = b;
+  }
+  wrap.appendChild(chips); $('picker').appendChild(wrap);
+}
+function paintChips() {
+  for (const [k, b] of Object.entries(chipEls)) {
+    const idx = tab.seq.indexOf(k);
+    b.innerHTML = EX[k].name + (mode === 'tab' && idx >= 0 ? `<span class="n">${idx + 1}</span>` : '');
+    b.setAttribute('aria-pressed', k === exKey);
+    b.classList.toggle('in-seq', mode === 'tab' && idx >= 0);
+  }
+}
+function onChip(k) {
+  if (mode === 'tab' && !tab.running) {
+    const i = tab.seq.indexOf(k);
+    if (i >= 0) tab.seq.splice(i, 1); else tab.seq.push(k);
+    saveTab(); updateSeqTxt();
+    if (tab.phase === 'done') resetTab();
+  }
+  if (mode === 'tab' && tab.running) return;
+  selectEx(k);
+}
+
+let rowEls = {};
+function buildRows() {
+  const ex = EX[exKey], peak = {};
+  for (let i = 0; i <= 20; i++) { const st = stateAt(ex, i / 20); for (const k in st.shown) peak[k] = Math.max(peak[k] || 0, st.shown[k]); }
+  const order = Object.keys(peak).sort((a, b) => peak[b] - peak[a]);
+  const vis = VISIBLE[ex.view];
+  list.innerHTML = ''; rowEls = {};
+  for (const id of order) {
+    const pk = peak[id];
+    const tag = (pk >= .75 ? 'hlavní' : pk >= .4 ? 'pomocný' : 'stabilizace') + (vis.has(id) ? '' : ' · vzadu');
+    const li = document.createElement('li');
+    li.className = 'row'; li.tabIndex = 0; li.setAttribute('role', 'button'); li.setAttribute('aria-pressed', hl === id);
+    li.innerHTML = `<span class="nm">${MUSCLE_NAMES[id]}<span class="tag">${tag}</span></span><span class="pc">0 %</span><span class="bar"><i></i></span>`;
+    const toggle = () => { hl = hl === id ? null : id; for (const [k, r] of Object.entries(rowEls)) r.li.setAttribute('aria-pressed', hl === k); render(); };
+    li.addEventListener('click', toggle);
+    li.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    list.appendChild(li);
+    rowEls[id] = {li, pc: li.querySelector('.pc'), bar: li.querySelector('.bar i')};
+  }
+  $('cue').innerHTML = `<b>${ex.cue[0]}</b>${ex.cue[1]}`;
+  $('viewTag').textContent = ex.view === 'front' ? 'Pohled zepředu' : 'Pohled z boku';
+}
+
+let lastLabel = '';
+function updateUI(ex, st, P) {
+  for (const id in rowEls) {
+    const v = st.shown[id] || 0, r = rowEls[id];
+    r.pc.textContent = Math.round(v * 100) + ' %';
+    r.bar.style.width = (v * 100).toFixed(1) + '%';
+    r.bar.style.background = heat(v);
+  }
+  const key = st.label.text + st.label.cls;
+  if (key !== lastLabel) { phaseEl.textContent = st.label.text; phaseEl.className = 'pill ' + st.label.cls; lastLabel = key; }
+  const mul_ = curSpeed();
+  infoEl.innerHTML = ex.info ? ex.info(mul_) : ex.mode === 'rep' ? `<b>Hloubka</b>${Math.round(st.p * 100)} %` : ex.mode === 'static' ? 'Izometrie' : `${Math.round(60 / (ex.period / mul_))} opak./min`;
+  const ang = ex.angles ? ex.angles(P) : [['Koleno', angleAt(P.hip, P.knee, P.ankle) + '°'], ['Kyčel', angleAt(P.shoulder, P.hip, P.knee) + '°'], ['Loket', angleAt(P.shoulder, P.elbow, P.wrist) + '°']];
+  ang.forEach(([l, v], i) => { $('aL' + i).textContent = l; $('aV' + i).textContent = v; });
+}
+
+function selectEx(k) {
+  exKey = k; hl = null; paintChips(); buildRows(); computeFit(); render();
+}
+
+function setPlaying(v) {
+  playing = v; playBtn.innerHTML = v ? ICON_PAUSE : ICON_PLAY;
+  playBtn.setAttribute('aria-label', v ? 'Pozastavit' : 'Přehrát'); last = null;
+}
+playBtn.addEventListener('click', () => setPlaying(!playing));
+scrub.addEventListener('input', () => { setPlaying(false); t = scrub.value / 1000; render(); });
+$('speed').addEventListener('change', e => { speed = +e.target.value; });
+
+// ================= režimy =================
+function setMode(m) {
+  mode = m;
+  $('modeView').setAttribute('aria-pressed', m === 'view'); $('modeTab').setAttribute('aria-pressed', m === 'tab');
+  $('tbSetup').hidden = m !== 'tab'; $('band').hidden = m !== 'tab'; $('prog').hidden = m !== 'tab';
+  $('ctrl').hidden = m === 'tab';
+  if (m === 'view') { stopTab(); document.body.classList.remove('tb-run'); $('summary').hidden = true; setPlaying(!reduce); }
+  else { resetTab(); if (tab.seq[0]) selectEx(tab.seq[0]); }
+  paintChips();
+}
+$('modeView').addEventListener('click', () => setMode('view'));
+$('modeTab').addEventListener('click', () => setMode('tab'));
+
+// ================= tabata =================
+const PRESETS = [[20, 10, 8, 'Klasická'], [30, 15, 8], [40, 20, 6], [45, 15, 6], [60, 30, 5]];
+for (const [w, rr, n, nm] of PRESETS) {
+  const b = document.createElement('button'); b.className = 'preset';
+  b.textContent = `${w}/${rr} × ${n}` + (nm ? ` · ${nm}` : '');
+  b.addEventListener('click', () => { if (tab.running) return; tab.work = w; tab.rest = rr; tab.rounds = n; syncInputs(); saveTab(); resetTab(); });
+  b.dataset.v = `${w}/${rr}/${n}`;
+  $('presets').appendChild(b);
+}
+const fmt = s => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+function syncInputs() {
+  $('tbWork').value = tab.work; $('tbRest').value = tab.rest; $('tbRounds').value = tab.rounds; $('tbSound').checked = tab.sound;
+  $('tbTotal').textContent = fmt(tab.rounds * tab.work + (tab.rounds - 1) * tab.rest);
+  for (const b of $('presets').children) b.setAttribute('aria-pressed', b.dataset.v === `${tab.work}/${tab.rest}/${tab.rounds}`);
+}
+for (const [id, key, min] of [['tbWork', 'work', 5], ['tbRest', 'rest', 0], ['tbRounds', 'rounds', 1]]) {
+  $(id).addEventListener('change', e => { const v = Math.round(+e.target.value); tab[key] = isFinite(v) ? Math.max(min, v) : tab[key]; syncInputs(); saveTab(); if (!tab.running) resetTab(); });
+}
+$('tbSound').addEventListener('change', e => { tab.sound = e.target.checked; saveTab(); });
+function saveTab() { store.set('tab', {work: tab.work, rest: tab.rest, rounds: tab.rounds, seq: tab.seq, sound: tab.sound}); }
+function updateSeqTxt() {
+  $('seqTxt').innerHTML = tab.seq.length
+    ? 'Pořadí v kolech: ' + tab.seq.map((k, i) => `<b>${i + 1}. ${EX[k].name}</b>`).join(' → ') + (tab.seq.length < tab.rounds ? ' → a znovu dokola' : '')
+    : 'Klepnutím na cviky níže je přidáš do tabaty. Střídají se po kolech.';
+}
+const exForRound = n => tab.seq.length ? tab.seq[(n - 1) % tab.seq.length] : exKey;
+
+let actx = null;
+function beep(freq, dur, vol = .2) {
+  if (!tab.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = freq; o.type = 'sine'; g.gain.value = vol;
+    g.gain.exponentialRampToValueAtTime(.001, actx.currentTime + dur);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + dur);
+  } catch (e) {}
+}
+let wake = null;
+async function lockWake() { try { wake = await navigator.wakeLock?.request('screen'); } catch (e) { wake = null; } }
+function releaseWake() { try { wake?.release(); } catch (e) {} wake = null; }
+
+function resetTab() {
+  document.body.classList.remove('tb-run');
+  tab.running = false; tab.phase = 'idle'; tab.round = 0; tab.remain = 0; tab.sums = {}; tab.workTime = 0;
+  $('tbStart').textContent = 'Start'; $('summary').hidden = true;
+  syncInputs(); updateSeqTxt(); paintBand(); releaseWake();
+  setPlaying(!reduce);
+}
+function stopTab() { tab.running = false; releaseWake(); $('tbStart').textContent = tab.phase === 'idle' || tab.phase === 'done' ? 'Start' : 'Pokračovat'; }
+$('tbReset').addEventListener('click', resetTab);
+$('tbStart').addEventListener('click', () => {
+  if (!tab.seq.length) { $('seqTxt').innerHTML = '<b>Nejdřív vyber aspoň jeden cvik.</b> Klepnutím na cviky níže je přidáš do tabaty.'; return; }
+  if (tab.running) { stopTab(); paintBand(); return; }
+  if (tab.phase === 'idle' || tab.phase === 'done') { resetTab(); tab.phase = 'prep'; tab.remain = 5; tab.round = 1; selectEx(exForRound(1)); t = 0; }
+  tab.running = true; document.body.classList.add('tb-run'); $('tbStart').textContent = 'Pauza'; setPlaying(true); lockWake(); beep(660, .12);
+  if (innerWidth < 820) document.querySelector('.stage').scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block: 'start'});
+});
+function advanceTab() {
+  if (tab.phase === 'prep') { tab.phase = 'work'; tab.remain = tab.work; selectEx(exForRound(tab.round)); t = 0; beep(880, .45, .3); return; }
+  if (tab.phase === 'work') {
+    if (tab.round >= tab.rounds) { finishTab(); return; }
+    if (tab.rest > 0) { tab.phase = 'rest'; tab.remain = tab.rest; selectEx(exForRound(tab.round + 1)); t = 0; beep(440, .5, .3); return; }
+    tab.round++; tab.phase = 'work'; tab.remain = tab.work; selectEx(exForRound(tab.round)); t = 0; beep(880, .45, .3); return;
+  }
+  if (tab.phase === 'rest') { tab.round++; tab.phase = 'work'; tab.remain = tab.work; selectEx(exForRound(tab.round)); t = 0; beep(880, .45, .3); }
+}
+function finishTab() {
+  tab.phase = 'done'; tab.running = false; document.body.classList.remove('tb-run'); releaseWake(); beep(880, .2); setTimeout(() => beep(990, .2), 250); setTimeout(() => beep(1180, .5), 500);
+  $('tbStart').textContent = 'Start';
+  const sums = tab.sums, tw = tab.workTime || 1;
+  const ids = Object.keys(sums).sort((a, b) => sums[b] - sums[a]);
+  $('sumTxt').textContent = `${tab.rounds} kol, ${fmt(tab.workTime)} čisté práce. Průměrné zapojení svalů během pracovních intervalů:`;
+  $('sumList').innerHTML = ids.map(id => { const v = sums[id] / tw; return `<li class="row" style="cursor:default"><span class="nm">${MUSCLE_NAMES[id]}</span><span class="pc">${Math.round(v * 100)} %</span><span class="bar"><i style="width:${(v * 100).toFixed(1)}%;background:${heat(v)}"></i></span></li>`; }).join('');
+  $('summary').hidden = false;
+  paintBand();
+}
+let lastBeepSec = null;
+function tickTab(dt) {
+  if (!tab.running) return;
+  const before = tab.remain;
+  tab.remain -= dt;
+  const sec = Math.ceil(tab.remain);
+  if (sec !== Math.ceil(before) && sec <= 3 && sec >= 1 && tab.phase !== 'done') beep(620, .1);
+  if (tab.phase === 'work') {
+    const st = stateAt(EX[exKey], t);
+    for (const k in st.shown) tab.sums[k] = (tab.sums[k] || 0) + st.shown[k] * dt;
+    tab.workTime += dt;
+  }
+  while (tab.running && tab.remain <= 0) { const over = -tab.remain; advanceTab(); if (tab.running) tab.remain -= over; }
+  paintBand();
+}
+function paintBand() {
+  const band = $('band'), ph = tab.phase;
+  band.className = 'band ' + ({work: 'work', rest: 'rest', prep: 'prep'}[ph] || '');
+  const names = {idle: 'Připraveno', prep: 'Připrav se', work: 'Práce', rest: 'Pauza', done: 'Hotovo'};
+  $('bandPh').textContent = names[ph] + (!tab.running && (ph === 'work' || ph === 'rest' || ph === 'prep') ? ' · pauza' : '');
+  let sub = '', tm = '', frac = 0;
+  if (ph === 'idle') { sub = tab.seq.length ? `${tab.rounds} kol · první: ${EX[tab.seq[0]].name}` : 'Vyber cviky'; tm = fmt(tab.work); }
+  else if (ph === 'prep') { sub = `Začínáme: ${EX[exForRound(1)].name}`; tm = fmt(tab.remain); frac = 1 - tab.remain / 5; }
+  else if (ph === 'work') { sub = `Kolo ${tab.round}/${tab.rounds} · ${EX[exKey].name}`; tm = fmt(tab.remain); frac = 1 - tab.remain / tab.work; }
+  else if (ph === 'rest') { sub = `Další: ${EX[exForRound(tab.round + 1)].name} (kolo ${tab.round + 1}/${tab.rounds})`; tm = fmt(tab.remain); frac = 1 - tab.remain / tab.rest; }
+  else if (ph === 'done') { sub = 'Souhrn je v panelu se svaly'; tm = '0:00'; frac = 1; }
+  $('bandSub').textContent = sub; $('bandTm').textContent = tm;
+  $('prog').firstElementChild.style.width = (clamp01(frac) * 100).toFixed(1) + '%';
+}
+function curSpeed() {
+  if (mode !== 'tab') return speed;
+  if (tab.phase === 'work') return tab.running ? 1.45 : 1.45;
+  if (tab.phase === 'rest' || tab.phase === 'prep') return .4;
+  return 1;
+}
+
+// ================= smyčka =================
+function frame(ts) {
+  const dt = last == null ? 0 : Math.min(.1, (ts - last) / 1000);
+  last = ts;
+  const tabActive = mode === 'tab' && tab.running;
+  if (tabActive) tickTab(dt);
+  const animate = mode === 'tab' ? (tab.running || tab.phase === 'idle' || tab.phase === 'done') && !reduce : playing;
+  if (animate) {
+    const ex = EX[exKey];
+    t = (t + dt * curSpeed() / cycleLen(ex)) % 1;
+    if (mode === 'view') scrub.value = Math.round(t * 1000);
+    render();
+  }
+  requestAnimationFrame(frame);
+}
+
+// ladicí háček pro náhledy
+
+syncInputs(); updateSeqTxt(); paintBand();
+selectEx(exKey); setPlaying(playing); resize();
+if (reduce) { t = .42; scrub.value = 420; render(); }
+requestAnimationFrame(frame);
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
