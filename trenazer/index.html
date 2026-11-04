@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenažér – krok 2</title>
+<title>Trenažér – krok 3</title>
 <style>
   body {
     margin: 0;
@@ -46,11 +46,34 @@
 
   .souhrn { font-size: 18px; margin-top: 16px; line-height: 1.6; }
   .stav   { margin-top: 6px; color: #888; font-size: 14px; }
+
+  /* ===== ERG a intervaly ===== */
+  .panel {
+    background: #1d1d1d;
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 14px;
+  }
+  .panel h2 { font-size: 17px; color: #bbb; margin: 0 0 8px; }
+  .cil { font-size: 48px; font-weight: bold; color: #ffca28; }
+  .maly { font-size: 16px; padding: 10px 14px; background: #444; }
+  #btnErg      { background: #8e24aa; }
+  #btnInterval { background: #43a047; }
+  .radek { margin: 6px 0; font-size: 16px; }
+  .radek input {
+    width: 54px; font-size: 17px; text-align: center;
+    background: #2a2a2a; color: #eee; border: 1px solid #444; border-radius: 6px;
+  }
+  #faze      { font-size: 22px; font-weight: bold; margin-top: 6px; }
+  #zbyva     { font-size: 54px; font-weight: bold; color: #fff; }
+  #dalsi     { color: #999; font-size: 15px; }
+  .postup    { height: 8px; background: #333; border-radius: 4px; margin-top: 8px; }
+  #postupBar { height: 8px; width: 0; background: #43a047; border-radius: 4px; }
 </style>
 </head>
 <body>
 
-<h1>Krok 2: Kolo + tep <small style="color:#555">(verze 2.5)</small></h1>
+<h1>Krok 3: ERG a intervaly <small style="color:#555">(verze 3.0)</small></h1>
 
 <button id="btnKolo">Připojit kolo</button>
 <button id="btnPas">Připojit pás</button>
@@ -85,7 +108,38 @@
   Max tep: <b id="maxTep">--</b>
 </div>
 
+<!-- ===== ERG: kolo drží nastavené watty ===== -->
+<div class="panel">
+  <h2>ERG – pevný výkon</h2>
+  <button class="maly" id="minus10">−10</button>
+  <span class="cil"><span id="cilW">150</span> W</span>
+  <button class="maly" id="plus10">+10</button><br>
+  <button id="btnErg">Zapnout ERG</button>
+</div>
+
+<!-- ===== Intervaly ===== -->
+<div class="panel">
+  <h2>Intervalový trénink</h2>
+  <div class="radek">Rozjetí <input id="rozMin" type="number" value="10"> min
+    při <input id="rozW" type="number" value="120"> W</div>
+  <div class="radek"><input id="opak" type="number" value="5"> × práce
+    <input id="praceMin" type="number" value="4"> min
+    při <input id="praceW" type="number" value="250"> W</div>
+  <div class="radek">odpočinek <input id="odpMin" type="number" value="3"> min
+    při <input id="odpW" type="number" value="110"> W</div>
+  <div class="radek">Vyjetí <input id="vyjMin" type="number" value="10"> min
+    při <input id="vyjW" type="number" value="110"> W</div>
+  <div class="radek">Celkem: <b id="celkem">--</b></div>
+  <button id="btnInterval">Start intervalů</button>
+
+  <div id="faze"></div>
+  <div id="zbyva"></div>
+  <div id="dalsi"></div>
+  <div class="postup"><div id="postupBar"></div></div>
+</div>
+
 <div class="stav" id="stavKolo">Kolo: nepřipojeno</div>
+<div class="stav" id="stavOvladani">Ovládání: --</div>
 <div class="stav" id="stavPas">Pás: nepřipojeno</div>
 
 <script>
@@ -137,6 +191,7 @@ async function pripojZarizeni(sluzba, charakteristika, zpracuj, stavId, nazev) {
     await ch.startNotifications();
     ch.addEventListener('characteristicvaluechanged', zpracuj);
     napis(stavId, nazev + ': ' + zarizeni.name);
+    return s;   // vrátíme službu – u kola ji potřebujeme pro ovládání
   } catch (chyba) {
     napis(stavId, nazev + ': chyba – ' + chyba.message);
   }
@@ -254,8 +309,216 @@ setInterval(() => {
 document.getElementById('btnPas').addEventListener('click', () =>
   pripojZarizeni(0x180D, 0x2A37, novyTep, 'stavPas', 'Pás'));
 
-document.getElementById('btnKolo').addEventListener('click', () =>
-  pripojZarizeni(0x1826, 0x2AD2, novaDataKola, 'stavKolo', 'Kolo'));
+document.getElementById('btnKolo').addEventListener('click', async () => {
+  const sluzba = await pripojZarizeni(0x1826, 0x2AD2, novaDataKola, 'stavKolo', 'Kolo');
+  if (sluzba) pripravOvladani(sluzba);
+});
+
+// =====================================================================
+// ===== KROK 3: OVLÁDÁNÍ KOLA (FTMS Control Point) =====
+// =====================================================================
+// 0x2AD9 = "Control Point" – šuplík, do kterého kolu POSÍLÁME příkazy.
+// Každý příkaz = pár bajtů: první bajt je číslo příkazu (opcode),
+// za ním případně hodnota. Kolo na každý příkaz odpoví:
+//   [0x80, číslo příkazu, výsledek]   výsledek 1 = OK
+const PRIKAZ = {
+  PREVZIT_RIZENI: 0x00,   // "teď tě ovládám já"
+  START:          0x07,   // start / pokračovat
+  VYKON:          0x05,   // nastav cílový výkon (W)
+  SIMULACE:       0x11,   // simulace jízdy – sklon, vítr...
+};
+
+let ovladani = null;    // charakteristika Control Point
+let fronta = Promise.resolve();   // příkazy posíláme jeden po druhém
+
+async function pripravOvladani(sluzba) {
+  try {
+    ovladani = await sluzba.getCharacteristic(0x2AD9);
+    // Odpovědi kola chodí jako "indikace" – musíme je zapnout dřív,
+    // než pošleme první příkaz, jinak kolo příkazy odmítne.
+    await ovladani.startNotifications();
+    ovladani.addEventListener('characteristicvaluechanged', odpovedKola);
+    await posli([PRIKAZ.PREVZIT_RIZENI]);
+    await posli([PRIKAZ.START]);
+    napis('stavOvladani', 'Ovládání: připraveno');
+  } catch (chyba) {
+    napis('stavOvladani', 'Ovládání: chyba – ' + chyba.message);
+  }
+}
+
+// Bluetooth zvládne jen jeden zápis najednou. Když pošleme dva příkazy
+// rychle po sobě, druhý by spadl s chybou. Proto je řadíme do fronty:
+// každý další čeká, až doběhne předchozí.
+function posli(bajty) {
+  fronta = fronta.then(() => {
+    if (!ovladani) return;
+    return ovladani.writeValueWithResponse(new Uint8Array(bajty));
+  }).catch(chyba => napis('stavOvladani', 'Ovládání: chyba – ' + chyba.message));
+  return fronta;
+}
+
+function odpovedKola(udalost) {
+  const d = udalost.target.value;
+  if (d.getUint8(0) !== 0x80) return;
+  const prikaz = d.getUint8(1), vysledek = d.getUint8(2);
+  if (vysledek !== 1) {
+    napis('stavOvladani', 'Kolo odmítlo příkaz 0x' + prikaz.toString(16) +
+          ' (kód ' + vysledek + ')');
+  }
+}
+
+// Nastav cílový výkon. Watty = 2 bajty, "little endian":
+// nejdřív dolní bajt (w & 0xFF), pak horní (w >> 8).
+// Např. 250 W = 0x00FA → bajty [0xFA, 0x00]
+function nastavVykon(w) {
+  w = Math.round(w);
+  posli([PRIKAZ.VYKON, w & 0xFF, (w >> 8) & 0xFF]);
+}
+
+// Volná jízda po rovině = simulace se sklonem 0 %.
+// Tím ERG vypneme a odpor zase řídí rychlost a převody.
+// Bajty: vítr (2), sklon (2, v setinách %), valivý odpor (1), vzduch (1)
+function volnaJizda(sklonProcent = 0) {
+  const s = Math.round(sklonProcent * 100);          // 5 % → 500
+  const s16 = s & 0xFFFF;                            // záporná čísla správně
+  posli([PRIKAZ.SIMULACE, 0, 0, s16 & 0xFF, s16 >> 8, 40, 51]);
+  //                      vítr 0   sklon             Crr 0,004  CdA·ρ/2 ≈ 0,51
+}
+
+// ===== ERG ovládací panel =====
+let cilW = 150;
+let ergZapnuto = false;
+
+function ukazCil() { napis('cilW', cilW); }
+
+document.getElementById('plus10').addEventListener('click', () => {
+  cilW += 10; ukazCil();
+  if (ergZapnuto) nastavVykon(cilW);
+});
+document.getElementById('minus10').addEventListener('click', () => {
+  cilW = Math.max(50, cilW - 10); ukazCil();
+  if (ergZapnuto) nastavVykon(cilW);
+});
+
+function prepniErg(zapnout) {
+  ergZapnuto = zapnout;
+  const b = document.getElementById('btnErg');
+  if (zapnout) {
+    nastavVykon(cilW);
+    b.textContent = 'Vypnout ERG';
+    b.style.background = '#555';
+  } else {
+    volnaJizda(0);
+    b.textContent = 'Zapnout ERG';
+    b.style.background = '#8e24aa';
+  }
+}
+document.getElementById('btnErg').addEventListener('click', () => {
+  if (!ovladani) { napis('stavOvladani', 'Nejdřív připoj kolo'); return; }
+  prepniErg(!ergZapnuto);
+});
+
+// ===== Intervaly =====
+// Z políček sestavíme seznam fází: [{nazev, sekundy, watty}, ...]
+const POLE = ['rozMin','rozW','opak','praceMin','praceW','odpMin','odpW','vyjMin','vyjW'];
+const cislo = id => Number(document.getElementById(id).value) || 0;
+
+// Nastavení si pamatujeme v prohlížeči
+POLE.forEach(id => {
+  const el = document.getElementById(id);
+  try { const u = localStorage.getItem('int_' + id); if (u !== null) el.value = u; } catch (e) {}
+  el.addEventListener('change', () => {
+    try { localStorage.setItem('int_' + id, el.value); } catch (e) {}
+    ukazCelkem();
+  });
+});
+
+function sestavFaze() {
+  const f = [];
+  if (cislo('rozMin') > 0) f.push({ nazev: 'Rozjetí', s: cislo('rozMin') * 60, w: cislo('rozW') });
+  const n = cislo('opak');
+  for (let i = 1; i <= n; i++) {
+    f.push({ nazev: 'Práce ' + i + '/' + n, s: cislo('praceMin') * 60, w: cislo('praceW') });
+    if (i < n && cislo('odpMin') > 0)        // po posledním už odpočinek není
+      f.push({ nazev: 'Odpočinek', s: cislo('odpMin') * 60, w: cislo('odpW') });
+  }
+  if (cislo('vyjMin') > 0) f.push({ nazev: 'Vyjetí', s: cislo('vyjMin') * 60, w: cislo('vyjW') });
+  return f;
+}
+
+const mmss = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+
+function ukazCelkem() {
+  const celkem = sestavFaze().reduce((soucet, f) => soucet + f.s, 0);
+  napis('celkem', mmss(celkem));
+}
+ukazCelkem();
+
+let faze = [], index = 0, zbyva = 0, intervalBezi = null;
+
+function spustFazi() {
+  const f = faze[index];
+  zbyva = f.s;
+  cilW = f.w; ukazCil();
+  ergZapnuto = true;
+  nastavVykon(f.w);
+  napis('faze', f.nazev + ' – ' + f.w + ' W');
+  const dalsi = faze[index + 1];
+  napis('dalsi', dalsi ? 'Další: ' + dalsi.nazev + ' – ' + dalsi.w + ' W' : 'Poslední fáze');
+  document.getElementById('faze').style.color = f.nazev.startsWith('Práce') ? '#ff7043' : '#81c784';
+}
+
+function tik() {
+  zbyva--;
+  napis('zbyva', mmss(Math.max(zbyva, 0)));
+  const f = faze[index];
+  document.getElementById('postupBar').style.width = (100 * (f.s - zbyva) / f.s) + '%';
+
+  // 3 s před koncem fáze krátce zavibruje (na tabletu/mobilu)
+  if (zbyva > 0 && zbyva <= 3 && navigator.vibrate) navigator.vibrate(150);
+
+  if (zbyva <= 0) {
+    index++;
+    if (index < faze.length) spustFazi();
+    else zastavIntervaly('Hotovo! 💪');
+  }
+}
+
+function zastavIntervaly(text) {
+  clearInterval(intervalBezi);
+  intervalBezi = null;
+  prepniErg(false);           // zpět na volnou jízdu
+  napis('faze', text);
+  napis('zbyva', ''); napis('dalsi', '');
+  document.getElementById('postupBar').style.width = '0';
+  const b = document.getElementById('btnInterval');
+  b.textContent = 'Start intervalů';
+  b.style.background = '#43a047';
+}
+
+document.getElementById('btnInterval').addEventListener('click', () => {
+  if (!ovladani) { napis('stavOvladani', 'Nejdřív připoj kolo'); return; }
+  if (intervalBezi) { zastavIntervaly('Zastaveno'); return; }
+
+  faze = sestavFaze();
+  if (faze.length === 0) return;
+  index = 0;
+  spustFazi();
+  napis('zbyva', mmss(zbyva));
+  intervalBezi = setInterval(tik, 1000);
+  const b = document.getElementById('btnInterval');
+  b.textContent = 'Zastavit';
+  b.style.background = '#c62828';
+});
+
+// Ať tablet během tréninku nezhasne obrazovku
+async function nezhasinej() {
+  try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+document.addEventListener('click', nezhasinej, { once: true });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') nezhasinej();
+});
 </script>
 
 </body>
