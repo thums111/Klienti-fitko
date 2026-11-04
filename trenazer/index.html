@@ -156,7 +156,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 4.1)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 4.2)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -696,12 +696,7 @@ document.getElementById('btnCela').addEventListener('click', () => {
   else celaObrazovka();
 });
 
-// Při otevření stránky obnovíme naposledy použitý režim (bez posílání příkazů)
-(() => {
-  let r = 'intervaly';
-  try { r = localStorage.getItem('rezim') || 'intervaly'; } catch (e) {}
-  ukazRezim(r);
-})();
+
 
 // =====================================================================
 // ===== KROK 4: TRASY =====
@@ -1017,6 +1012,15 @@ document.addEventListener('click', nezhasinej, { once: true });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') nezhasinej();
 });
+
+// POZOR: musí být až úplně na konci – režim "Trasa" sahá na mapu
+// a proměnné, které jsou nadefinované až výše v kroku 4.
+// Při otevření stránky obnovíme naposledy použitý režim (bez posílání příkazů)
+(() => {
+  let r = 'intervaly';
+  try { r = localStorage.getItem('rezim') || 'intervaly'; } catch (e) {}
+  ukazRezim(r);
+})();
 </script>
 
 </body>
