@@ -211,7 +211,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 5.2)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 5.3)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -593,6 +593,11 @@ let ovladani = null;    // charakteristika Control Point
 let fronta = Promise.resolve();   // příkazy posíláme jeden po druhém
 
 async function pripravOvladani(sluzba) {
+  // Nové připojení = nový začátek: zapomeneme, co jsme zjistili minule
+  umiVykon = true; umiOdpor = false; umiSimulaci = true;
+  odporNejde = false; odporAkt = null; odporPokusy = 0; odmitnutiSimulace = 0;
+  ergSklonMin = 0; ergSklonMax = 15; ergSklon = 2;
+  zastavRegulator();
   try {
     ovladani = await sluzba.getCharacteristic(0x2AD9);
     // Odpovědi kola chodí jako "indikace" – musíme je zapnout dřív,
@@ -713,6 +718,11 @@ setInterval(() => {
 //  'odpor' – posíláme přímo úroveň odporu (pro kola bez simulace).
 let regRezim = 'sklon';
 let ergSklon = 2;            // virtuální sklon v %, kterým držíme watty
+// Rozsah sklonu pro ERG: z kopce (záporný sklon) nepotřebujeme – nízké watty
+// se dají ujet i po rovině. Záporný sklon navíc některá kola odmítnou.
+let ergSklonMin = 0, ergSklonMax = 15;
+let posledniSklonPoslany = 0;
+let odmitnutiSimulace = 0;   // kolikrát po sobě kolo simulaci odmítlo
 
 function spustRegulator() {
   if (odporNejde) return;
@@ -731,14 +741,14 @@ function spustRegulator() {
       if (Math.abs(chyba) > Math.max(5, cilW * 0.03)) {
         let krok = Math.max(-2, Math.min(2, chyba / 30));
         if (Math.abs(krok) < 0.3) krok = 0.3 * Math.sign(chyba);
-        ergSklon = Math.max(-5, Math.min(20, ergSklon + krok));
+        ergSklon = Math.max(ergSklonMin, Math.min(ergSklonMax, ergSklon + krok));
         posliSimulaci(ergSklon);
       }
       // Když už je kopec na maximu/minimu a pořád to nestačí → poradíme převod
       const tol = Math.max(8, cilW * 0.06);
-      if (ergSklon >= 20 && chyba > tol) {
+      if (ergSklon >= ergSklonMax && chyba > tol) {
         el.className = 'trener tezsi'; el.textContent = '⬆ zařaď těžší (+' + Math.round(chyba) + ' W)';
-      } else if (ergSklon <= -5 && chyba < -tol) {
+      } else if (ergSklon <= ergSklonMin && chyba < -tol) {
         el.className = 'trener lehci'; el.textContent = '⬇ zařaď lehčí (' + Math.round(chyba) + ' W)';
       } else {
         el.className = ''; el.textContent = 'aplikace dorovnává – virtuální sklon ' + ergSklon.toFixed(1) + ' %';
@@ -754,6 +764,14 @@ function spustRegulator() {
   }, 2000);
 }
 
+// Při novém zapnutí ERG / startu intervalů dáme kolu novou šanci
+function obnovPokusy() {
+  odporNejde = false; odporPokusy = 0; odmitnutiSimulace = 0;
+  if (!umiSimulaci) umiSimulaci = true;
+  const el = document.getElementById('ergInfo');
+  el.className = ''; el.textContent = '';
+}
+
 function zastavRegulator() {
   clearInterval(regulator);
   regulator = null;
@@ -762,6 +780,7 @@ function zastavRegulator() {
 
 // Pošle kolu simulaci: vítr 0, sklon (v setinách %), valivý odpor, odpor vzduchu
 function posliSimulaci(sklonProcent) {
+  posledniSklonPoslany = sklonProcent;
   const s = Math.round(sklonProcent * 100);          // 5 % → 500
   const s16 = s & 0xFFFF;                            // záporná čísla správně
   posli([PRIKAZ.SIMULACE, 0, 0, s16 & 0xFF, s16 >> 8, 40, 51]);
@@ -784,7 +803,30 @@ function odpovedKola(udalost) {
     if (ergZapnuto) spustRegulator();
     return;
   }
-  if (vysledek !== 1 && prikaz === PRIKAZ.SIMULACE) { umiSimulaci = false; return; }
+  if (prikaz === PRIKAZ.SIMULACE) {
+    if (vysledek === 1) { odmitnutiSimulace = 0; return; }
+    odmitnutiSimulace++;
+    if (vysledek === 5) {
+      // 5 = "řízení není povoleno": kolo nás "zapomnělo" (třeba po pauze).
+      // Znovu převezmeme řízení a příkaz zopakujeme.
+      posli([PRIKAZ.PREVZIT_RIZENI]);
+      posli([PRIKAZ.START]);
+      posliSimulaci(posledniSklonPoslany);
+    } else if (vysledek === 3) {
+      // 3 = "neplatná hodnota": tenhle sklon kolo neumí → zúžíme rozsah
+      if (posledniSklonPoslany < 0) ergSklonMin = 0;
+      else ergSklonMax = Math.max(4, Math.floor(posledniSklonPoslany) - 1);
+      ergSklon = Math.max(ergSklonMin, Math.min(ergSklonMax, ergSklon));
+      if (odmitnutiSimulace < 3) posliSimulaci(ergSklon);
+    }
+    // Teprve když to kolo odmítne mnohokrát po sobě, vzdáme simulaci
+    if (odmitnutiSimulace >= 6) umiSimulaci = false;
+    return;
+  }
+  if (vysledek === 5) {                    // i u jiných příkazů: znovu převzít řízení
+    posli([PRIKAZ.PREVZIT_RIZENI]);
+    posli([PRIKAZ.START]);
+  }
   if (vysledek !== 1) {
     napis('stavOvladani', 'Kolo odmítlo příkaz 0x' + prikaz.toString(16) +
           ' (kód ' + vysledek + ')');
@@ -837,6 +879,7 @@ function prepniErg(zapnout) {
   ergZapnuto = zapnout;
   const b = document.getElementById('btnErg');
   if (zapnout) {
+    obnovPokusy();
     nastavVykon(cilW);
     b.textContent = 'Vypnout ERG';
     b.style.background = '#555';
@@ -968,6 +1011,7 @@ document.getElementById('btnInterval').addEventListener('click', () => {
   if (intervalBezi) { zastavIntervaly('Zastaveno'); return; }
 
   faze = sestavFaze();
+  obnovPokusy();                // nový trénink = kolo zkusíme řídit znovu
   vynulujStatistiku();          // start intervalů = čas a km od nuly
   if (faze.length === 0) return;
   index = 0;
