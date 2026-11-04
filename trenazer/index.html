@@ -50,6 +50,9 @@
   .tep     { color: #ff5252; }
   .prevodC { color: #ce93d8; }
   .casC    { color: #eee; }
+  .ujetoC  { color: #4dd0e1; }
+  /* 7 dlaždic ve 2 sloupcích: poslední (čas) přes celou šířku */
+  .mrizka > .dlazdice:last-child { grid-column: span 2; }
 
   .souhrn { font-size: 18px; margin-top: 16px; line-height: 1.6; }
   .stav   { margin-top: 6px; color: #888; font-size: 14px; }
@@ -142,7 +145,9 @@
   #btnNastaveni.aktivni { background: #fb8c00; }
 
   /* ===== Volná jízda: 6 dlaždic ve 3 sloupcích ===== */
-  body.volna .mrizka { grid-template-columns: repeat(3, 1fr); }
+  body.volna .mrizka { grid-template-columns: repeat(12, 1fr); }
+  body.volna .mrizka > .dlazdice { grid-column: span 3; }                /* horní řada: 4 × 3 = 12 */
+  body.volna .mrizka > .dlazdice:nth-child(n+5) { grid-column: span 4; } /* dolní řada: 3 × 4 = 12 */
   body.volna .dlazdice { padding: 5vh 6px; }
   /* čas má víc znaků (např. 125:47) – o kus menší písmo, ať se vejde */
   .hodnota.casC { font-size: 44px; }
@@ -167,7 +172,8 @@
     body.trasa #mapa { flex: 1; height: auto; min-height: 150px; }
     body.trasa #profil { height: 11vh; flex: none; }
     body.trasa .souhrn, body.trasa #sloupecData .stav { display: none; }
-    body.trasa .mrizka { grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 0; }
+    body.trasa .mrizka { grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 0; }
+    body.trasa .mrizka > .dlazdice:last-child { grid-column: auto; }
     body.trasa .dlazdice { padding: 2px 4px; }
     body.trasa .hodnota { font-size: 9vh; }
     body.trasa .hodnota.casC { font-size: 6.5vh; }
@@ -200,7 +206,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 4.7)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 4.8)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -234,6 +240,10 @@
   <div class="dlazdice">
     <div class="hodnota rychlost" id="rychlost">--</div>
     <div class="popis">km/h</div>
+  </div>
+  <div class="dlazdice">
+    <div class="hodnota ujetoC" id="ujeto">0.00</div>
+    <div class="popis">km</div>
   </div>
   <div class="dlazdice">
     <div class="hodnota casC" id="cas">0:00</div>
@@ -526,6 +536,8 @@ setInterval(() => {
   }
   metry += (rychlostKola / 3.6) * KROK;
   napis('vzdalenost', (metry / 1000).toFixed(2));
+  const km = metry / 1000;
+  napis('ujeto', km < 10 ? km.toFixed(2) : km.toFixed(1));   // do 10 km 2 desetiny
 }, KROK * 1000);
 
 // ===== Tlačítka =====
@@ -758,6 +770,7 @@ document.getElementById('btnInterval').addEventListener('click', () => {
   if (intervalBezi) { zastavIntervaly('Zastaveno'); return; }
 
   faze = sestavFaze();
+  vynulujStatistiku();          // start intervalů = čas a km od nuly
   if (faze.length === 0) return;
   index = 0;
   spustFazi();
@@ -772,12 +785,24 @@ document.getElementById('btnInterval').addEventListener('click', () => {
 
 // ===== Režimy zobrazení: Volná jízda / Intervaly =====
 function ukazRezim(rezim) {
+  aktualniRezim = rezim;
   ['volna', 'intervaly', 'trasa'].forEach(r => document.body.classList.toggle(r, r === rezim));
   document.getElementById('btnVolna').classList.toggle('aktivni', rezim === 'volna');
   document.getElementById('btnIntervaly').classList.toggle('aktivni', rezim === 'intervaly');
   document.getElementById('btnTrasa').classList.toggle('aktivni', rezim === 'trasa');
   if (rezim === 'trasa') pripravMapu();
 }
+
+// Vynuluje čas, km a průměry – nový trénink začíná od nuly
+function vynulujStatistiku() {
+  sekundy = 0; metry = 0;
+  vykonSoucet = 0; vykonPocet = 0;
+  tepSoucet = 0; tepPocet = 0; tepMax = 0;
+  napis('cas', '0:00'); napis('ujeto', '0.00'); napis('vzdalenost', '0.00');
+  napis('prumVykon', '--'); napis('prumTep', '--'); napis('maxTep', '--');
+}
+
+let aktualniRezim = null;
 
 function nastavRezim(rezim) {
   // Když něco běží a odcházíme jinam, zeptáme se
@@ -793,6 +818,7 @@ function nastavRezim(rezim) {
     if (ergZapnuto) prepniErg(false);   // ERG vypnout → volná jízda po rovině
     else if (ovladani) volnaJizda(0);
   }
+  if (rezim !== aktualniRezim) vynulujStatistiku();   // jiný režim = nový trénink
   ukazRezim(rezim);
   try { localStorage.setItem('rezim', rezim); } catch (e) {}
 }
@@ -1115,6 +1141,7 @@ document.getElementById('btnStartTrasy').addEventListener('click', () => {
   if (ergZapnuto) prepniErg(false);
 
   trasaMetry = 0; stoupani = 0; predchoziVyska = null; posledniSklon = null;
+  vynulujStatistiku();          // start trasy = čas a km od nuly
   v = rychlostKola / 3.6;                 // ať se nezačíná z nuly
   trasaBezi = true;
   document.getElementById('vyberTrasy').style.display = 'none';
