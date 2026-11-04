@@ -50,7 +50,7 @@
 </head>
 <body>
 
-<h1>Krok 2: Kolo + tep <small style="color:#555">(verze 2.4)</small></h1>
+<h1>Krok 2: Kolo + tep <small style="color:#555">(verze 2.5)</small></h1>
 
 <button id="btnKolo">Připojit kolo</button>
 <button id="btnPas">Připojit pás</button>
@@ -70,7 +70,7 @@
   </div>
   <div class="dlazdice">
     <div class="hodnota rychlost" id="rychlost">--</div>
-    <div class="popis">km/h (výpočet: <span id="rychlostVypocet">--</span>)</div>
+    <div class="popis">km/h</div>
   </div>
 </div>
 
@@ -247,7 +247,6 @@ setInterval(() => {
   v = Math.max(0, v + zrychleni * KROK);
 
   metry += (rychlostKola / 3.6) * KROK;            // km/h → m/s, jako Garmin
-  napis('rychlostVypocet', (v * 3.6).toFixed(1));  // fyzika – pro kopce později
   napis('vzdalenost', (metry / 1000).toFixed(2));
 }, KROK * 1000);
 
