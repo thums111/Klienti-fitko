@@ -206,7 +206,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 4.9)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 5.0)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -275,6 +275,7 @@
   <span class="cil"><span id="cilW">150</span> W</span>
   <button class="maly" id="plus10">+10</button>
   <button id="btnErg">Zapnout ERG</button>
+  <div class="stav" id="ergInfo"></div>
 </div>
 
 <!-- ===== Intervaly ===== -->
@@ -575,6 +576,7 @@ const PRIKAZ = {
   START:          0x07,   // start / pokračovat
   VYKON:          0x05,   // nastav cílový výkon (W)
   SIMULACE:       0x11,   // simulace jízdy – sklon, vítr...
+  ODPOR:          0x04,   // nastav úroveň odporu
 };
 
 let ovladani = null;    // charakteristika Control Point
@@ -589,7 +591,9 @@ async function pripravOvladani(sluzba) {
     ovladani.addEventListener('characteristicvaluechanged', odpovedKola);
     await posli([PRIKAZ.PREVZIT_RIZENI]);
     await posli([PRIKAZ.START]);
-    napis('stavOvladani', 'Ovládání: připraveno');
+    await zjistiSchopnosti(sluzba);
+    napis('stavOvladani', 'Ovládání: připraveno – ' +
+      (umiVykon ? 'watty drží kolo samo' : umiOdpor ? 'watty dorovnává aplikace přes odpor' : 'jen čtení dat'));
   } catch (chyba) {
     napis('stavOvladani', 'Ovládání: chyba – ' + chyba.message);
   }
@@ -606,10 +610,79 @@ function posli(bajty) {
   return fronta;
 }
 
+// =====================================================================
+// ===== SCHOPNOSTI KOLA a "softwarové ERG" =====
+// =====================================================================
+// Ne každé kolo umí samo držet watty (příkaz 0x05). Některá (třeba Trinfit)
+// umí jen nastavit ÚROVEŇ ODPORU (příkaz 0x04). Pak watty dorovnává
+// aplikace sama: každé 2 s porovná skutečný výkon s cílem a odpor
+// o kousek přidá nebo ubere – jako termostat u topení.
+let umiVykon = true, umiOdpor = false, umiSimulaci = true;
+let odporMin = 10, odporMax = 320, odporKrok = 10;   // v desetinách úrovně (norma)
+let odporAkt = null;
+let regulator = null;
+
+async function zjistiSchopnosti(sluzba) {
+  // 0x2ACC = "Fitness Machine Feature": 2× 32 bitů, druhé číslo = co jde nastavit
+  try {
+    const f = await (await sluzba.getCharacteristic(0x2ACC)).readValue();
+    const cile = f.getUint32(4, true);
+    umiOdpor    = !!(cile & (1 << 2));
+    umiVykon    = !!(cile & (1 << 3));
+    umiSimulaci = !!(cile & (1 << 13));
+  } catch (e) { /* kolo to neprozradí – zkusíme a uvidíme podle odpovědí */ }
+  // 0x2AD6 = rozsah odporu: min, max, krok (vše v desetinách)
+  try {
+    const r = await (await sluzba.getCharacteristic(0x2AD6)).readValue();
+    odporMin = r.getInt16(0, true);
+    odporMax = r.getInt16(2, true);
+    odporKrok = Math.max(1, r.getUint16(4, true));
+    umiOdpor = true;
+  } catch (e) {}
+}
+
+function posliOdpor(raw) {
+  raw = Math.round(Math.max(odporMin, Math.min(odporMax, raw)));
+  odporAkt = raw;
+  // Starší verze normy: 1 bajt, novější: 2 bajty. Když se rozsah do 1 bajtu
+  // nevejde, pošleme 2 bajty.
+  if (odporMax <= 255) posli([PRIKAZ.ODPOR, raw & 0xFF]);
+  else posli([PRIKAZ.ODPOR, raw & 0xFF, (raw >> 8) & 0xFF]);
+  napis('ergInfo', 'odpor ' + (raw / 10).toFixed(1).replace('.0', ''));
+}
+
+function spustRegulator() {
+  if (regulator) return;
+  if (odporAkt === null) posliOdpor(odporMin + (odporMax - odporMin) * 0.3);
+  regulator = setInterval(() => {
+    if (!ergZapnuto || kadenceAkt < 30) return;     // nešlapeš → nesahat
+    const chyba = cilW - posledniVykon;
+    if (Math.abs(chyba) <= Math.max(5, cilW * 0.03)) return;   // je to dost blízko
+    // Velká odchylka = větší krok, malá = jemný krok (nejvýš 5 kroků naráz)
+    let kroky = Math.max(-5, Math.min(5, Math.round(chyba / 12)));
+    if (kroky === 0) kroky = Math.sign(chyba);
+    posliOdpor(odporAkt + kroky * odporKrok);
+  }, 2000);
+}
+
+function zastavRegulator() {
+  clearInterval(regulator);
+  regulator = null;
+  napis('ergInfo', '');
+}
+
 function odpovedKola(udalost) {
   const d = udalost.target.value;
   if (d.getUint8(0) !== 0x80) return;
   const prikaz = d.getUint8(1), vysledek = d.getUint8(2);
+  // Kolo odmítlo watty → přepneme na softwarové ERG přes odpor
+  if (vysledek !== 1 && prikaz === PRIKAZ.VYKON && umiVykon) {
+    umiVykon = false; umiOdpor = true;
+    napis('stavOvladani', 'Ovládání: watty dorovnává aplikace přes odpor');
+    if (ergZapnuto) spustRegulator();
+    return;
+  }
+  if (vysledek !== 1 && prikaz === PRIKAZ.SIMULACE) { umiSimulaci = false; return; }
   if (vysledek !== 1) {
     napis('stavOvladani', 'Kolo odmítlo příkaz 0x' + prikaz.toString(16) +
           ' (kód ' + vysledek + ')');
@@ -621,13 +694,24 @@ function odpovedKola(udalost) {
 // Např. 250 W = 0x00FA → bajty [0xFA, 0x00]
 function nastavVykon(w) {
   w = Math.round(w);
-  posli([PRIKAZ.VYKON, w & 0xFF, (w >> 8) & 0xFF]);
+  if (umiVykon) posli([PRIKAZ.VYKON, w & 0xFF, (w >> 8) & 0xFF]);
+  else if (umiOdpor) spustRegulator();   // cílem je cilW, regulátor ho dohání
 }
 
 // Volná jízda po rovině = simulace se sklonem 0 %.
 // Tím ERG vypneme a odpor zase řídí rychlost a převody.
 // Bajty: vítr (2), sklon (2, v setinách %), valivý odpor (1), vzduch (1)
 function volnaJizda(sklonProcent = 0) {
+  zastavRegulator();
+  if (!umiSimulaci) {
+    // Kolo neumí simulaci: na trase převedeme sklon na úroveň odporu
+    // (−5 % = nejlehčí, +15 % = nejtěžší). Mimo trasu necháme odpor na tobě.
+    if (trasaBezi && umiOdpor) {
+      const cast = Math.max(0, Math.min(1, (sklonProcent + 5) / 20));
+      posliOdpor(odporMin + (odporMax - odporMin) * cast);
+    }
+    return;
+  }
   const s = Math.round(sklonProcent * 100);          // 5 % → 500
   const s16 = s & 0xFFFF;                            // záporná čísla správně
   posli([PRIKAZ.SIMULACE, 0, 0, s16 & 0xFF, s16 >> 8, 40, 51]);
