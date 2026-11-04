@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenažér – krok 1: tep</title>
+<title>Trenažér – krok 2</title>
 <style>
   body {
     margin: 0;
@@ -11,126 +11,198 @@
     background: #111;
     color: #eee;
     text-align: center;
-    padding: 20px;
+    padding: 16px;
   }
-  h1 { font-size: 20px; color: #aaa; }
+  h1 { font-size: 18px; color: #aaa; margin: 4px 0 12px; }
   button {
-    font-size: 20px;
-    padding: 14px 28px;
+    font-size: 18px;
+    padding: 12px 20px;
     border: none;
     border-radius: 10px;
-    background: #e53935;
     color: white;
-    margin: 10px;
+    margin: 6px;
   }
-  #tep {
-    font-size: 120px;
-    font-weight: bold;
-    color: #ff5252;
-    margin: 20px 0 0;
+  #btnPas  { background: #e53935; }
+  #btnKolo { background: #1e88e5; }
+
+  /* Mřížka 2×2 s dlaždicemi */
+  .mrizka {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
   }
-  .jednotka { font-size: 24px; color: #aaa; }
-  .statistika { font-size: 22px; margin-top: 20px; }
-  #stav { margin-top: 20px; color: #888; }
+  .dlazdice {
+    background: #1d1d1d;
+    border-radius: 12px;
+    padding: 12px 6px;
+  }
+  .hodnota { font-size: 56px; font-weight: bold; line-height: 1.1; }
+  .popis   { font-size: 15px; color: #999; }
+  .vykon   { color: #ffca28; }
+  .kadence { color: #66bb6a; }
+  .rychlost{ color: #42a5f5; }
+  .tep     { color: #ff5252; }
+
+  .souhrn { font-size: 18px; margin-top: 16px; line-height: 1.6; }
+  .stav   { margin-top: 6px; color: #888; font-size: 14px; }
 </style>
 </head>
 <body>
 
-<h1>Krok 1: Tep z hrudního pásu</h1>
+<h1>Krok 2: Kolo + tep</h1>
 
-<button id="pripojit">Připojit pás</button>
+<button id="btnKolo">Připojit kolo</button>
+<button id="btnPas">Připojit pás</button>
 
-<div id="tep">--</div>
-<div class="jednotka">tepů/min</div>
-
-<div class="statistika">
-  Průměr: <span id="prumer">--</span> &nbsp;|&nbsp; Max: <span id="max">--</span>
+<div class="mrizka">
+  <div class="dlazdice">
+    <div class="hodnota vykon" id="vykon">--</div>
+    <div class="popis">W</div>
+  </div>
+  <div class="dlazdice">
+    <div class="hodnota tep" id="tep">--</div>
+    <div class="popis">tep/min</div>
+  </div>
+  <div class="dlazdice">
+    <div class="hodnota kadence" id="kadence">--</div>
+    <div class="popis">ot/min</div>
+  </div>
+  <div class="dlazdice">
+    <div class="hodnota rychlost" id="rychlost">--</div>
+    <div class="popis">km/h</div>
+  </div>
 </div>
 
-<div id="stav">Nepřipojeno</div>
+<div class="souhrn">
+  Čas: <b id="cas">0:00</b> &nbsp;|&nbsp;
+  Prům. výkon: <b id="prumVykon">--</b> W<br>
+  Prům. tep: <b id="prumTep">--</b> &nbsp;|&nbsp;
+  Max tep: <b id="maxTep">--</b>
+</div>
+
+<div class="stav" id="stavKolo">Kolo: nepřipojeno</div>
+<div class="stav" id="stavPas">Pás: nepřipojeno</div>
 
 <script>
-// Proměnné pro statistiku
-let soucet = 0;     // součet všech naměřených tepů
-let pocet = 0;      // kolik hodnot jsme dostali
-let maximum = 0;    // nejvyšší tep
-
-// Krátké funkce pro zápis na obrazovku
-function stav(text) {
-  document.getElementById('stav').textContent = text;
+// ===== Pomocné funkce =====
+function napis(id, text) {
+  document.getElementById(id).textContent = text;
 }
 
-// Hlavní funkce: připojení k pásu
-async function pripojit() {
-  // Kontrola, jestli prohlížeč umí Bluetooth
+// ===== Statistika =====
+let tepSoucet = 0, tepPocet = 0, tepMax = 0;
+let vykonSoucet = 0, vykonPocet = 0;
+let sekundy = 0;          // čas jízdy
+let posledniVykon = 0;    // aktuální výkon (pro časovač)
+
+// Časovač: každou sekundu.
+// Čas běží jen když šlapete (výkon > 0) – jako auto-pauza.
+setInterval(() => {
+  if (posledniVykon > 0) {
+    sekundy++;
+    vykonSoucet += posledniVykon;
+    vykonPocet++;
+    const min = Math.floor(sekundy / 60);
+    const sek = String(sekundy % 60).padStart(2, '0');
+    napis('cas', min + ':' + sek);
+    napis('prumVykon', Math.round(vykonSoucet / vykonPocet));
+  }
+}, 1000);
+
+// ===== Společná funkce pro připojení čehokoli =====
+// sluzba = číslo služby, charakteristika = číslo "šuplíku",
+// zpracuj = funkce, která přečte data, stavId = kam psát stav
+async function pripojZarizeni(sluzba, charakteristika, zpracuj, stavId, nazev) {
   if (!navigator.bluetooth) {
-    stav('Tento prohlížeč neumí Bluetooth. Použijte Chrome.');
+    napis(stavId, 'Tento prohlížeč neumí Bluetooth. Použijte Chrome.');
     return;
   }
-
   try {
-    stav('Hledám zařízení...');
-
-    // 1) Prohlížeč ukáže seznam zařízení, která vysílají tep
+    napis(stavId, nazev + ': hledám...');
     const zarizeni = await navigator.bluetooth.requestDevice({
-      filters: [{ services: ['heart_rate'] }]
+      filters: [{ services: [sluzba] }]
     });
-
-    // Když se pás odpojí, dáme vědět
     zarizeni.addEventListener('gattserverdisconnected', () => {
-      stav('Pás se odpojil');
+      napis(stavId, nazev + ': odpojeno');
     });
-
-    stav('Připojuji k ' + zarizeni.name + '...');
-
-    // 2) Připojení k zařízení
+    napis(stavId, nazev + ': připojuji...');
     const server = await zarizeni.gatt.connect();
-
-    // 3) Najdeme "službu" pro tep
-    const sluzba = await server.getPrimaryService('heart_rate');
-
-    // 4) V ní "charakteristiku", která posílá naměřený tep
-    const mereni = await sluzba.getCharacteristic('heart_rate_measurement');
-
-    // 5) Řekneme pásu: posílej nám každou novou hodnotu
-    await mereni.startNotifications();
-    mereni.addEventListener('characteristicvaluechanged', novyTep);
-
-    stav('Připojeno: ' + zarizeni.name);
+    const s = await server.getPrimaryService(sluzba);
+    const ch = await s.getCharacteristic(charakteristika);
+    await ch.startNotifications();
+    ch.addEventListener('characteristicvaluechanged', zpracuj);
+    napis(stavId, nazev + ': ' + zarizeni.name);
   } catch (chyba) {
-    stav('Chyba: ' + chyba.message);
+    napis(stavId, nazev + ': chyba – ' + chyba.message);
   }
 }
 
-// Tato funkce se spustí pokaždé, když pás pošle data (asi 1× za sekundu)
+// ===== PÁS (stejné jako v kroku 1) =====
+// 0x180D = služba Heart Rate, 0x2A37 = měření tepu
 function novyTep(udalost) {
-  const data = udalost.target.value;   // surová data (bajty)
-
-  // První bajt = "příznaky". Nejnižší bit říká, jak je tep uložen:
-  // 0 = tep je v 1 bajtu (0–255), 1 = tep je ve 2 bajtech
+  const data = udalost.target.value;
   const priznaky = data.getUint8(0);
-  let tep;
-  if (priznaky & 1) {
-    tep = data.getUint16(1, true);  // 2 bajty, pořadí "little endian"
-  } else {
-    tep = data.getUint8(1);         // 1 bajt
-  }
+  const tep = (priznaky & 1) ? data.getUint16(1, true) : data.getUint8(1);
+  if (tep === 0) return;
 
-  if (tep === 0) return;  // pás ještě nemá kontakt s kůží
+  tepSoucet += tep; tepPocet++;
+  if (tep > tepMax) tepMax = tep;
 
-  // Statistika
-  soucet += tep;
-  pocet++;
-  if (tep > maximum) maximum = tep;
-
-  // Zobrazení
-  document.getElementById('tep').textContent = tep;
-  document.getElementById('prumer').textContent = Math.round(soucet / pocet);
-  document.getElementById('max').textContent = maximum;
+  napis('tep', tep);
+  napis('prumTep', Math.round(tepSoucet / tepPocet));
+  napis('maxTep', tepMax);
 }
 
-// Propojení tlačítka s funkcí
-document.getElementById('pripojit').addEventListener('click', pripojit);
+// ===== KOLO (FTMS) =====
+// 0x1826 = služba Fitness Machine, 0x2AD2 = Indoor Bike Data
+//
+// Kolo posílá balíček bajtů. První 2 bajty = PŘÍZNAKY (16 bitů).
+// Každý bit říká, jestli daný údaj v balíčku JE. Údaje jdou
+// za sebou v pevném pořadí, takže musíme číst postupně
+// a posouvat "ukazatel" (pozice) o velikost každého údaje.
+function novaDataKola(udalost) {
+  const data = udalost.target.value;
+  const priznaky = data.getUint16(0, true);
+  let pozice = 2;   // za příznaky začínají údaje
+
+  // bit 0: POZOR – obráceně! 0 = rychlost JE v balíčku
+  if ((priznaky & 1) === 0) {
+    const rychlost = data.getUint16(pozice, true) / 100;  // jednotka 0,01 km/h
+    napis('rychlost', rychlost.toFixed(1));
+    pozice += 2;
+  }
+  // bit 1: průměrná rychlost (nepotřebujeme, jen přeskočit)
+  if (priznaky & (1 << 1)) pozice += 2;
+
+  // bit 2: kadence
+  if (priznaky & (1 << 2)) {
+    const kadence = data.getUint16(pozice, true) / 2;     // jednotka 0,5 ot/min
+    napis('kadence', Math.round(kadence));
+    pozice += 2;
+  }
+  // bit 3: průměrná kadence – přeskočit
+  if (priznaky & (1 << 3)) pozice += 2;
+  // bit 4: celková vzdálenost – 3 bajty – přeskočit
+  if (priznaky & (1 << 4)) pozice += 3;
+  // bit 5: úroveň odporu – přeskočit
+  if (priznaky & (1 << 5)) pozice += 2;
+
+  // bit 6: okamžitý výkon (může být i záporný, proto Int16)
+  if (priznaky & (1 << 6)) {
+    const vykon = data.getInt16(pozice, true);
+    posledniVykon = Math.max(0, vykon);
+    napis('vykon', posledniVykon);
+    pozice += 2;
+  }
+}
+
+// ===== Tlačítka =====
+document.getElementById('btnPas').addEventListener('click', () =>
+  pripojZarizeni(0x180D, 0x2A37, novyTep, 'stavPas', 'Pás'));
+
+document.getElementById('btnKolo').addEventListener('click', () =>
+  pripojZarizeni(0x1826, 0x2AD2, novaDataKola, 'stavKolo', 'Kolo'));
 </script>
 
 </body>
