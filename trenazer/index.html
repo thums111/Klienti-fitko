@@ -70,11 +70,15 @@
   </div>
   <div class="dlazdice">
     <div class="hodnota rychlost" id="rychlost">--</div>
-    <div class="popis">km/h</div>
+    <div class="popis">km/h (kolo: <span id="rychlostKolo">--</span>)</div>
   </div>
 </div>
 
 <div class="souhrn">
+  Hmotnost jezdce:
+  <input id="hmotnost" type="number" value="75" min="30" max="150"
+         style="width:60px;font-size:18px;text-align:center"> kg<br>
+  Vzdálenost: <b id="vzdalenost">0.00</b> km<br>
   Čas: <b id="cas">0:00</b> &nbsp;|&nbsp;
   Prům. výkon: <b id="prumVykon">--</b> W<br>
   Prům. tep: <b id="prumTep">--</b> &nbsp;|&nbsp;
@@ -169,7 +173,7 @@ function novaDataKola(udalost) {
   // bit 0: POZOR – obráceně! 0 = rychlost JE v balíčku
   if ((priznaky & 1) === 0) {
     const rychlost = data.getUint16(pozice, true) / 100;  // jednotka 0,01 km/h
-    napis('rychlost', rychlost.toFixed(1));
+    napis('rychlostKolo', rychlost.toFixed(1));  // jen pro srovnání
     pozice += 2;
   }
   // bit 1: průměrná rychlost (nepotřebujeme, jen přeskočit)
@@ -196,6 +200,52 @@ function novaDataKola(udalost) {
     pozice += 2;
   }
 }
+
+// ===== VLASTNÍ RYCHLOST Z FYZIKY (jako Rouvy/Zwift) =====
+// Rychlost od kola je jen jeho odhad. Spočítáme ji sami:
+// výkon tlačí kolo dopředu, vzduch, valivý odpor a kopec brzdí.
+// Hmotnost dává setrvačnost: po přestání šlapání se "dojíždí".
+const g = 9.81;         // tíhové zrychlení
+const HUSTOTA = 1.2;    // hustota vzduchu (kg/m³)
+const CdA = 0.32;       // čelní plocha × tvar (kola na silnici, držení na horní části)
+const Crr = 0.004;      // valivý odpor (dobré pláště na asfaltu)
+const UCINNOST = 0.97;  // ztráty v řetězu
+const KOLO_KG = 8;      // hmotnost kola
+let sklon = 0;          // sklon silnice v % – zatím rovina, v kroku 4 z trasy
+let v = 0;              // rychlost v m/s
+let metry = 0;          // ujetá vzdálenost
+
+// Hmotnost si pamatujeme v prohlížeči (když to jde)
+const poleHmotnost = document.getElementById('hmotnost');
+try {
+  const ulozeno = localStorage.getItem('hmotnost');
+  if (ulozeno) poleHmotnost.value = ulozeno;
+} catch (e) {}
+poleHmotnost.addEventListener('change', () => {
+  try { localStorage.setItem('hmotnost', poleHmotnost.value); } catch (e) {}
+});
+
+const KROK = 0.25;  // počítáme 4× za sekundu
+setInterval(() => {
+  const m = (Number(poleHmotnost.value) || 75) + KOLO_KG;
+  const uhel = Math.atan(sklon / 100);
+
+  // Brzdné síly (v newtonech)
+  const vzduch = 0.5 * HUSTOTA * CdA * v * v;
+  const valeni = Crr * m * g * Math.cos(uhel);
+  const kopec  = m * g * Math.sin(uhel);   // z kopce je záporná = pomáhá
+
+  // Hnací síla = výkon / rychlost (při nule bereme 1 m/s, ať nedělíme nulou)
+  const hnaci = (posledniVykon * UCINNOST) / Math.max(v, 1);
+
+  // Newton: zrychlení = (síla dopředu − síly dozadu) / hmotnost
+  const zrychleni = (hnaci - vzduch - valeni - kopec) / m;
+  v = Math.max(0, v + zrychleni * KROK);
+
+  metry += v * KROK;
+  napis('rychlost', (v * 3.6).toFixed(1));        // m/s → km/h
+  napis('vzdalenost', (metry / 1000).toFixed(2));
+}, KROK * 1000);
 
 // ===== Tlačítka =====
 document.getElementById('btnPas').addEventListener('click', () =>
