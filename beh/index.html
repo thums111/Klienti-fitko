@@ -179,6 +179,7 @@ function dataPasu(ud) {
 }
 
 function ukazRychlost(v) {
+  aktRychlost = v;
   napis('rychlost', v.toFixed(1));
   if (v > 0.5) {
     const minNaKm = 60 / v;
@@ -228,10 +229,21 @@ document.getElementById('sPlus').addEventListener('click', () => {
 document.getElementById('sMinus').addEventListener('click', () => {
   cilS = Math.max(rozsah.sMin, cilS - 1); ukazCile(); posliSklon();
 });
+// Start: některé pásy příkaz "start" neberou, ale rozjedou se na příkaz
+// "rychlost". Zkusíme obojí a po 6 s ověříme, jestli se pás opravdu točí.
+let aktRychlost = 0;
 document.getElementById('btnStart').addEventListener('click', () => {
   cilR = Math.min(cilR, maxR()); ukazCile();
   posli([PRIKAZ.PREVZIT]);
   posli([PRIKAZ.START]);
+  setTimeout(posliRychlost, 800);
+  napis('stav', 'Startuji pás…');
+  setTimeout(() => {
+    napis('stav', aktRychlost > 0.3
+      ? 'Pás běží – rychlost a sklon ovládáš z aplikace'
+      : 'Pás se z aplikace spustit nedá (bezpečnostní pojistka výrobce). ' +
+        'Spusť ho tlačítkem START na panelu pásu – pak už rychlost, sklon i STOP jdou z aplikace.');
+  }, 6000);
 });
 document.getElementById('btnStop').addEventListener('click', () => {
   posli([PRIKAZ.STOP, 0x01]);             // 0x01 = zastavit (0x02 by byla pauza)
