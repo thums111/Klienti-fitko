@@ -211,7 +211,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 5.3)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 5.4)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -596,7 +596,7 @@ async function pripravOvladani(sluzba) {
   // Nové připojení = nový začátek: zapomeneme, co jsme zjistili minule
   umiVykon = true; umiOdpor = false; umiSimulaci = true;
   odporNejde = false; odporAkt = null; odporPokusy = 0; odmitnutiSimulace = 0;
-  ergSklonMin = 0; ergSklonMax = 15; ergSklon = 2;
+  ergSklonMin = -3; ergSklonMax = 15; ergSklon = 2; lehkost = 1;
   zastavRegulator();
   try {
     ovladani = await sluzba.getCharacteristic(0x2AD9);
@@ -718,9 +718,14 @@ setInterval(() => {
 //  'odpor' – posíláme přímo úroveň odporu (pro kola bez simulace).
 let regRezim = 'sklon';
 let ergSklon = 2;            // virtuální sklon v %, kterým držíme watty
-// Rozsah sklonu pro ERG: z kopce (záporný sklon) nepotřebujeme – nízké watty
-// se dají ujet i po rovině. Záporný sklon navíc některá kola odmítnou.
-let ergSklonMin = 0, ergSklonMax = 15;
+// Rozsah sklonu pro ERG. Zkusíme i mírně z kopce (−3 %); když to kolo
+// odmítne, rozsah se sám zúží na 0 %.
+let ergSklonMin = -3, ergSklonMax = 15;
+// "Lehkost" 1 = normální valivý odpor a vzduch, 0 = skoro žádný.
+// Když jsme na nejnižším sklonu a wattů je pořád moc, ubíráme lehkost.
+let lehkost = 1;
+let wattNaProcento = 30;     // kolik wattů zhruba přidá 1 % sklonu (učí se)
+let posledniKrok = null;     // {sklon, watty, cas} – pro učení wattNaProcento
 let posledniSklonPoslany = 0;
 let odmitnutiSimulace = 0;   // kolikrát po sobě kolo simulaci odmítlo
 
@@ -737,21 +742,36 @@ function spustRegulator() {
     const el = document.getElementById('ergInfo');
 
     if (regRezim === 'sklon') {
-      // Krok sklonu podle odchylky: 30 W ≈ 1 %, nejvýš ±2 % naráz
+      // Po změně cíle necháme kolo 3 s "dojet" skok, ať nepřestřelíme
+      if (Date.now() - cilZmenen < 3000) return;
       if (Math.abs(chyba) > Math.max(5, cilW * 0.03)) {
-        let krok = Math.max(-2, Math.min(2, chyba / 30));
+        // Krok podle odchylky a naučeného poměru; velká odchylka = větší krok
+        let krok = Math.max(-4, Math.min(4, chyba / wattNaProcento * 0.7));
         if (Math.abs(krok) < 0.3) krok = 0.3 * Math.sign(chyba);
-        ergSklon = Math.max(ergSklonMin, Math.min(ergSklonMax, ergSklon + krok));
-        posliSimulaci(ergSklon);
+        if (chyba < 0 && ergSklon <= ergSklonMin && lehkost > 0) {
+          // Sklon už je dole a pořád moc wattů → ubereme valivý odpor a vzduch
+          lehkost = Math.max(0, lehkost - 0.25);
+          posliSimulaci(ergSklon);
+        } else if (chyba > 0 && lehkost < 1) {
+          // Málo wattů a lehkost je stažená → nejdřív vrátíme lehkost
+          lehkost = Math.min(1, lehkost + 0.25);
+          posliSimulaci(ergSklon);
+        } else {
+          naucSe();
+          ergSklon = Math.max(ergSklonMin, Math.min(ergSklonMax, ergSklon + krok));
+          posledniKrok = { wattyPred: posledniVykon, krok };
+          posliSimulaci(ergSklon);
+        }
       }
       // Když už je kopec na maximu/minimu a pořád to nestačí → poradíme převod
       const tol = Math.max(8, cilW * 0.06);
       if (ergSklon >= ergSklonMax && chyba > tol) {
         el.className = 'trener tezsi'; el.textContent = '⬆ zařaď těžší (+' + Math.round(chyba) + ' W)';
-      } else if (ergSklon <= ergSklonMin && chyba < -tol) {
+      } else if (ergSklon <= ergSklonMin && lehkost <= 0 && chyba < -tol) {
         el.className = 'trener lehci'; el.textContent = '⬇ zařaď lehčí (' + Math.round(chyba) + ' W)';
       } else {
-        el.className = ''; el.textContent = 'aplikace dorovnává – virtuální sklon ' + ergSklon.toFixed(1) + ' %';
+        el.className = ''; el.textContent = 'aplikace dorovnává – virtuální sklon ' + ergSklon.toFixed(1) + ' %' +
+          (lehkost < 1 ? ' · lehčí jízda ' + Math.round(lehkost * 100) + ' %' : '');
       }
       return;
     }
@@ -764,10 +784,41 @@ function spustRegulator() {
   }, 2000);
 }
 
+// Učení: o kolik se změnily watty po minulém kroku sklonu → upravíme poměr W/%
+function naucSe() {
+  if (!posledniKrok || Math.abs(posledniKrok.krok) < 0.5) { posledniKrok = null; return; }
+  const zmenaW = posledniVykon - posledniKrok.wattyPred;
+  const pomer = zmenaW / posledniKrok.krok;
+  if (pomer > 5 && pomer < 120) {
+    wattNaProcento = Math.max(10, Math.min(80, wattNaProcento * 0.7 + pomer * 0.3));
+  }
+  posledniKrok = null;
+}
+
+// Skok při změně cíle (např. Práce 250 W → Vyjetí 110 W): sklon posuneme
+// hned o odhad, ne až postupně po 2 s krocích
+function skokNaCil(staryCil, novyCil) {
+  if (regRezim !== 'sklon' || !regulator) return;
+  let posun = (novyCil - staryCil) / wattNaProcento;
+  let novy = ergSklon + posun;
+  if (novy < ergSklonMin) {
+    // Ani nejnižší sklon nestačí → rovnou ubereme i lehkost
+    const zbyvaW = (ergSklonMin - novy) * wattNaProcento;
+    lehkost = Math.max(0, lehkost - zbyvaW / 100);
+    novy = ergSklonMin;
+  } else if (novyCil > staryCil && lehkost < 1) {
+    lehkost = 1;
+  }
+  ergSklon = Math.max(ergSklonMin, Math.min(ergSklonMax, novy));
+  posledniKrok = null;
+  posliSimulaci(ergSklon);
+}
+
 // Při novém zapnutí ERG / startu intervalů dáme kolu novou šanci
 function obnovPokusy() {
   odporNejde = false; odporPokusy = 0; odmitnutiSimulace = 0;
   if (!umiSimulaci) umiSimulaci = true;
+  lehkost = 1; posledniKrok = null;
   const el = document.getElementById('ergInfo');
   el.className = ''; el.textContent = '';
 }
@@ -783,7 +834,10 @@ function posliSimulaci(sklonProcent) {
   posledniSklonPoslany = sklonProcent;
   const s = Math.round(sklonProcent * 100);          // 5 % → 500
   const s16 = s & 0xFFFF;                            // záporná čísla správně
-  posli([PRIKAZ.SIMULACE, 0, 0, s16 & 0xFF, s16 >> 8, 40, 51]);
+  // Při ERG může být "lehkost" < 1 → menší valivý odpor i vzduch
+  const k = (ergZapnuto && regulator) ? lehkost : 1;
+  const crr = Math.round(40 * k), vzduch = Math.round(51 * k);
+  posli([PRIKAZ.SIMULACE, 0, 0, s16 & 0xFF, s16 >> 8, crr, vzduch]);
   //                      vítr 0   sklon             Crr 0,004  CdA·ρ/2 ≈ 0,51
 }
 
@@ -836,9 +890,12 @@ function odpovedKola(udalost) {
 // Nastav cílový výkon. Watty = 2 bajty, "little endian":
 // nejdřív dolní bajt (w & 0xFF), pak horní (w >> 8).
 // Např. 250 W = 0x00FA → bajty [0xFA, 0x00]
+let posledniCil = null;
 function nastavVykon(w) {
   w = Math.round(w);
   cilZmenen = Date.now();
+  if (posledniCil !== null && posledniCil !== w) skokNaCil(posledniCil, w);
+  posledniCil = w;
   if (umiVykon) posli([PRIKAZ.VYKON, w & 0xFF, (w >> 8) & 0xFF]);
   else if (umiOdpor) spustRegulator();   // cílem je cilW, regulátor ho dohání
 }
