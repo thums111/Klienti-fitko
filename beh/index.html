@@ -63,12 +63,15 @@
   body.trasa #panelOvl button { padding: 14px 22px; font-size: 22px; }
   body.trasa #btnStop { padding: 14px 34px; }
   body.trasa #btnStartTrasy { background: #6d4c41; }
+  body.nahled #btnStartTrasy { display: none; }
+  body.trasa:not(.nahled) #btnNahled { display: none; }
+  #btnNahled { background: #5e35b1; }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
-<h1>Běžecký pás <small style="color:#555">(verze 1.3)</small></h1>
+<h1>Běžecký pás <small style="color:#555">(verze 1.4)</small></h1>
 
 <button id="btnPripojit">Připojit pás</button>
 <button id="btnTep">Připojit hrudní pás</button>
@@ -117,6 +120,7 @@
     <span>Ujeto <b id="tUjeto">0.00</b> / <span id="tCelkem">–</span> km ·</span>
     <span>sklon trasy <b id="tSklonTrasy">--</b> % · pás <b id="tSklonPas">--</b> %</span>
     <button id="btnSatelit">Satelit</button>
+    <button id="btnNahled">Náhled</button>
     <button id="btnStartTrasy">Start trasy</button>
   </div>
   <div id="stavTrasa" class="popis">Načti trasu – tvoje uložené (⭐) z trenažéru jsou tu taky.</div>
@@ -519,6 +523,16 @@ function zastavTrasu(text) {
   rezimTrasa(false);
   stavT(text);
 }
+
+// Náhled: ukáže rozložení s velkou mapou i bez připojeného pásu (nic se nespouští)
+document.getElementById('btnNahled').addEventListener('click', () => {
+  const zap = !document.body.classList.contains('nahled');
+  if (zap && trasa.length < 2) { stavT('Nejdřív načti trasu, pak dej Náhled.'); return; }
+  document.body.classList.toggle('nahled', zap);
+  document.getElementById('btnNahled').textContent = zap ? 'Zavřít náhled' : 'Náhled';
+  rezimTrasa(zap);
+  if (zap && mapa) setTimeout(() => mapa.fitBounds(cara.getBounds(), { padding: [20, 20] }), 200);
+});
 
 document.getElementById('btnStartTrasy').addEventListener('click', () => {
   if (trasaBezi) { zastavTrasu('Trasa zastavena.'); return; }
