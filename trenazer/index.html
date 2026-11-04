@@ -49,7 +49,7 @@
   .rychlost{ color: #42a5f5; }
   .tep     { color: #ff5252; }
   .prevodC { color: #ce93d8; }
-  .lomitko { color: #555; margin: 0 0.08em; font-weight: normal; }
+  .casC    { color: #eee; }
 
   .souhrn { font-size: 18px; margin-top: 16px; line-height: 1.6; }
   .stav   { margin-top: 6px; color: #888; font-size: 14px; }
@@ -90,7 +90,7 @@
   body.volna .rozlozeni { display: block; }
   body.volna .mrizka { gap: 14px; }
   body.volna .dlazdice { padding: 1vh 6px; }
-  body.volna .hodnota { font-size: min(20vh, 16vw); }
+  body.volna .hodnota { font-size: min(20vh, 9.5vw); }
   body.volna .stav { display: inline-block; margin: 4px 10px; }
   body.volna .popis { font-size: 22px; }
   body.volna .souhrn { font-size: 24px; }
@@ -113,6 +113,18 @@
   .tlacSoubor { display: inline-block; color: #fff; border-radius: 10px; cursor: pointer; }
   .tlacSoubor input { display: none; }
 
+  /* ===== Souhrn a stav připojení jen po klepnutí na ⚙ ===== */
+  body:not(.nastaveni) .souhrn,
+  body:not(.nastaveni) #sloupecData .stav { display: none !important; }
+  #btnNastaveni.aktivni { background: #fb8c00; }
+
+  /* ===== Volná jízda: 6 dlaždic ve 3 sloupcích ===== */
+  body.volna .mrizka { grid-template-columns: repeat(3, 1fr); }
+  body.volna .dlazdice { padding: 5vh 6px; }
+  /* čas má víc znaků (např. 125:47) – o kus menší písmo, ať se vejde */
+  .hodnota.casC { font-size: 44px; }
+  body.volna .hodnota.casC { font-size: min(20vh, 7vw); }
+
   /* ===== TABLET NA ŠÍŘKU =====
      Když je obrazovka širší než vyšší, dáme dva sloupce vedle sebe:
      vlevo hodnoty, vpravo ovládání. Vše se tak vejde bez posouvání. */
@@ -132,9 +144,10 @@
     body.trasa #mapa { flex: 1; height: auto; min-height: 150px; }
     body.trasa #profil { height: 11vh; flex: none; }
     body.trasa .souhrn, body.trasa #sloupecData .stav { display: none; }
-    body.trasa .mrizka { grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 0; }
+    body.trasa .mrizka { grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 0; }
     body.trasa .dlazdice { padding: 2px 4px; }
     body.trasa .hodnota { font-size: 9vh; }
+    body.trasa .hodnota.casC { font-size: 6.5vh; }
 
     body { padding: 8px 14px; }
     .hlavicka { display: flex; align-items: center; justify-content: center; gap: 6px; }
@@ -147,7 +160,8 @@
       align-items: start;
     }
     .mrizka { margin-top: 8px; }
-    .hodnota { font-size: 84px; }
+    .hodnota { font-size: 76px; }
+    .hodnota.casC { font-size: 56px; }
     .dlazdice { padding: 16px 6px; }
     .souhrn { margin-top: 10px; font-size: 17px; line-height: 1.5; }
     .panel { margin-top: 8px; padding: 8px 12px; }
@@ -163,7 +177,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 4.5)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 4.6)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -171,6 +185,7 @@
   <button class="rezim" id="btnIntervaly">Intervaly</button>
   <button class="rezim" id="btnTrasa">Trasa</button>
   <button class="rezim" id="btnCela" title="Celá obrazovka">⛶</button>
+  <button class="rezim" id="btnNastaveni" title="Hmotnost, souhrn, stav připojení">⚙</button>
 </div>
 
 <div class="rozlozeni">
@@ -186,12 +201,20 @@
     <div class="popis">tep/min</div>
   </div>
   <div class="dlazdice">
-    <div class="hodnota"><span class="kadence" id="kadence">--</span><span class="lomitko">/</span><span class="prevodC" id="prevod">--</span></div>
-    <div class="popis">ot/min / převod</div>
+    <div class="hodnota kadence" id="kadence">--</div>
+    <div class="popis">ot/min</div>
+  </div>
+  <div class="dlazdice">
+    <div class="hodnota prevodC" id="prevod">--</div>
+    <div class="popis">převod</div>
   </div>
   <div class="dlazdice">
     <div class="hodnota rychlost" id="rychlost">--</div>
     <div class="popis">km/h</div>
+  </div>
+  <div class="dlazdice">
+    <div class="hodnota casC" id="cas">0:00</div>
+    <div class="popis">čas</div>
   </div>
 </div>
 
@@ -200,7 +223,6 @@
   <input id="hmotnost" type="number" value="75" min="30" max="150"
          style="width:60px;font-size:18px;text-align:center"> kg<br>
   Vzdálenost: <b id="vzdalenost">0.00</b> km<br>
-  Čas: <b id="cas">0:00</b> &nbsp;|&nbsp;
   Prům. výkon: <b id="prumVykon">--</b> W<br>
   Prům. tep: <b id="prumTep">--</b> &nbsp;|&nbsp;
   Max tep: <b id="maxTep">--</b>
@@ -363,7 +385,7 @@ function novaDataKola(udalost) {
     // desetkrát větší číslo – proto dělíme jen 10.
     const rychlost = data.getUint16(pozice, true) / 10;
     rychlostKola = rychlost;                 // hlavní rychlost = z kola (sedí s Garminem)
-    if (!trasaBezi) napis('rychlost', rychlost.toFixed(1));  // na trase ukazujeme fyziku
+    napis('rychlost', rychlost.toFixed(1));
     pozice += 2;
   }
   // bit 1: průměrná rychlost (nepotřebujeme, jen přeskočit)
@@ -466,12 +488,10 @@ setInterval(() => {
   // Na trase jede "virtuální" kolo podle fyziky (do kopce pomaleji),
   // jinak bereme rychlost z kola (sedí s Garminem).
   if (trasaBezi) {
-    metry += v * KROK;
-    trasaMetry += v * KROK;
-    napis('rychlost', (v * 3.6).toFixed(1));
-  } else {
-    metry += (rychlostKola / 3.6) * KROK;
+    // i na trase jedeme rychlostí z kola – stejně jako ji vidí Garmin
+    trasaMetry += (rychlostKola / 3.6) * KROK;
   }
+  metry += (rychlostKola / 3.6) * KROK;
   napis('vzdalenost', (metry / 1000).toFixed(2));
 }, KROK * 1000);
 
@@ -727,6 +747,10 @@ document.getElementById('btnIntervaly').addEventListener('click', () => {
 });
 document.getElementById('btnTrasa').addEventListener('click', () => {
   nastavRezim('trasa'); celaObrazovka();
+});
+document.getElementById('btnNastaveni').addEventListener('click', () => {
+  const zap = document.body.classList.toggle('nastaveni');
+  document.getElementById('btnNastaveni').classList.toggle('aktivni', zap);
 });
 document.getElementById('btnCela').addEventListener('click', () => {
   if (document.fullscreenElement) document.exitFullscreen();
