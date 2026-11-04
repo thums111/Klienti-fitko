@@ -77,6 +77,29 @@
   .postup    { height: 8px; background: #333; border-radius: 4px; margin-top: 8px; }
   #postupBar { height: 8px; width: 0; background: #43a047; border-radius: 4px; }
 
+  /* ===== Tabulka intervalů ===== */
+  .tabInt { margin: 4px auto 2px; border-collapse: separate; border-spacing: 0 5px; font-size: 17px; }
+  .tabInt th { color: #888; font-weight: normal; font-size: 13px; text-transform: uppercase;
+               letter-spacing: .05em; padding: 0 8px; }
+  .tabInt td { background: #262626; padding: 4px 10px; text-align: left; }
+  .tabInt td:last-child { border-radius: 0 8px 8px 0; }
+  .tabInt td.pruh { width: 6px; padding: 0; border-radius: 8px 0 0 8px; }
+  .tabInt input { width: 64px; font-size: 19px; padding: 4px; text-align: center;
+                  background: #111; color: #fff; border: 1px solid #444; border-radius: 6px; }
+  .tabInt input.opak { width: 44px; }
+  .krat { color: #888; }
+  .fRoz   .pruh { background: #42a5f5; }
+  .fPrace .pruh { background: #ff7043; }
+  .fOdp   .pruh { background: #81c784; }
+  .fVyj   .pruh { background: #7e57c2; }
+
+  /* Náhled tréninku */
+  #nahled { position: relative; display: flex; align-items: flex-end; gap: 2px;
+            height: 56px; margin: 6px 4px 0; }
+  #nahled .blok { border-radius: 3px 3px 0 0; min-width: 2px; }
+  #nahledZnacka { position: absolute; top: -4px; bottom: 0; width: 3px; background: #fff;
+                  left: 0; display: none; border-radius: 2px; }
+
   /* ===== Přepínač režimů ===== */
   .rezim { background: #333; }
   .rezim.aktivni { background: #fb8c00; }
@@ -177,7 +200,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 4.6)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 4.7)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -247,17 +270,27 @@
 <div class="panel" id="panelInterval">
   <h2>Intervalový trénink</h2>
   <div id="nastaveni">
-  <div class="radek">Rozjetí <input id="rozMin" type="number" value="10"> min
-    při <input id="rozW" type="number" value="120"> W</div>
-  <div class="radek"><input id="opak" type="number" value="5"> × práce
-    <input id="praceMin" type="number" value="4"> min
-    při <input id="praceW" type="number" value="250"> W</div>
-  <div class="radek">odpočinek <input id="odpMin" type="number" value="3"> min
-    při <input id="odpW" type="number" value="110"> W</div>
-  <div class="radek">Vyjetí <input id="vyjMin" type="number" value="10"> min
-    při <input id="vyjW" type="number" value="110"> W</div>
-  <div class="radek">Celkem: <b id="celkem">--</b></div>
+  <!-- Tabulka: každý řádek = jedna fáze, barevný proužek vlevo -->
+  <table class="tabInt">
+    <tr><th></th><th>Fáze</th><th>Minuty</th><th>Watty</th></tr>
+    <tr class="fRoz"><td class="pruh"></td><td>Rozjetí</td>
+      <td><input id="rozMin" type="number" value="10"></td>
+      <td><input id="rozW" type="number" value="120"></td></tr>
+    <tr class="fPrace"><td class="pruh"></td>
+      <td>Práce <span class="krat">×</span> <input id="opak" type="number" value="5" class="opak"></td>
+      <td><input id="praceMin" type="number" value="4"></td>
+      <td><input id="praceW" type="number" value="250"></td></tr>
+    <tr class="fOdp"><td class="pruh"></td><td>Odpočinek</td>
+      <td><input id="odpMin" type="number" value="3"></td>
+      <td><input id="odpW" type="number" value="110"></td></tr>
+    <tr class="fVyj"><td class="pruh"></td><td>Vyjetí</td>
+      <td><input id="vyjMin" type="number" value="10"></td>
+      <td><input id="vyjW" type="number" value="110"></td></tr>
+  </table>
+  <div class="radek">Celkem <b id="celkem">--</b></div>
   </div>
+  <!-- Náhled tréninku: šířka bloku = čas, výška = watty -->
+  <div id="nahled"><div id="nahledZnacka"></div></div>
   <button id="btnInterval">Start intervalů</button>
 
   <div id="faze"></div>
@@ -621,6 +654,7 @@ POLE.forEach(id => {
     try { localStorage.setItem('int_' + id, el.value); } catch (e) {}
     ukazCelkem();
   });
+  el.addEventListener('input', ukazCelkem);
 });
 
 function sestavFaze() {
@@ -639,8 +673,38 @@ function sestavFaze() {
 const mmss = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 
 function ukazCelkem() {
-  const celkem = sestavFaze().reduce((soucet, f) => soucet + f.s, 0);
+  const faze = sestavFaze();
+  const celkem = faze.reduce((soucet, f) => soucet + f.s, 0);
   napis('celkem', mmss(celkem));
+  kresliNahled(faze, celkem);
+}
+
+// Náhled: každá fáze = sloupec. Šířka podle času, výška podle wattů.
+const BARVY = { Rozjetí: '#42a5f5', Práce: '#ff7043', Odpočinek: '#81c784', Vyjetí: '#7e57c2' };
+function kresliNahled(faze, celkem) {
+  const box = document.getElementById('nahled');
+  box.querySelectorAll('.blok').forEach(b => b.remove());
+  if (!celkem) return;
+  const maxW = Math.max(...faze.map(f => f.w), 1);
+  faze.forEach(f => {
+    const b = document.createElement('div');
+    b.className = 'blok';
+    b.style.flex = f.s + ' 1 0';                       // poměrná šířka podle času
+    b.style.height = Math.max(8, 100 * f.w / maxW) + '%';
+    b.style.background = BARVY[f.nazev.split(' ')[0]] || '#888';
+    b.title = f.nazev + ' – ' + f.w + ' W';
+    box.appendChild(b);
+  });
+}
+
+// Bílá značka v náhledu: kde v tréninku právě jsem
+function posunZnacku() {
+  const z = document.getElementById('nahledZnacka');
+  if (!intervalBezi) { z.style.display = 'none'; return; }
+  const celkem = faze.reduce((a, f) => a + f.s, 0);
+  const ubehlo = faze.slice(0, index).reduce((a, f) => a + f.s, 0) + (faze[index].s - zbyva);
+  z.style.display = 'block';
+  z.style.left = (100 * ubehlo / celkem) + '%';
 }
 ukazCelkem();
 
@@ -663,6 +727,7 @@ function tik() {
   napis('zbyva', mmss(Math.max(zbyva, 0)));
   const f = faze[index];
   document.getElementById('postupBar').style.width = (100 * (f.s - zbyva) / f.s) + '%';
+  posunZnacku();
 
   // 3 s před koncem fáze krátce zavibruje (na tabletu/mobilu)
   if (zbyva > 0 && zbyva <= 3 && navigator.vibrate) navigator.vibrate(150);
@@ -677,6 +742,7 @@ function tik() {
 function zastavIntervaly(text) {
   clearInterval(intervalBezi);
   intervalBezi = null;
+  posunZnacku();              // schová značku
   prepniErg(false);           // zpět na volnou jízdu
   document.getElementById('nastaveni').style.display = '';    // nastavení zpět
   napis('faze', text);
@@ -697,6 +763,7 @@ document.getElementById('btnInterval').addEventListener('click', () => {
   spustFazi();
   napis('zbyva', mmss(zbyva));
   intervalBezi = setInterval(tik, 1000);
+  posunZnacku();
   document.getElementById('nastaveni').style.display = 'none';  // místo pro odpočet
   const b = document.getElementById('btnInterval');
   b.textContent = 'Zastavit';
