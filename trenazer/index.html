@@ -95,8 +95,9 @@
   /* ===== Trasa ===== */
   #mapa { height: 40vh; border-radius: 8px; margin-top: 6px; background: #222; }
   #profil { width: 100%; height: 14vh; display: block; margin-top: 6px; }
-  .trasaInfo { display: flex; justify-content: space-around; flex-wrap: wrap;
-               font-size: 17px; margin: 6px 0; }
+  .trasaInfo { display: flex; justify-content: space-around; align-items: center;
+               flex-wrap: wrap; font-size: 17px; margin: 4px 0; }
+  .trasaInfo button { margin: 2px 4px; }
   .trasaInfo b { font-size: 22px; }
   #tSklon { color: #ff7043; }
   #btnStartTrasy { background: #43a047; }
@@ -109,6 +110,25 @@
      Když je obrazovka širší než vyšší, dáme dva sloupce vedle sebe:
      vlevo hodnoty, vpravo ovládání. Vše se tak vejde bez posouvání. */
   @media (orientation: landscape) {
+    /* ===== Režim TRASA: velká mapa nahoře, data z kola dole v řadě =====
+       Stránka má přesně výšku obrazovky (100vh). Mapa dostane
+       "flex: 1" = veškeré místo, které zbyde po ostatních částech. */
+    body.trasa { height: 100vh; box-sizing: border-box; overflow: hidden;
+                 display: flex; flex-direction: column; }
+    body.trasa .rozlozeni { flex: 1; min-height: 0; display: flex;
+                            flex-direction: column; gap: 6px; align-items: stretch; }
+    body.trasa #sloupecOvladani { order: 1; flex: 1; min-height: 0;
+                                  display: flex; flex-direction: column; }
+    body.trasa #sloupecData { order: 2; }
+    body.trasa #panelTrasa { flex: 1; min-height: 0; display: flex;
+                             flex-direction: column; margin-top: 4px; padding: 6px 10px; }
+    body.trasa #mapa { flex: 1; height: auto; min-height: 150px; }
+    body.trasa #profil { height: 11vh; flex: none; }
+    body.trasa .souhrn, body.trasa #sloupecData .stav { display: none; }
+    body.trasa .mrizka { grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 0; }
+    body.trasa .dlazdice { padding: 2px 4px; }
+    body.trasa .hodnota { font-size: 9vh; }
+
     body { padding: 8px 14px; }
     .hlavicka { display: flex; align-items: center; justify-content: center; gap: 6px; }
     .hlavicka h1 { margin: 0 12px 0 0; }
@@ -136,7 +156,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 4.0)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 4.1)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -147,7 +167,7 @@
 </div>
 
 <div class="rozlozeni">
-<div class="sloupec">   <!-- LEVÝ sloupec: hodnoty -->
+<div class="sloupec" id="sloupecData">   <!-- LEVÝ sloupec: hodnoty -->
 
 <div class="mrizka">
   <div class="dlazdice">
@@ -237,9 +257,11 @@
     <span>Výška <b id="tVyska">--</b> m</span>
     <span><b id="tUjeto">0.0</b> / <b id="tCelkem">--</b> km</span>
     <span>Nastoupáno <b id="tStoupani">0</b> m</span>
+    <span>
+      <button id="btnStartTrasy">Start trasy</button>
+      <button class="maly" id="btnSatelit">Satelit</button>
+    </span>
   </div>
-  <button id="btnStartTrasy">Start trasy</button>
-  <button class="maly" id="btnSatelit">Satelit</button>
   <div class="stav" id="stavTrasa"></div>
 </div>
 </div>   <!-- konec pravého sloupce -->
@@ -690,6 +712,19 @@ document.getElementById('btnCela').addEventListener('click', () => {
 // Připravené trasy: jen pár bodů, cestu po silnicích a výšky
 // dopočítá zdarma služba BRouter (brouter.de).
 const TRASY = [
+  // --- Chomutovsko ---
+  { nazev: 'Chomutov – Kadaň (k Ohři)',
+    body: [[13.4178, 50.4605], [13.322, 50.433], [13.271, 50.383]] },
+  { nazev: 'Chomutov – Jirkov – Boleboř (do Krušných hor)',
+    body: [[13.4178, 50.4605], [13.448, 50.500], [13.414, 50.538]] },
+  { nazev: 'Chomutov – Křimov – Hora Sv. Šebestiána',
+    body: [[13.4178, 50.4605], [13.315, 50.497], [13.252, 50.512]] },
+  { nazev: 'Okruh: Chomutov – Jirkov – Boleboř – Blatno – Chomutov',
+    body: [[13.4178, 50.4605], [13.448, 50.500], [13.414, 50.538],
+           [13.373, 50.513], [13.4178, 50.4605]] },
+  { nazev: 'Kadaň – Chomutov – Most (přes Chomutov)',
+    body: [[13.271, 50.383], [13.4178, 50.4605], [13.636, 50.503]] },
+  // --- další ---
   { nazev: 'Zbraslav – Karlštejn (rovina)',
     body: [[14.393, 49.975], [14.290, 49.955], [14.180, 49.934]] },
   { nazev: 'Vrchlabí – Špindl (kopec)',
@@ -947,6 +982,7 @@ function zastavTrasu(text) {
   b.textContent = 'Start trasy';
   b.style.background = '#43a047';
   document.getElementById('vyberTrasy').style.display = '';
+  if (mapa) setTimeout(() => mapa.invalidateSize(), 100);  // mapa změnila velikost
 }
 
 document.getElementById('btnStartTrasy').addEventListener('click', () => {
@@ -958,8 +994,11 @@ document.getElementById('btnStartTrasy').addEventListener('click', () => {
   trasaMetry = 0; stoupani = 0; predchoziVyska = null; posledniSklon = null;
   v = rychlostKola / 3.6;                 // ať se nezačíná z nuly
   trasaBezi = true;
-  if (mapa) mapa.setView([trasa[0].lat, trasa[0].lon], 16);
   document.getElementById('vyberTrasy').style.display = 'none';
+  if (mapa) {
+    mapa.invalidateSize();               // řádek s výběrem zmizel → mapa je větší
+    mapa.setView([trasa[0].lat, trasa[0].lon], 16);
+  }
   kresleni = false;
   document.getElementById('kresleniInfo').style.display = 'none';
   const b = document.getElementById('btnStartTrasy');
