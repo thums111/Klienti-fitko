@@ -68,6 +68,11 @@
   .cil { font-size: 48px; font-weight: bold; color: #ffca28; }
   .maly { font-size: 16px; padding: 10px 14px; background: #444; }
   #btnErg      { background: #8e24aa; }
+  #ergInfo { font-size: 15px; color: #999; margin-top: 4px; }
+  #ergInfo.trener { font-size: 34px; font-weight: bold; color: #fff; }
+  #ergInfo.tezsi  { color: #ff7043; }
+  #ergInfo.lehci  { color: #42a5f5; }
+  #ergInfo.drz    { color: #66bb6a; }
   #btnInterval { background: #43a047; }
   .radek { margin: 6px 0; font-size: 16px; }
   .radek input {
@@ -206,7 +211,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 5.0)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 5.1)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -259,7 +264,8 @@
   Prům. výkon: <b id="prumVykon">--</b> W<br>
   Prům. tep: <b id="prumTep">--</b> &nbsp;|&nbsp;
   Max tep: <b id="maxTep">--</b><br>
-  <span style="font-size:13px;color:#888">Surová data kola: <code id="surovaData">--</code></span>
+  <span style="font-size:13px;color:#888">Surová data kola: <code id="surovaData">--</code><br>
+  Odpor hlášený kolem: <b id="odporKola">--</b> · Odpovědi kola: <code id="odpovedi">--</code></span>
 </div>
 
 <div class="stav" id="stavKolo">Kolo: nepřipojeno</div>
@@ -275,7 +281,7 @@
   <span class="cil"><span id="cilW">150</span> W</span>
   <button class="maly" id="plus10">+10</button>
   <button id="btnErg">Zapnout ERG</button>
-  <div class="stav" id="ergInfo"></div>
+  <div id="ergInfo"></div>
 </div>
 
 <!-- ===== Intervaly ===== -->
@@ -454,8 +460,12 @@ function novaDataKola(udalost) {
   if (priznaky & (1 << 3)) pozice += 2;
   // bit 4: celková vzdálenost – 3 bajty – přeskočit
   if (priznaky & (1 << 4)) pozice += 3;
-  // bit 5: úroveň odporu – přeskočit
-  if (priznaky & (1 << 5)) pozice += 2;
+  // bit 5: úroveň odporu (u Trinfitu = číslo převodu na jeho displeji)
+  if (priznaky & (1 << 5)) {
+    odporKola = data.getInt16(pozice, true);
+    napis('odporKola', odporKola);
+    pozice += 2;
+  }
 
   // bit 6: okamžitý výkon (může být i záporný, proto Int16)
   if (priznaky & (1 << 6)) {
@@ -651,7 +661,53 @@ function posliOdpor(raw) {
   napis('ergInfo', 'odpor ' + (raw / 10).toFixed(1).replace('.0', ''));
 }
 
+// ===== Hlídač: opravdu kolo watty drží? =====
+// Některá kola na příkaz odpoví "OK", ale nic neudělají. Proto se každé
+// 2 s podíváme na skutečnost:
+//  1) kolo mělo držet watty samo, ale po 10 s je výkon mimo o víc než 25 %
+//     → zkusíme to řídit přes úroveň odporu,
+//  2) posíláme odpor, ale kolo hlásí pořád stejnou úroveň
+//     → kolo se řídit nedá, ukážeme šipky "řaď těžší / lehčí".
+let odporKola = null;         // úroveň, kterou kolo samo hlásí (pokud ji posílá)
+let cilZmenen = 0;            // kdy se naposledy změnil cíl (ms)
+let odporNejde = false;       // kolo nereaguje na odpor → ruční řazení
+let odporPokusy = 0, odporKolaPredtim = null;
+
+setInterval(() => {
+  const el = document.getElementById('ergInfo');
+  if (!ergZapnuto || !ovladani) {
+    if (odporNejde) { el.className = ''; el.textContent = ''; }   // ERG vypnuto → šipky pryč
+    return;
+  }
+  const chyba = cilW - posledniVykon;
+  const mimo = Math.abs(chyba) > cilW * 0.25;
+
+  if (umiVykon && kadenceAkt > 40 && Date.now() - cilZmenen > 10000 && mimo) {
+    umiVykon = false; umiOdpor = true;
+    napis('stavOvladani', 'Ovládání: kolo watty nedrží – zkouším přes odpor');
+    spustRegulator();
+  }
+  if (regulator && odporKola !== null) {
+    if (odporKola === odporKolaPredtim) odporPokusy++; else odporPokusy = 0;
+    odporKolaPredtim = odporKola;
+    if (odporPokusy >= 4 && mimo) {           // 8 s se úroveň ani nehnula
+      odporNejde = true;
+      zastavRegulator();
+      napis('stavOvladani', 'Ovládání: kolo se řídit nedá – řaď ručně podle šipek');
+    }
+  }
+  // Ruční řazení: velká šipka, kterým směrem přeřadit
+  if (odporNejde && kadenceAkt > 20) {
+    const tolerance = Math.max(8, cilW * 0.06);
+    el.className = 'trener ' + (chyba > tolerance ? 'tezsi' : chyba < -tolerance ? 'lehci' : 'drz');
+    el.textContent = chyba > tolerance ? '⬆ zařaď těžší (+' + Math.round(chyba) + ' W)'
+                   : chyba < -tolerance ? '⬇ zařaď lehčí (' + Math.round(chyba) + ' W)'
+                   : '✓ drž, je to ono';
+  }
+}, 2000);
+
 function spustRegulator() {
+  if (odporNejde) return;
   if (regulator) return;
   if (odporAkt === null) posliOdpor(odporMin + (odporMax - odporMin) * 0.3);
   regulator = setInterval(() => {
@@ -668,13 +724,18 @@ function spustRegulator() {
 function zastavRegulator() {
   clearInterval(regulator);
   regulator = null;
-  napis('ergInfo', '');
+  if (!odporNejde) { napis('ergInfo', ''); document.getElementById('ergInfo').className = ''; }
 }
 
+let odpovedi = [];
 function odpovedKola(udalost) {
   const d = udalost.target.value;
   if (d.getUint8(0) !== 0x80) return;
   const prikaz = d.getUint8(1), vysledek = d.getUint8(2);
+  // Pro ladění: posledních pár odpovědí ("05:1" = příkaz 0x05, výsledek 1 = OK)
+  odpovedi.push(prikaz.toString(16).padStart(2, '0') + ':' + vysledek);
+  if (odpovedi.length > 8) odpovedi.shift();
+  napis('odpovedi', odpovedi.join(' '));
   // Kolo odmítlo watty → přepneme na softwarové ERG přes odpor
   if (vysledek !== 1 && prikaz === PRIKAZ.VYKON && umiVykon) {
     umiVykon = false; umiOdpor = true;
@@ -694,6 +755,7 @@ function odpovedKola(udalost) {
 // Např. 250 W = 0x00FA → bajty [0xFA, 0x00]
 function nastavVykon(w) {
   w = Math.round(w);
+  cilZmenen = Date.now();
   if (umiVykon) posli([PRIKAZ.VYKON, w & 0xFF, (w >> 8) & 0xFF]);
   else if (umiOdpor) spustRegulator();   // cílem je cilW, regulátor ho dohání
 }
