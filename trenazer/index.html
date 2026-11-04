@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trenažér – krok 1: tep</title>
+<style>
+  body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    background: #111;
+    color: #eee;
+    text-align: center;
+    padding: 20px;
+  }
+  h1 { font-size: 20px; color: #aaa; }
+  button {
+    font-size: 20px;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 10px;
+    background: #e53935;
+    color: white;
+    margin: 10px;
+  }
+  #tep {
+    font-size: 120px;
+    font-weight: bold;
+    color: #ff5252;
+    margin: 20px 0 0;
+  }
+  .jednotka { font-size: 24px; color: #aaa; }
+  .statistika { font-size: 22px; margin-top: 20px; }
+  #stav { margin-top: 20px; color: #888; }
+</style>
+</head>
+<body>
+
+<h1>Krok 1: Tep z hrudního pásu</h1>
+
+<button id="pripojit">Připojit pás</button>
+
+<div id="tep">--</div>
+<div class="jednotka">tepů/min</div>
+
+<div class="statistika">
+  Průměr: <span id="prumer">--</span> &nbsp;|&nbsp; Max: <span id="max">--</span>
+</div>
+
+<div id="stav">Nepřipojeno</div>
+
+<script>
+// Proměnné pro statistiku
+let soucet = 0;     // součet všech naměřených tepů
+let pocet = 0;      // kolik hodnot jsme dostali
+let maximum = 0;    // nejvyšší tep
+
+// Krátké funkce pro zápis na obrazovku
+function stav(text) {
+  document.getElementById('stav').textContent = text;
+}
+
+// Hlavní funkce: připojení k pásu
+async function pripojit() {
+  // Kontrola, jestli prohlížeč umí Bluetooth
+  if (!navigator.bluetooth) {
+    stav('Tento prohlížeč neumí Bluetooth. Použijte Chrome.');
+    return;
+  }
+
+  try {
+    stav('Hledám zařízení...');
+
+    // 1) Prohlížeč ukáže seznam zařízení, která vysílají tep
+    const zarizeni = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ['heart_rate'] }]
+    });
+
+    // Když se pás odpojí, dáme vědět
+    zarizeni.addEventListener('gattserverdisconnected', () => {
+      stav('Pás se odpojil');
+    });
+
+    stav('Připojuji k ' + zarizeni.name + '...');
+
+    // 2) Připojení k zařízení
+    const server = await zarizeni.gatt.connect();
+
+    // 3) Najdeme "službu" pro tep
+    const sluzba = await server.getPrimaryService('heart_rate');
+
+    // 4) V ní "charakteristiku", která posílá naměřený tep
+    const mereni = await sluzba.getCharacteristic('heart_rate_measurement');
+
+    // 5) Řekneme pásu: posílej nám každou novou hodnotu
+    await mereni.startNotifications();
+    mereni.addEventListener('characteristicvaluechanged', novyTep);
+
+    stav('Připojeno: ' + zarizeni.name);
+  } catch (chyba) {
+    stav('Chyba: ' + chyba.message);
+  }
+}
+
+// Tato funkce se spustí pokaždé, když pás pošle data (asi 1× za sekundu)
+function novyTep(udalost) {
+  const data = udalost.target.value;   // surová data (bajty)
+
+  // První bajt = "příznaky". Nejnižší bit říká, jak je tep uložen:
+  // 0 = tep je v 1 bajtu (0–255), 1 = tep je ve 2 bajtech
+  const priznaky = data.getUint8(0);
+  let tep;
+  if (priznaky & 1) {
+    tep = data.getUint16(1, true);  // 2 bajty, pořadí "little endian"
+  } else {
+    tep = data.getUint8(1);         // 1 bajt
+  }
+
+  if (tep === 0) return;  // pás ještě nemá kontakt s kůží
+
+  // Statistika
+  soucet += tep;
+  pocet++;
+  if (tep > maximum) maximum = tep;
+
+  // Zobrazení
+  document.getElementById('tep').textContent = tep;
+  document.getElementById('prumer').textContent = Math.round(soucet / pocet);
+  document.getElementById('max').textContent = maximum;
+}
+
+// Propojení tlačítka s funkcí
+document.getElementById('pripojit').addEventListener('click', pripojit);
+</script>
+
+</body>
+</html>
