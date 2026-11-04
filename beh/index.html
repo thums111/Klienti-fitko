@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Běžecký pás – test</title>
+<meta name="theme-color" content="#111111">
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee;
+         text-align: center; padding: 16px; }
+  h1 { font-size: 18px; color: #aaa; margin: 4px 0 12px; }
+  button { font-size: 18px; padding: 12px 18px; border: none; border-radius: 10px;
+           color: #fff; background: #444; margin: 5px; }
+  button:disabled { opacity: .35; }
+  #btnPripojit { background: #1e88e5; }
+  #btnHledat   { background: #555; }
+  #btnTep      { background: #e53935; }
+  #btnStart    { background: #43a047; }
+  #btnStop     { background: #d50000; font-size: 26px; padding: 18px 40px; font-weight: bold; }
+  .mrizka { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .dlazdice { background: #1d1d1d; border-radius: 12px; padding: 12px 6px; }
+  .hodnota { font-size: 52px; font-weight: bold; line-height: 1.1; }
+  .popis { font-size: 15px; color: #999; }
+  .rych { color: #42a5f5; } .tempo { color: #66bb6a; } .sklon { color: #ff7043; }
+  .vzd { color: #4dd0e1; }  .tep { color: #ff5252; }   .cas { color: #eee; }
+  .panel { background: #1d1d1d; border-radius: 12px; padding: 12px; margin-top: 14px; }
+  .radek { margin: 8px 0; font-size: 18px; }
+  .radek b { display: inline-block; min-width: 90px; font-size: 26px; }
+  .varovani { background: #4a2a00; color: #ffcc80; border-radius: 10px; padding: 10px;
+              font-size: 15px; margin-top: 10px; text-align: left; }
+  .ladeni { font-family: monospace; font-size: 13px; color: #888; margin-top: 12px;
+            word-break: break-all; text-align: left; line-height: 1.5; }
+  input[type=number] { width: 70px; font-size: 18px; padding: 6px; border-radius: 8px; border: none; }
+</style>
+</head>
+<body>
+<h1>Běžecký pás – zkušební stránka</h1>
+
+<button id="btnPripojit">Připojit pás</button>
+<button id="btnTep">Připojit hrudní pás</button>
+<button id="btnHledat">Diagnostika (všechna zařízení)</button>
+<div id="stav" class="popis">Nepřipojeno</div>
+
+<div class="mrizka">
+  <div class="dlazdice"><div class="hodnota rych" id="rychlost">--</div><div class="popis">km/h</div></div>
+  <div class="dlazdice"><div class="hodnota tempo" id="tempo">--</div><div class="popis">tempo min/km</div></div>
+  <div class="dlazdice"><div class="hodnota sklon" id="sklon">--</div><div class="popis">sklon %</div></div>
+  <div class="dlazdice"><div class="hodnota vzd" id="vzdalenost">--</div><div class="popis">km</div></div>
+  <div class="dlazdice"><div class="hodnota tep" id="tep">--</div><div class="popis">tep/min</div></div>
+  <div class="dlazdice"><div class="hodnota cas" id="cas">--</div><div class="popis">čas (z pásu)</div></div>
+</div>
+
+<!-- ===== Ovládání ===== -->
+<div class="panel">
+  <div class="varovani">
+    ⚠️ <b>Bezpečnost:</b> měj vždy připnutý bezpečnostní klíč a stůj na bočnicích,
+    když měníš rychlost poprvé. Aplikace pošle pásu nejvýš rychlost nastavenou níže.
+    Červené <b>STOP</b> zastaví pás.
+  </div>
+
+  <div class="radek">Max. rychlost pro aplikaci:
+    <input type="number" id="maxRychlost" value="12" min="1" max="20" step="0.5"> km/h</div>
+
+  <div class="radek">
+    <button class="ovl" id="rMinus">−0,5</button>
+    Cíl rychlost <b id="cilRychlost">3.0</b> km/h
+    <button class="ovl" id="rPlus">+0,5</button>
+  </div>
+  <div class="radek">
+    <button class="ovl" id="sMinus">−1</button>
+    Cíl sklon <b id="cilSklon">0</b> %
+    <button class="ovl" id="sPlus">+1</button>
+  </div>
+  <button class="ovl" id="btnStart">▶ Start pásu</button>
+  <button class="ovl" id="btnStop">STOP</button>
+</div>
+
+<div class="ladeni">
+  <div>Rozsah rychlosti: <span id="rozsahR">?</span> · rozsah sklonu: <span id="rozsahS">?</span></div>
+  <div>Surová data pásu: <span id="surova">–</span></div>
+  <div>Odpovědi pásu: <span id="odpovedi">–</span></div>
+  <div id="diag"></div>
+</div>
+
+<script>
+// =====================================================================
+// Zkušební stránka pro běžecký pás přes Bluetooth FTMS
+// (stejný standard jako u kola, jen jiný "šuplík" s daty)
+//   0x1826 = služba Fitness Machine
+//   0x2ACD = Treadmill Data (rychlost, vzdálenost, sklon...)
+//   0x2AD9 = Control Point (příkazy: převzít řízení, rychlost, sklon, start, stop)
+//   0x2AD4 / 0x2AD5 = podporovaný rozsah rychlosti / sklonu
+// =====================================================================
+const napis = (id, t) => { document.getElementById(id).textContent = t; };
+const hex = dv => [...new Uint8Array(dv.buffer)].map(b => b.toString(16).padStart(2, '0')).join(' ');
+
+let ovladani = null;
+let fronta = Promise.resolve();
+let cilR = 3.0, cilS = 0;
+let rozsah = { rMin: 0.8, rMax: 20, sMin: 0, sMax: 20 };
+
+const PRIKAZ = { PREVZIT: 0x00, RYCHLOST: 0x02, SKLON: 0x03, START: 0x07, STOP: 0x08 };
+const NAZVY = { 0: 'převzít', 2: 'rychlost', 3: 'sklon', 7: 'start', 8: 'stop' };
+const VYSLEDKY = { 1: 'OK', 2: 'neumí', 3: 'špatná hodnota', 4: 'selhalo', 5: 'nepovoleno' };
+
+// Příkazy posíláme jeden po druhém, ať se v Bluetooth nepřetlačují
+function posli(bajty) {
+  if (!ovladani) return;
+  fronta = fronta.then(() => ovladani.writeValueWithResponse(new Uint8Array(bajty)))
+                 .catch(e => napis('stav', 'Chyba příkazu: ' + e.message));
+  return fronta;
+}
+
+// ----- Připojení pásu -----
+document.getElementById('btnPripojit').addEventListener('click', async () => {
+  if (!navigator.bluetooth) { napis('stav', 'Tento prohlížeč neumí Bluetooth. Použij Chrome.'); return; }
+  try {
+    napis('stav', 'Hledám pás…');
+    const zar = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x1826] }] });
+    zar.addEventListener('gattserverdisconnected', () => { ovladani = null; napis('stav', 'Pás odpojen'); });
+    napis('stav', 'Připojuji…');
+    const server = await zar.gatt.connect();
+    const sl = await server.getPrimaryService(0x1826);
+
+    // Data z pásu
+    const data = await sl.getCharacteristic(0x2ACD);
+    await data.startNotifications();
+    data.addEventListener('characteristicvaluechanged', dataPasu);
+
+    // Rozsahy (nemusí je mít)
+    try {
+      const r = await (await sl.getCharacteristic(0x2AD4)).readValue();
+      rozsah.rMin = r.getUint16(0, true) / 100; rozsah.rMax = r.getUint16(2, true) / 100;
+      napis('rozsahR', rozsah.rMin + '–' + rozsah.rMax + ' km/h');
+    } catch (e) { napis('rozsahR', 'neuvádí'); }
+    try {
+      const s = await (await sl.getCharacteristic(0x2AD5)).readValue();
+      rozsah.sMin = s.getInt16(0, true) / 10; rozsah.sMax = s.getInt16(2, true) / 10;
+      napis('rozsahS', rozsah.sMin + ' až ' + rozsah.sMax + ' %');
+    } catch (e) { napis('rozsahS', 'neuvádí'); }
+
+    // Ovládání
+    try {
+      ovladani = await sl.getCharacteristic(0x2AD9);
+      await ovladani.startNotifications();
+      ovladani.addEventListener('characteristicvaluechanged', odpovedPasu);
+      await posli([PRIKAZ.PREVZIT]);
+      napis('stav', 'Pás: ' + (zar.name || 'bez jména') + ' – připojen, ovládání k dispozici');
+    } catch (e) {
+      napis('stav', 'Pás: ' + (zar.name || 'bez jména') + ' – jen čtení dat (ovládání nenabízí)');
+    }
+  } catch (e) {
+    napis('stav', 'Chyba: ' + e.message + ' – zkus Diagnostiku');
+  }
+});
+
+// ----- Čtení Treadmill Data -----
+// První 2 bajty = příznaky, které říkají, jaké údaje v balíčku jsou.
+function dataPasu(ud) {
+  const d = ud.target.value;
+  napis('surova', hex(d));
+  const f = d.getUint16(0, true);
+  let i = 2;
+  if (!(f & 0x0001)) { const v = d.getUint16(i, true) / 100; i += 2; ukazRychlost(v); }
+  if (f & 0x0002) i += 2;                                      // průměrná rychlost
+  if (f & 0x0004) {                                            // vzdálenost (3 bajty, metry)
+    const m = d.getUint8(i) | (d.getUint8(i + 1) << 8) | (d.getUint8(i + 2) << 16); i += 3;
+    napis('vzdalenost', (m / 1000).toFixed(2));
+  }
+  if (f & 0x0008) { napis('sklon', (d.getInt16(i, true) / 10).toFixed(1)); i += 4; } // sklon + úhel
+  if (f & 0x0010) i += 4;                                      // převýšení
+  if (f & 0x0020) i += 1;                                      // okamžité tempo
+  if (f & 0x0040) i += 1;                                      // průměrné tempo
+  if (f & 0x0080) i += 5;                                      // energie
+  if (f & 0x0100) { const t = d.getUint8(i); i += 1; if (t > 0 && !tepZPasu) napis('tep', t); }
+  if (f & 0x0200) i += 1;                                      // MET
+  if (f & 0x0400) { const s = d.getUint16(i, true); i += 2;
+                    napis('cas', Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')); }
+}
+
+function ukazRychlost(v) {
+  napis('rychlost', v.toFixed(1));
+  if (v > 0.5) {
+    const minNaKm = 60 / v;
+    const min = Math.floor(minNaKm), sek = Math.round((minNaKm - min) * 60);
+    napis('tempo', min + ':' + String(sek % 60).padStart(2, '0'));
+  } else napis('tempo', '--');
+}
+
+// ----- Odpovědi pásu na příkazy (pro ladění) -----
+let odpovedi = [];
+function odpovedPasu(ud) {
+  const d = ud.target.value;
+  if (d.getUint8(0) !== 0x80) return;
+  const p = d.getUint8(1), v = d.getUint8(2);
+  odpovedi.push((NAZVY[p] || p.toString(16)) + ':' + (VYSLEDKY[v] || v));
+  if (odpovedi.length > 6) odpovedi.shift();
+  napis('odpovedi', odpovedi.join(' · '));
+  if (v === 5) posli([PRIKAZ.PREVZIT]);   // "nepovoleno" → znovu převezmeme řízení
+}
+
+// ----- Ovládací tlačítka -----
+function ukazCile() {
+  napis('cilRychlost', cilR.toFixed(1));
+  napis('cilSklon', cilS);
+}
+function maxR() {
+  return Math.min(rozsah.rMax, Number(document.getElementById('maxRychlost').value) || 12);
+}
+function posliRychlost() {
+  const v = Math.round(cilR * 100);
+  posli([PRIKAZ.RYCHLOST, v & 0xFF, v >> 8]);
+}
+function posliSklon() {
+  const s = Math.round(cilS * 10) & 0xFFFF;
+  posli([PRIKAZ.SKLON, s & 0xFF, s >> 8]);
+}
+
+document.getElementById('rPlus').addEventListener('click', () => {
+  cilR = Math.min(maxR(), cilR + 0.5); ukazCile(); posliRychlost();
+});
+document.getElementById('rMinus').addEventListener('click', () => {
+  cilR = Math.max(rozsah.rMin, cilR - 0.5); ukazCile(); posliRychlost();
+});
+document.getElementById('sPlus').addEventListener('click', () => {
+  cilS = Math.min(rozsah.sMax, cilS + 1); ukazCile(); posliSklon();
+});
+document.getElementById('sMinus').addEventListener('click', () => {
+  cilS = Math.max(rozsah.sMin, cilS - 1); ukazCile(); posliSklon();
+});
+document.getElementById('btnStart').addEventListener('click', () => {
+  cilR = Math.min(cilR, maxR()); ukazCile();
+  posli([PRIKAZ.PREVZIT]);
+  posli([PRIKAZ.START]);
+});
+document.getElementById('btnStop').addEventListener('click', () => {
+  posli([PRIKAZ.STOP, 0x01]);             // 0x01 = zastavit (0x02 by byla pauza)
+});
+ukazCile();
+
+// ----- Hrudní pás (tep) -----
+let tepZPasu = false;
+document.getElementById('btnTep').addEventListener('click', async () => {
+  try {
+    const zar = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x180D] }] });
+    const sl = await (await zar.gatt.connect()).getPrimaryService(0x180D);
+    const ch = await sl.getCharacteristic(0x2A37);
+    await ch.startNotifications();
+    ch.addEventListener('characteristicvaluechanged', ud => {
+      const d = ud.target.value;
+      const t = (d.getUint8(0) & 1) ? d.getUint16(1, true) : d.getUint8(1);
+      if (t > 0) { tepZPasu = true; napis('tep', t); }
+    });
+    document.getElementById('btnTep').textContent = '❤ ' + (zar.name || 'pás');
+  } catch (e) { napis('stav', 'Hrudní pás: ' + e.message); }
+});
+
+// ----- Diagnostika: když pás neumí FTMS, zjistíme, jaké služby má -----
+document.getElementById('btnHledat').addEventListener('click', async () => {
+  try {
+    const zar = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [0x1826, 0x1816, 0x1818, 0x180D, 0x180A, 0xFFF0, 0xFFE0, 0xFFF1, 0xFE00,
+                         '0000fff0-0000-1000-8000-00805f9b34fb',
+                         '6e40fff0-b5a3-f393-e0a9-e50e24dcca9e',
+                         '6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+    });
+    const server = await zar.gatt.connect();
+    const sluzby = await server.getPrimaryServices();
+    let t = 'Zařízení: ' + (zar.name || '?') + '<br>';
+    for (const s of sluzby) {
+      t += 'služba ' + s.uuid.slice(4, 8) + ': ';
+      try {
+        const chs = await s.getCharacteristics();
+        t += chs.map(c => c.uuid.slice(4, 8)).join(', ');
+      } catch (e) { t += '?'; }
+      t += '<br>';
+    }
+    document.getElementById('diag').innerHTML = t;
+    zar.gatt.disconnect();
+  } catch (e) { napis('stav', 'Diagnostika: ' + e.message); }
+});
+</script>
+</body>
+</html>
