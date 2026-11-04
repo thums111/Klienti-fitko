@@ -88,6 +88,23 @@
   body.volna .popis { font-size: 22px; }
   body.volna .souhrn { font-size: 24px; }
 
+  /* ===== Režimy: co se kde ukazuje ===== */
+  body.trasa #panelErg, body.trasa #panelInterval { display: none; }
+  body:not(.trasa) #panelTrasa { display: none; }
+
+  /* ===== Trasa ===== */
+  #mapa { height: 40vh; border-radius: 8px; margin-top: 6px; background: #222; }
+  #profil { width: 100%; height: 14vh; display: block; margin-top: 6px; }
+  .trasaInfo { display: flex; justify-content: space-around; flex-wrap: wrap;
+               font-size: 17px; margin: 6px 0; }
+  .trasaInfo b { font-size: 22px; }
+  #tSklon { color: #ff7043; }
+  #btnStartTrasy { background: #43a047; }
+  select { font-size: 16px; padding: 8px; background: #2a2a2a; color: #eee;
+           border: 1px solid #444; border-radius: 6px; max-width: 46%; }
+  .tlacSoubor { display: inline-block; color: #fff; border-radius: 10px; cursor: pointer; }
+  .tlacSoubor input { display: none; }
+
   /* ===== TABLET NA ŠÍŘKU =====
      Když je obrazovka širší než vyšší, dáme dva sloupce vedle sebe:
      vlevo hodnoty, vpravo ovládání. Vše se tak vejde bez posouvání. */
@@ -113,16 +130,19 @@
     #zbyva { font-size: 64px; }
   }
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 3.2)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 4.0)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
   <button class="rezim" id="btnVolna">Volná jízda</button>
   <button class="rezim" id="btnIntervaly">Intervaly</button>
+  <button class="rezim" id="btnTrasa">Trasa</button>
   <button class="rezim" id="btnCela" title="Celá obrazovka">⛶</button>
 </div>
 
@@ -166,7 +186,7 @@
 
 <div class="sloupec" id="sloupecOvladani">   <!-- PRAVÝ sloupec: ovládání -->
 <!-- ===== ERG: kolo drží nastavené watty ===== -->
-<div class="panel">
+<div class="panel" id="panelErg">
   <h2>ERG – pevný výkon</h2>
   <button class="maly" id="minus10">−10</button>
   <span class="cil"><span id="cilW">150</span> W</span>
@@ -175,7 +195,7 @@
 </div>
 
 <!-- ===== Intervaly ===== -->
-<div class="panel">
+<div class="panel" id="panelInterval">
   <h2>Intervalový trénink</h2>
   <div id="nastaveni">
   <div class="radek">Rozjetí <input id="rozMin" type="number" value="10"> min
@@ -197,6 +217,31 @@
   <div class="postup"><div id="postupBar"></div></div>
 </div>
 
+<!-- ===== TRASA: mapa, profil, sklon ===== -->
+<div class="panel" id="panelTrasa">
+  <div id="vyberTrasy">
+    <select id="seznamTras"></select>
+    <button class="maly" id="btnNacist">Načíst</button>
+    <label class="maly tlacSoubor">GPX<input type="file" id="souborGpx" accept=".gpx"></label>
+    <button class="maly" id="btnKreslit">Kreslit</button>
+  </div>
+  <div id="kresleniInfo" class="radek" style="display:none">
+    Klepej do mapy – body trasy: <b id="pocetBodu">0</b>
+    <button class="maly" id="btnSpocitat">Spočítat trasu</button>
+    <button class="maly" id="btnSmazatBody">Smazat</button>
+  </div>
+  <div id="mapa"></div>
+  <canvas id="profil"></canvas>
+  <div class="trasaInfo">
+    <span>Sklon <b id="tSklon">--</b> %</span>
+    <span>Výška <b id="tVyska">--</b> m</span>
+    <span><b id="tUjeto">0.0</b> / <b id="tCelkem">--</b> km</span>
+    <span>Nastoupáno <b id="tStoupani">0</b> m</span>
+  </div>
+  <button id="btnStartTrasy">Start trasy</button>
+  <button class="maly" id="btnSatelit">Satelit</button>
+  <div class="stav" id="stavTrasa"></div>
+</div>
 </div>   <!-- konec pravého sloupce -->
 </div>   <!-- konec rozložení -->
 
@@ -289,7 +334,7 @@ function novaDataKola(udalost) {
     // desetkrát větší číslo – proto dělíme jen 10.
     const rychlost = data.getUint16(pozice, true) / 10;
     rychlostKola = rychlost;                 // hlavní rychlost = z kola (sedí s Garminem)
-    napis('rychlost', rychlost.toFixed(1));
+    if (!trasaBezi) napis('rychlost', rychlost.toFixed(1));  // na trase ukazujeme fyziku
     pozice += 2;
   }
   // bit 1: průměrná rychlost (nepotřebujeme, jen přeskočit)
@@ -359,7 +404,15 @@ setInterval(() => {
   const zrychleni = (hnaci - vzduch - valeni - kopec) / m;
   v = Math.max(0, v + zrychleni * KROK);
 
-  metry += (rychlostKola / 3.6) * KROK;            // km/h → m/s, jako Garmin
+  // Na trase jede "virtuální" kolo podle fyziky (do kopce pomaleji),
+  // jinak bereme rychlost z kola (sedí s Garminem).
+  if (trasaBezi) {
+    metry += v * KROK;
+    trasaMetry += v * KROK;
+    napis('rychlost', (v * 3.6).toFixed(1));
+  } else {
+    metry += (rychlostKola / 3.6) * KROK;
+  }
   napis('vzdalenost', (metry / 1000).toFixed(2));
 }, KROK * 1000);
 
@@ -572,19 +625,29 @@ document.getElementById('btnInterval').addEventListener('click', () => {
 });
 
 // ===== Režimy zobrazení: Volná jízda / Intervaly =====
+function ukazRezim(rezim) {
+  ['volna', 'intervaly', 'trasa'].forEach(r => document.body.classList.toggle(r, r === rezim));
+  document.getElementById('btnVolna').classList.toggle('aktivni', rezim === 'volna');
+  document.getElementById('btnIntervaly').classList.toggle('aktivni', rezim === 'intervaly');
+  document.getElementById('btnTrasa').classList.toggle('aktivni', rezim === 'trasa');
+  if (rezim === 'trasa') pripravMapu();
+}
+
 function nastavRezim(rezim) {
-  if (rezim === 'volna') {
-    // Když běží intervaly, zeptáme se, jestli je opravdu ukončit
-    if (intervalBezi) {
-      if (!confirm('Běží intervaly. Ukončit je a přejít na volnou jízdu?')) return;
-      zastavIntervaly('Zastaveno');
-    }
+  // Když něco běží a odcházíme jinam, zeptáme se
+  if (intervalBezi && rezim !== 'intervaly') {
+    if (!confirm('Běží intervaly. Ukončit je?')) return;
+    zastavIntervaly('Zastaveno');
+  }
+  if (trasaBezi && rezim !== 'trasa') {
+    if (!confirm('Jedeš trasu. Ukončit ji?')) return;
+    zastavTrasu('Zastaveno');
+  }
+  if (rezim !== 'intervaly') {
     if (ergZapnuto) prepniErg(false);   // ERG vypnout → volná jízda po rovině
     else if (ovladani) volnaJizda(0);
   }
-  document.body.classList.toggle('volna', rezim === 'volna');
-  document.getElementById('btnVolna').classList.toggle('aktivni', rezim === 'volna');
-  document.getElementById('btnIntervaly').classList.toggle('aktivni', rezim !== 'volna');
+  ukazRezim(rezim);
   try { localStorage.setItem('rezim', rezim); } catch (e) {}
 }
 
@@ -603,6 +666,9 @@ document.getElementById('btnVolna').addEventListener('click', () => {
 document.getElementById('btnIntervaly').addEventListener('click', () => {
   nastavRezim('intervaly'); celaObrazovka();
 });
+document.getElementById('btnTrasa').addEventListener('click', () => {
+  nastavRezim('trasa'); celaObrazovka();
+});
 document.getElementById('btnCela').addEventListener('click', () => {
   if (document.fullscreenElement) document.exitFullscreen();
   else celaObrazovka();
@@ -612,10 +678,297 @@ document.getElementById('btnCela').addEventListener('click', () => {
 (() => {
   let r = 'intervaly';
   try { r = localStorage.getItem('rezim') || 'intervaly'; } catch (e) {}
-  document.body.classList.toggle('volna', r === 'volna');
-  document.getElementById('btnVolna').classList.toggle('aktivni', r === 'volna');
-  document.getElementById('btnIntervaly').classList.toggle('aktivni', r !== 'volna');
+  ukazRezim(r);
 })();
+
+// =====================================================================
+// ===== KROK 4: TRASY =====
+// =====================================================================
+// Trasa = seznam bodů {lat, lon, ele (výška), d (vzdálenost od startu v m)}.
+// Podle ujetých metrů najdeme, kde jsme, spočítáme sklon a pošleme ho kolu.
+
+// Připravené trasy: jen pár bodů, cestu po silnicích a výšky
+// dopočítá zdarma služba BRouter (brouter.de).
+const TRASY = [
+  { nazev: 'Zbraslav – Karlštejn (rovina)',
+    body: [[14.393, 49.975], [14.290, 49.955], [14.180, 49.934]] },
+  { nazev: 'Vrchlabí – Špindl (kopec)',
+    body: [[15.609, 50.627], [15.609, 50.726]] },
+  { nazev: 'Ještěd (stoupák)',
+    body: [[15.010, 50.738], [14.9845, 50.7325]] },
+];
+
+let trasa = [];          // body aktuální trasy
+let trasaMetry = 0;      // kolik jsme na trase ujeli
+let trasaBezi = false;
+let trasaTimer = null;
+let posledniSklon = null; // naposledy poslaný sklon kolu
+let stoupani = 0, predchoziVyska = null;
+let mapa = null, cara = null, tecka = null, vrstvaMapa, vrstvaSatelit, satelit = false;
+let kresleni = false, kresleneBody = [], znackyBodu = [];
+
+const sel = document.getElementById('seznamTras');
+TRASY.forEach((t, i) => sel.add(new Option(t.nazev, i)));
+
+function stavTrasy(t) { napis('stavTrasa', t); }
+
+// ----- Mapa (Leaflet) -----
+function pripravMapu() {
+  if (mapa || typeof L === 'undefined') {
+    if (mapa) setTimeout(() => mapa.invalidateSize(), 100);  // po zobrazení přepočítat velikost
+    return;
+  }
+  mapa = L.map('mapa', { zoomControl: true }).setView([49.8, 15.5], 7);
+  vrstvaMapa = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapa);
+  vrstvaSatelit = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { maxZoom: 19, attribution: '© Esri' });
+  mapa.on('click', klikDoMapy);
+  setTimeout(() => mapa.invalidateSize(), 100);
+}
+
+document.getElementById('btnSatelit').addEventListener('click', () => {
+  if (!mapa) return;
+  satelit = !satelit;
+  if (satelit) { mapa.removeLayer(vrstvaMapa); vrstvaSatelit.addTo(mapa); }
+  else         { mapa.removeLayer(vrstvaSatelit); vrstvaMapa.addTo(mapa); }
+  document.getElementById('btnSatelit').textContent = satelit ? 'Mapa' : 'Satelit';
+});
+
+// ----- Načtení GPX (z BRouteru nebo ze souboru) -----
+// GPX je text ve formátu XML: <trkpt lat=".." lon=".."><ele>výška</ele></trkpt>
+function nactiGpx(text) {
+  const xml = new DOMParser().parseFromString(text, 'application/xml');
+  let pts = [...xml.getElementsByTagName('trkpt')];
+  if (pts.length === 0) pts = [...xml.getElementsByTagName('rtept')];
+  const body = [];
+  for (const p of pts) {
+    const e = p.getElementsByTagName('ele')[0];
+    body.push({
+      lat: Number(p.getAttribute('lat')),
+      lon: Number(p.getAttribute('lon')),
+      ele: e ? Number(e.textContent) : 0,
+    });
+  }
+  if (body.length < 2) { stavTrasy('V souboru jsem nenašel trasu.'); return; }
+
+  // Vzdálenost od startu – sčítáme úseky mezi body
+  body[0].d = 0;
+  for (let i = 1; i < body.length; i++) {
+    body[i].d = body[i - 1].d + vzdalenostBodu(body[i - 1], body[i]);
+  }
+  trasa = body;
+  ukazTrasu();
+}
+
+// Vzdálenost dvou bodů na Zemi v metrech (haversinův vzorec)
+function vzdalenostBodu(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+  const h = Math.sin(dLat / 2) ** 2 +
+            Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Požádáme BRouter o trasu mezi body. Vrátí GPX i s výškami.
+async function trasaZBrouteru(body) {
+  const lonlats = body.map(b => b[0].toFixed(5) + ',' + b[1].toFixed(5)).join('|');
+  const url = 'https://brouter.de/brouter?lonlats=' + lonlats +
+              '&profile=fastbike&alternativeidx=0&format=gpx';
+  stavTrasy('Počítám trasu…');
+  try {
+    const odpoved = await fetch(url);
+    if (!odpoved.ok) throw new Error('server odpověděl ' + odpoved.status);
+    nactiGpx(await odpoved.text());
+  } catch (chyba) {
+    stavTrasy('Trasu se nepodařilo načíst (' + chyba.message + '). Zkus GPX soubor.');
+  }
+}
+
+document.getElementById('btnNacist').addEventListener('click', () => {
+  pripravMapu();
+  trasaZBrouteru(TRASY[sel.value].body);
+});
+
+document.getElementById('souborGpx').addEventListener('change', e => {
+  const soubor = e.target.files[0];
+  if (!soubor) return;
+  pripravMapu();
+  soubor.text().then(nactiGpx);
+});
+
+// ----- Vlastní trasa: klepání do mapy -----
+document.getElementById('btnKreslit').addEventListener('click', () => {
+  pripravMapu();
+  kresleni = !kresleni;
+  document.getElementById('kresleniInfo').style.display = kresleni ? '' : 'none';
+  document.getElementById('btnKreslit').textContent = kresleni ? 'Hotovo' : 'Kreslit';
+});
+
+function klikDoMapy(e) {
+  if (!kresleni) return;
+  kresleneBody.push([e.latlng.lng, e.latlng.lat]);
+  znackyBodu.push(L.circleMarker(e.latlng, { radius: 6, color: '#fb8c00' }).addTo(mapa));
+  napis('pocetBodu', kresleneBody.length);
+}
+
+document.getElementById('btnSmazatBody').addEventListener('click', () => {
+  znackyBodu.forEach(z => mapa.removeLayer(z));
+  kresleneBody = []; znackyBodu = [];
+  napis('pocetBodu', 0);
+});
+
+document.getElementById('btnSpocitat').addEventListener('click', () => {
+  if (kresleneBody.length < 2) { stavTrasy('Klepni aspoň 2 body (start a cíl).'); return; }
+  trasaZBrouteru(kresleneBody);
+});
+
+// ----- Zobrazení trasy -----
+function ukazTrasu() {
+  const celkem = trasa[trasa.length - 1].d;
+  let nahoru = 0;
+  for (let i = 1; i < trasa.length; i++) {
+    nahoru += Math.max(0, trasa[i].ele - trasa[i - 1].ele);
+  }
+  stavTrasy('Trasa: ' + (celkem / 1000).toFixed(1) + ' km, stoupání celkem ' +
+            Math.round(nahoru) + ' m');
+  napis('tCelkem', (celkem / 1000).toFixed(1));
+
+  if (mapa) {
+    if (cara) mapa.removeLayer(cara);
+    if (tecka) mapa.removeLayer(tecka);
+    const ll = trasa.map(b => [b.lat, b.lon]);
+    cara = L.polyline(ll, { color: '#fb8c00', weight: 5 }).addTo(mapa);
+    tecka = L.circleMarker(ll[0], { radius: 9, color: '#fff', fillColor: '#e53935',
+                                    fillOpacity: 1, weight: 3 }).addTo(mapa);
+    mapa.fitBounds(cara.getBounds(), { padding: [20, 20] });
+  }
+  trasaMetry = 0;
+  kresliProfil(0);
+}
+
+// Najde bod na trase ve vzdálenosti d (dopočítá mezi dvěma sousedními body)
+function bodNa(d) {
+  d = Math.max(0, Math.min(d, trasa[trasa.length - 1].d));
+  let lo = 0, hi = trasa.length - 1;
+  while (hi - lo > 1) {                 // půlení intervalu – rychlé hledání
+    const mid = (lo + hi) >> 1;
+    if (trasa[mid].d <= d) lo = mid; else hi = mid;
+  }
+  const a = trasa[lo], b = trasa[hi];
+  const t = b.d > a.d ? (d - a.d) / (b.d - a.d) : 0;
+  return { lat: a.lat + (b.lat - a.lat) * t,
+           lon: a.lon + (b.lon - a.lon) * t,
+           ele: a.ele + (b.ele - a.ele) * t };
+}
+
+// Sklon = převýšení / vzdálenost. Bereme úsek 40 m před a za námi,
+// aby skoky ve výškových datech necukaly odporem.
+function sklonNa(d) {
+  const celkem = trasa[trasa.length - 1].d;
+  const d1 = Math.max(0, d - 40), d2 = Math.min(celkem, d + 40);
+  if (d2 - d1 < 1) return 0;
+  const s = (bodNa(d2).ele - bodNa(d1).ele) / (d2 - d1) * 100;
+  return Math.max(-10, Math.min(20, s));   // omezíme na rozumný rozsah
+}
+
+// ----- Výškový profil (kreslíme na <canvas>) -----
+function kresliProfil(d) {
+  const c = document.getElementById('profil');
+  const W = c.width = c.clientWidth, H = c.height = c.clientHeight;
+  const g2 = c.getContext('2d');
+  g2.clearRect(0, 0, W, H);
+  if (trasa.length < 2) return;
+  const celkem = trasa[trasa.length - 1].d;
+  let min = Infinity, max = -Infinity;
+  trasa.forEach(b => { min = Math.min(min, b.ele); max = Math.max(max, b.ele); });
+  if (max - min < 20) max = min + 20;      // ať rovina nevypadá jako Alpy
+  const x = dd => dd / celkem * W;
+  const y = e => H - 4 - (e - min) / (max - min) * (H - 8);
+
+  // Plocha profilu – ujetá část oranžově, zbytek šedě
+  for (const [od, doo, barva] of [[0, d, '#fb8c00'], [d, celkem, '#555']]) {
+    if (doo <= od) continue;
+    g2.beginPath();
+    g2.moveTo(x(od), H);
+    const krok = celkem / W;               // jeden bod na pixel
+    for (let dd = od; dd <= doo; dd += krok) g2.lineTo(x(dd), y(bodNa(dd).ele));
+    g2.lineTo(x(doo), y(bodNa(doo).ele));
+    g2.lineTo(x(doo), H);
+    g2.closePath();
+    g2.fillStyle = barva;
+    g2.fill();
+  }
+  // Svislá čára = kde jsem
+  g2.fillStyle = '#fff';
+  g2.fillRect(x(d) - 1, 0, 3, H);
+  g2.font = '13px system-ui';
+  g2.fillText(Math.round(max) + ' m', 4, 14);
+  g2.fillText(Math.round(min) + ' m', 4, H - 6);
+}
+
+// ----- Jízda po trase -----
+function tikTrasy() {
+  const celkem = trasa[trasa.length - 1].d;
+  const p = bodNa(trasaMetry);
+  sklon = sklonNa(trasaMetry);           // fyzika rychlosti počítá s tímto sklonem
+
+  // Kolu posíláme sklon jen když se změní aspoň o 0,3 % – šetříme Bluetooth
+  if (posledniSklon === null || Math.abs(sklon - posledniSklon) >= 0.3) {
+    volnaJizda(sklon);
+    posledniSklon = sklon;
+  }
+
+  if (predchoziVyska !== null && p.ele > predchoziVyska) stoupani += p.ele - predchoziVyska;
+  predchoziVyska = p.ele;
+
+  napis('tSklon', sklon.toFixed(1));
+  napis('tVyska', Math.round(p.ele));
+  napis('tUjeto', (trasaMetry / 1000).toFixed(2));
+  napis('tStoupani', Math.round(stoupani));
+  if (tecka) {
+    tecka.setLatLng([p.lat, p.lon]);
+    mapa.panTo([p.lat, p.lon], { animate: true });
+  }
+  kresliProfil(trasaMetry);
+
+  if (trasaMetry >= celkem) zastavTrasu('🏁 Cíl! ' + (celkem / 1000).toFixed(1) + ' km');
+}
+
+function zastavTrasu(text) {
+  clearInterval(trasaTimer);
+  trasaBezi = false;
+  sklon = 0;
+  posledniSklon = null;
+  volnaJizda(0);
+  stavTrasy(text);
+  const b = document.getElementById('btnStartTrasy');
+  b.textContent = 'Start trasy';
+  b.style.background = '#43a047';
+  document.getElementById('vyberTrasy').style.display = '';
+}
+
+document.getElementById('btnStartTrasy').addEventListener('click', () => {
+  if (trasaBezi) { zastavTrasu('Zastaveno'); return; }
+  if (!ovladani) { stavTrasy('Nejdřív připoj kolo.'); return; }
+  if (trasa.length < 2) { stavTrasy('Nejdřív načti trasu.'); return; }
+  if (ergZapnuto) prepniErg(false);
+
+  trasaMetry = 0; stoupani = 0; predchoziVyska = null; posledniSklon = null;
+  v = rychlostKola / 3.6;                 // ať se nezačíná z nuly
+  trasaBezi = true;
+  if (mapa) mapa.setView([trasa[0].lat, trasa[0].lon], 16);
+  document.getElementById('vyberTrasy').style.display = 'none';
+  kresleni = false;
+  document.getElementById('kresleniInfo').style.display = 'none';
+  const b = document.getElementById('btnStartTrasy');
+  b.textContent = 'Zastavit';
+  b.style.background = '#c62828';
+  stavTrasy('Jedeš! 🚴');
+  tikTrasy();
+  trasaTimer = setInterval(tikTrasy, 1000);
+});
 
 // Ať tablet během tréninku nezhasne obrazovku
 async function nezhasinej() {
