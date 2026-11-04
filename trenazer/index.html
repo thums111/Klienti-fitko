@@ -69,14 +69,43 @@
   #dalsi     { color: #999; font-size: 15px; }
   .postup    { height: 8px; background: #333; border-radius: 4px; margin-top: 8px; }
   #postupBar { height: 8px; width: 0; background: #43a047; border-radius: 4px; }
+
+  /* ===== TABLET NA ŠÍŘKU =====
+     Když je obrazovka širší než vyšší, dáme dva sloupce vedle sebe:
+     vlevo hodnoty, vpravo ovládání. Vše se tak vejde bez posouvání. */
+  @media (orientation: landscape) {
+    body { padding: 8px 14px; }
+    .hlavicka { display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .hlavicka h1 { margin: 0 12px 0 0; }
+    .hlavicka button { padding: 8px 16px; margin: 2px; }
+    .rozlozeni {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+    .mrizka { margin-top: 8px; }
+    .hodnota { font-size: 84px; }
+    .dlazdice { padding: 16px 6px; }
+    .souhrn { margin-top: 10px; font-size: 17px; line-height: 1.5; }
+    .panel { margin-top: 8px; padding: 8px 12px; }
+    .panel h2 { margin-bottom: 4px; }
+    .cil { font-size: 40px; vertical-align: middle; }
+    .radek { margin: 3px 0; }
+    #zbyva { font-size: 64px; }
+  }
 </style>
 </head>
 <body>
 
-<h1>Krok 3: ERG a intervaly <small style="color:#555">(verze 3.0)</small></h1>
+<div class="hlavicka">
+  <h1>Krok 3: ERG a intervaly <small style="color:#555">(verze 3.1)</small></h1>
+  <button id="btnKolo">Připojit kolo</button>
+  <button id="btnPas">Připojit pás</button>
+</div>
 
-<button id="btnKolo">Připojit kolo</button>
-<button id="btnPas">Připojit pás</button>
+<div class="rozlozeni">
+<div class="sloupec">   <!-- LEVÝ sloupec: hodnoty -->
 
 <div class="mrizka">
   <div class="dlazdice">
@@ -108,18 +137,25 @@
   Max tep: <b id="maxTep">--</b>
 </div>
 
+<div class="stav" id="stavKolo">Kolo: nepřipojeno</div>
+<div class="stav" id="stavOvladani">Ovládání: --</div>
+<div class="stav" id="stavPas">Pás: nepřipojeno</div>
+</div>   <!-- konec levého sloupce -->
+
+<div class="sloupec">   <!-- PRAVÝ sloupec: ovládání -->
 <!-- ===== ERG: kolo drží nastavené watty ===== -->
 <div class="panel">
   <h2>ERG – pevný výkon</h2>
   <button class="maly" id="minus10">−10</button>
   <span class="cil"><span id="cilW">150</span> W</span>
-  <button class="maly" id="plus10">+10</button><br>
+  <button class="maly" id="plus10">+10</button>
   <button id="btnErg">Zapnout ERG</button>
 </div>
 
 <!-- ===== Intervaly ===== -->
 <div class="panel">
   <h2>Intervalový trénink</h2>
+  <div id="nastaveni">
   <div class="radek">Rozjetí <input id="rozMin" type="number" value="10"> min
     při <input id="rozW" type="number" value="120"> W</div>
   <div class="radek"><input id="opak" type="number" value="5"> × práce
@@ -130,6 +166,7 @@
   <div class="radek">Vyjetí <input id="vyjMin" type="number" value="10"> min
     při <input id="vyjW" type="number" value="110"> W</div>
   <div class="radek">Celkem: <b id="celkem">--</b></div>
+  </div>
   <button id="btnInterval">Start intervalů</button>
 
   <div id="faze"></div>
@@ -138,9 +175,8 @@
   <div class="postup"><div id="postupBar"></div></div>
 </div>
 
-<div class="stav" id="stavKolo">Kolo: nepřipojeno</div>
-<div class="stav" id="stavOvladani">Ovládání: --</div>
-<div class="stav" id="stavPas">Pás: nepřipojeno</div>
+</div>   <!-- konec pravého sloupce -->
+</div>   <!-- konec rozložení -->
 
 <script>
 // ===== Pomocné funkce =====
@@ -488,6 +524,7 @@ function zastavIntervaly(text) {
   clearInterval(intervalBezi);
   intervalBezi = null;
   prepniErg(false);           // zpět na volnou jízdu
+  document.getElementById('nastaveni').style.display = '';    // nastavení zpět
   napis('faze', text);
   napis('zbyva', ''); napis('dalsi', '');
   document.getElementById('postupBar').style.width = '0';
@@ -506,6 +543,7 @@ document.getElementById('btnInterval').addEventListener('click', () => {
   spustFazi();
   napis('zbyva', mmss(zbyva));
   intervalBezi = setInterval(tik, 1000);
+  document.getElementById('nastaveni').style.display = 'none';  // místo pro odpočet
   const b = document.getElementById('btnInterval');
   b.textContent = 'Zastavit';
   b.style.background = '#c62828';
