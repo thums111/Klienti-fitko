@@ -31,7 +31,18 @@
   .ladeni { font-family: monospace; font-size: 13px; color: #888; margin-top: 12px;
             word-break: break-all; text-align: left; line-height: 1.5; }
   input[type=number] { width: 70px; font-size: 18px; padding: 6px; border-radius: 8px; border: none; }
+  #panelTrasa select { font-size: 17px; padding: 10px; border-radius: 8px; max-width: 100%; }
+  .tlacSoubor { display: inline-block; font-size: 18px; padding: 12px 18px; border-radius: 10px;
+                background: #444; margin: 5px; cursor: pointer; }
+  .tlacSoubor input { display: none; }
+  #btnStartTrasy { background: #43a047; }
+  #mapa { height: 35vh; border-radius: 8px; margin-top: 8px; background: #222; }
+  #profil { width: 100%; height: 13vh; display: block; margin-top: 6px; }
+  .trasaInfo { font-size: 18px; margin-top: 6px; }
+  .trasaInfo b { color: #ff7043; }
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
 <h1>Běžecký pás – zkušební stránka</h1>
@@ -52,11 +63,6 @@
 
 <!-- ===== Ovládání ===== -->
 <div class="panel">
-  <div class="varovani">
-    ⚠️ <b>Bezpečnost:</b> měj vždy připnutý bezpečnostní klíč a stůj na bočnicích,
-    když měníš rychlost poprvé. Aplikace pošle pásu nejvýš rychlost nastavenou níže.
-    Červené <b>STOP</b> zastaví pás.
-  </div>
 
   <div class="radek">Max. rychlost pro aplikaci:
     <input type="number" id="maxRychlost" value="12" min="1" max="20" step="0.5"> km/h</div>
@@ -71,8 +77,25 @@
     Cíl sklon <b id="cilSklon">0</b> %
     <button class="ovl" id="sPlus">+1</button>
   </div>
-  <button class="ovl" id="btnStart">▶ Start pásu</button>
   <button class="ovl" id="btnStop">STOP</button>
+</div>
+
+<!-- ===== Trasa ===== -->
+<div class="panel" id="panelTrasa">
+  <div id="vyberTrasy">
+    <select id="seznamTras"></select>
+    <button id="btnNacist">Načíst</button>
+    <label class="tlacSoubor">GPX<input type="file" id="souborGpx" accept=".gpx"></label>
+    <button id="btnUlozitTrasu">💾 Uložit</button>
+  </div>
+  <div id="mapa"></div>
+  <canvas id="profil"></canvas>
+  <div class="trasaInfo">
+    Ujeto <b id="tUjeto">0.00</b> / <span id="tCelkem">–</span> km ·
+    sklon trasy <b id="tSklonTrasy">--</b> % · pás <b id="tSklonPas">--</b> %
+  </div>
+  <button id="btnStartTrasy">Start trasy</button>
+  <div id="stavTrasa" class="popis">Načti trasu – tvoje uložené (⭐) z trenažéru jsou tu taky.</div>
 </div>
 
 <div class="ladeni">
@@ -166,6 +189,7 @@ function dataPasu(ud) {
   if (f & 0x0004) {                                            // vzdálenost (3 bajty, metry)
     const m = d.getUint8(i) | (d.getUint8(i + 1) << 8) | (d.getUint8(i + 2) << 16); i += 3;
     napis('vzdalenost', (m / 1000).toFixed(2));
+    vzdalenostPasu = m;
   }
   if (f & 0x0008) { napis('sklon', (d.getInt16(i, true) / 10).toFixed(1)); i += 4; } // sklon + úhel
   if (f & 0x0010) i += 4;                                      // převýšení
@@ -178,6 +202,8 @@ function dataPasu(ud) {
                     napis('cas', Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')); }
 }
 
+let aktRychlost = 0;
+let vzdalenostPasu = null;   // celková vzdálenost hlášená pásem (m), když ji posílá
 function ukazRychlost(v) {
   aktRychlost = v;
   napis('rychlost', v.toFixed(1));
@@ -229,22 +255,6 @@ document.getElementById('sPlus').addEventListener('click', () => {
 document.getElementById('sMinus').addEventListener('click', () => {
   cilS = Math.max(rozsah.sMin, cilS - 1); ukazCile(); posliSklon();
 });
-// Start: některé pásy příkaz "start" neberou, ale rozjedou se na příkaz
-// "rychlost". Zkusíme obojí a po 6 s ověříme, jestli se pás opravdu točí.
-let aktRychlost = 0;
-document.getElementById('btnStart').addEventListener('click', () => {
-  cilR = Math.min(cilR, maxR()); ukazCile();
-  posli([PRIKAZ.PREVZIT]);
-  posli([PRIKAZ.START]);
-  setTimeout(posliRychlost, 800);
-  napis('stav', 'Startuji pás…');
-  setTimeout(() => {
-    napis('stav', aktRychlost > 0.3
-      ? 'Pás běží – rychlost a sklon ovládáš z aplikace'
-      : 'Pás se z aplikace spustit nedá (bezpečnostní pojistka výrobce). ' +
-        'Spusť ho tlačítkem START na panelu pásu – pak už rychlost, sklon i STOP jdou z aplikace.');
-  }, 6000);
-});
 document.getElementById('btnStop').addEventListener('click', () => {
   posli([PRIKAZ.STOP, 0x01]);             // 0x01 = zastavit (0x02 by byla pauza)
 });
@@ -265,6 +275,203 @@ document.getElementById('btnTep').addEventListener('click', async () => {
     });
     document.getElementById('btnTep').textContent = '❤ ' + (zar.name || 'pás');
   } catch (e) { napis('stav', 'Hrudní pás: ' + e.message); }
+});
+
+// =====================================================================
+// TRASY – sklon pásu podle výškového profilu trasy
+// Uložené trasy sdílí s trenažérem (stejný web = stejné úložiště v prohlížeči).
+// =====================================================================
+let trasa = [], trasaBezi = false, trasaTimer = null;
+let startVzd = 0, integrovano = 0, posledniSklonPas = null, navrhNazvu = '';
+let mapa = null, cara = null, tecka = null;
+const sel = document.getElementById('seznamTras');
+const stavT = t => napis('stavTrasa', t);
+
+function mojeTrasy() {
+  try { return JSON.parse(localStorage.getItem('mojeTrasy') || '[]'); } catch (e) { return []; }
+}
+function naplnSeznam(vybrat) {
+  sel.innerHTML = '';
+  const m = mojeTrasy();
+  if (m.length === 0) sel.add(new Option('(zatím žádná uložená trasa)', ''));
+  m.forEach((t, i) => sel.add(new Option('⭐ ' + t.nazev, i)));
+  if (vybrat !== undefined) sel.value = vybrat;
+}
+naplnSeznam();
+
+function pripravMapu() {
+  if (mapa || typeof L === 'undefined') return;
+  mapa = L.map('mapa').setView([49.8, 15.5], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapa);
+}
+
+function vzdalenostBodu(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+  const h = Math.sin(dLat / 2) ** 2 +
+            Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function nastavTrasu(body) {
+  body[0].d = 0;
+  for (let i = 1; i < body.length; i++) body[i].d = body[i - 1].d + vzdalenostBodu(body[i - 1], body[i]);
+  trasa = body;
+  ukazTrasu();
+}
+
+// GPX ze souboru
+document.getElementById('souborGpx').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  navrhNazvu = f.name.replace(/\.gpx$/i, '');
+  f.text().then(text => {
+    const xml = new DOMParser().parseFromString(text, 'application/xml');
+    let pts = [...xml.getElementsByTagName('trkpt')];
+    if (!pts.length) pts = [...xml.getElementsByTagName('rtept')];
+    const body = pts.map(p => {
+      const el = p.getElementsByTagName('ele')[0];
+      return { lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon'), ele: el ? +el.textContent : 0 };
+    });
+    if (body.length < 2) { stavT('V souboru jsem nenašel trasu.'); return; }
+    const jm = xml.getElementsByTagName('name')[0];
+    if (jm && jm.textContent.trim()) navrhNazvu = jm.textContent.trim();
+    nastavTrasu(body);
+  });
+  e.target.value = '';
+});
+
+// Uložená trasa
+document.getElementById('btnNacist').addEventListener('click', () => {
+  const t = mojeTrasy()[sel.value];
+  if (!t) { stavT('Vyber uloženou trasu, nebo načti GPX.'); return; }
+  navrhNazvu = t.nazev;
+  nastavTrasu(t.body.map(b => ({ lat: b[0], lon: b[1], ele: b[2] })));
+});
+
+// Uložení (stejný formát jako v trenažéru)
+document.getElementById('btnUlozitTrasu').addEventListener('click', () => {
+  if (trasa.length < 2) { stavT('Nejdřív načti trasu.'); return; }
+  const nazev = (prompt('Název trasy:', navrhNazvu) || '').trim();
+  if (!nazev) return;
+  const body = []; let pd = -Infinity;
+  trasa.forEach((b, i) => {
+    if (b.d - pd >= 10 || i === trasa.length - 1) {
+      body.push([+b.lat.toFixed(5), +b.lon.toFixed(5), Math.round(b.ele * 10) / 10]); pd = b.d;
+    }
+  });
+  const m = mojeTrasy();
+  const i = m.findIndex(t => t.nazev === nazev);
+  if (i >= 0 && !confirm('Trasa „' + nazev + '“ už existuje. Přepsat?')) return;
+  if (i >= 0) m[i] = { nazev, body }; else m.push({ nazev, body });
+  try { localStorage.setItem('mojeTrasy', JSON.stringify(m)); }
+  catch (e) { stavT('Nepodařilo se uložit – došlo místo.'); return; }
+  naplnSeznam(i >= 0 ? i : m.length - 1);
+  stavT('Uloženo: ' + nazev + ' ⭐');
+});
+
+function ukazTrasu() {
+  pripravMapu();
+  const celkem = trasa[trasa.length - 1].d;
+  let nahoru = 0;
+  for (let i = 1; i < trasa.length; i++) nahoru += Math.max(0, trasa[i].ele - trasa[i - 1].ele);
+  napis('tCelkem', (celkem / 1000).toFixed(2));
+  stavT('Trasa: ' + (celkem / 1000).toFixed(1) + ' km, stoupání ' + Math.round(nahoru) + ' m');
+  if (mapa) {
+    if (cara) mapa.removeLayer(cara);
+    if (tecka) mapa.removeLayer(tecka);
+    const ll = trasa.map(b => [b.lat, b.lon]);
+    cara = L.polyline(ll, { color: '#fb8c00', weight: 5 }).addTo(mapa);
+    tecka = L.circleMarker(ll[0], { radius: 9, color: '#fff', fillColor: '#e53935',
+                                    fillOpacity: 1, weight: 3 }).addTo(mapa);
+    setTimeout(() => { mapa.invalidateSize(); mapa.fitBounds(cara.getBounds(), { padding: [20, 20] }); }, 100);
+  }
+  kresliProfil(0);
+}
+
+function bodNa(d) {
+  d = Math.max(0, Math.min(d, trasa[trasa.length - 1].d));
+  let lo = 0, hi = trasa.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (trasa[mid].d <= d) lo = mid; else hi = mid; }
+  const a = trasa[lo], b = trasa[hi];
+  const t = b.d > a.d ? (d - a.d) / (b.d - a.d) : 0;
+  return { lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t, ele: a.ele + (b.ele - a.ele) * t };
+}
+// Sklon z úseku 30 m před a za námi (při běhu jsme pomalejší než na kole)
+function sklonNa(d) {
+  const celkem = trasa[trasa.length - 1].d;
+  const d1 = Math.max(0, d - 30), d2 = Math.min(celkem, d + 30);
+  if (d2 - d1 < 1) return 0;
+  return (bodNa(d2).ele - bodNa(d1).ele) / (d2 - d1) * 100;
+}
+
+function kresliProfil(d) {
+  const c = document.getElementById('profil');
+  const W = c.width = c.clientWidth, H = c.height = c.clientHeight;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  if (trasa.length < 2) return;
+  const celkem = trasa[trasa.length - 1].d;
+  let min = Infinity, max = -Infinity;
+  trasa.forEach(b => { min = Math.min(min, b.ele); max = Math.max(max, b.ele); });
+  if (max - min < 20) max = min + 20;
+  const x = dd => dd / celkem * W, y = e => H - 4 - (e - min) / (max - min) * (H - 8);
+  for (const [od, doo, barva] of [[0, d, '#fb8c00'], [d, celkem, '#555']]) {
+    if (doo <= od) continue;
+    g.beginPath(); g.moveTo(x(od), H);
+    const krok = celkem / W;
+    for (let dd = od; dd <= doo; dd += krok) g.lineTo(x(dd), y(bodNa(dd).ele));
+    g.lineTo(x(doo), y(bodNa(doo).ele)); g.lineTo(x(doo), H); g.closePath();
+    g.fillStyle = barva; g.fill();
+  }
+  g.fillStyle = '#fff'; g.fillRect(x(d) - 1, 0, 3, H);
+  g.font = '13px system-ui';
+  g.fillText(Math.round(max) + ' m', 4, 14); g.fillText(Math.round(min) + ' m', 4, H - 6);
+}
+
+// Kolik metrů jsme na trase: z vzdálenosti, kterou hlásí pás (od startu trasy),
+// a když ji pás neposílá, sčítáme rychlost × čas
+function ujetoNaTrase() {
+  return vzdalenostPasu !== null ? vzdalenostPasu - startVzd : integrovano;
+}
+
+function tikTrasy() {
+  integrovano += aktRychlost / 3.6;                 // 1 s × rychlost v m/s
+  const celkem = trasa[trasa.length - 1].d;
+  const d = Math.max(0, ujetoNaTrase());
+  const s = sklonNa(d);
+  // Pás umí jen celá procenta a nejde z kopce → zaokrouhlíme a omezíme na rozsah pásu
+  const proPas = Math.round(Math.max(Math.max(0, rozsah.sMin), Math.min(rozsah.sMax, s)));
+  if (proPas !== posledniSklonPas) {
+    cilS = proPas; ukazCile(); posliSklon();
+    posledniSklonPas = proPas;
+  }
+  napis('tUjeto', (d / 1000).toFixed(2));
+  napis('tSklonTrasy', s.toFixed(1));
+  napis('tSklonPas', proPas);
+  if (mapa && tecka) { const p = bodNa(d); tecka.setLatLng([p.lat, p.lon]); mapa.panTo([p.lat, p.lon]); }
+  kresliProfil(d);
+  if (d >= celkem) zastavTrasu('Cíl! 🏁 Trasa doběhnuta.');
+}
+
+function zastavTrasu(text) {
+  clearInterval(trasaTimer); trasaTimer = null; trasaBezi = false;
+  cilS = Math.max(0, rozsah.sMin); ukazCile(); posliSklon();   // sklon zpátky na rovinu
+  document.getElementById('btnStartTrasy').textContent = 'Start trasy';
+  document.getElementById('vyberTrasy').style.display = '';
+  stavT(text);
+}
+
+document.getElementById('btnStartTrasy').addEventListener('click', () => {
+  if (trasaBezi) { zastavTrasu('Trasa zastavena.'); return; }
+  if (!ovladani) { stavT('Nejdřív připoj pás.'); return; }
+  if (trasa.length < 2) { stavT('Nejdřív načti trasu.'); return; }
+  startVzd = vzdalenostPasu ?? 0; integrovano = 0; posledniSklonPas = null;
+  trasaBezi = true;
+  document.getElementById('btnStartTrasy').textContent = 'Zastavit trasu';
+  document.getElementById('vyberTrasy').style.display = 'none';
+  stavT('Běžíš! Rychlost si řídíš sám, sklon nastavuje trasa. 🏃');
+  tikTrasy();
+  trasaTimer = setInterval(tikTrasy, 1000);
 });
 
 // ----- Diagnostika: když pás neumí FTMS, zjistíme, jaké služby má -----
