@@ -50,7 +50,7 @@
 </head>
 <body>
 
-<h1>Krok 2: Kolo + tep <small style="color:#555">(verze 2.3)</small></h1>
+<h1>Krok 2: Kolo + tep <small style="color:#555">(verze 2.4)</small></h1>
 
 <button id="btnKolo">Připojit kolo</button>
 <button id="btnPas">Připojit pás</button>
@@ -70,7 +70,7 @@
   </div>
   <div class="dlazdice">
     <div class="hodnota rychlost" id="rychlost">--</div>
-    <div class="popis">km/h (kolo: <span id="rychlostKolo">--</span>)</div>
+    <div class="popis">km/h (výpočet: <span id="rychlostVypocet">--</span>)</div>
   </div>
 </div>
 
@@ -175,7 +175,8 @@ function novaDataKola(udalost) {
     // Norma říká jednotku 0,01 km/h (dělit 100), ale Zycle posílá
     // desetkrát větší číslo – proto dělíme jen 10.
     const rychlost = data.getUint16(pozice, true) / 10;
-    napis('rychlostKolo', rychlost.toFixed(1));  // jen pro srovnání
+    rychlostKola = rychlost;                 // hlavní rychlost = z kola (sedí s Garminem)
+    napis('rychlost', rychlost.toFixed(1));
     pozice += 2;
   }
   // bit 1: průměrná rychlost (nepotřebujeme, jen přeskočit)
@@ -215,7 +216,8 @@ const UCINNOST = 0.97;  // ztráty v řetězu
 const KOLO_KG = 8;      // hmotnost kola
 let sklon = 0;          // sklon silnice v % – zatím rovina, v kroku 4 z trasy
 let v = 0;              // rychlost v m/s
-let metry = 0;          // ujetá vzdálenost
+let metry = 0;          // ujetá vzdálenost (z rychlosti kola)
+let rychlostKola = 0;   // km/h, poslední hodnota z kola
 
 // Hmotnost si pamatujeme v prohlížeči (když to jde)
 const poleHmotnost = document.getElementById('hmotnost');
@@ -244,8 +246,8 @@ setInterval(() => {
   const zrychleni = (hnaci - vzduch - valeni - kopec) / m;
   v = Math.max(0, v + zrychleni * KROK);
 
-  metry += v * KROK;
-  napis('rychlost', (v * 3.6).toFixed(1));        // m/s → km/h
+  metry += (rychlostKola / 3.6) * KROK;            // km/h → m/s, jako Garmin
+  napis('rychlostVypocet', (v * 3.6).toFixed(1));  // fyzika – pro kopce později
   napis('vzdalenost', (metry / 1000).toFixed(2));
 }, KROK * 1000);
 
