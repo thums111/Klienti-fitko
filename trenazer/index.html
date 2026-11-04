@@ -211,7 +211,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 5.5)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 5.6)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -324,6 +324,8 @@
     <button class="maly" id="btnNacist">Načíst</button>
     <label class="maly tlacSoubor">GPX<input type="file" id="souborGpx" accept=".gpx"></label>
     <button class="maly" id="btnKreslit">Kreslit</button>
+    <button class="maly" id="btnUlozitTrasu">💾 Uložit</button>
+    <button class="maly" id="btnSmazatTrasu" style="display:none">🗑 Smazat</button>
   </div>
   <div id="kresleniInfo" class="radek" style="display:none">
     Klepej do mapy – body trasy: <b id="pocetBodu">0</b>
@@ -1204,7 +1206,86 @@ let mapa = null, cara = null, tecka = null, vrstvaMapa, vrstvaSatelit, satelit =
 let kresleni = false, kresleneBody = [], znackyBodu = [];
 
 const sel = document.getElementById('seznamTras');
-TRASY.forEach((t, i) => sel.add(new Option(t.nazev, i)));
+let navrhNazvu = '';      // název z GPX souboru – nabídne se při ukládání
+
+// ----- Uložené trasy (v tabletu, localStorage) -----
+// Ukládáme body jako [lat, lon, výška] – vzdálenosti se dopočítají při načtení.
+function nactiMojeTrasy() {
+  try { return JSON.parse(localStorage.getItem('mojeTrasy') || '[]'); }
+  catch (e) { return []; }
+}
+function ulozMojeTrasy(seznam) {
+  localStorage.setItem('mojeTrasy', JSON.stringify(seznam));
+}
+
+// Naplní nabídku: nejdřív tvoje uložené (⭐), pak připravené.
+// Hodnota "m:3" = moje trasa č. 3, "v:2" = připravená trasa č. 2.
+function naplnSeznamTras(vybrat) {
+  sel.innerHTML = '';
+  const moje = nactiMojeTrasy();
+  moje.forEach((t, i) => sel.add(new Option('⭐ ' + t.nazev, 'm:' + i)));
+  TRASY.forEach((t, i) => sel.add(new Option(t.nazev, 'v:' + i)));
+  if (vybrat) sel.value = vybrat;
+  ukazTlacitkoSmazat();
+}
+function ukazTlacitkoSmazat() {
+  document.getElementById('btnSmazatTrasu').style.display =
+    sel.value.startsWith('m:') ? '' : 'none';
+}
+sel.addEventListener('change', ukazTlacitkoSmazat);
+naplnSeznamTras();
+
+document.getElementById('btnUlozitTrasu').addEventListener('click', () => {
+  if (trasa.length < 2) { stavTrasy('Nejdřív načti nebo nakresli trasu, pak ji ulož.'); return; }
+  const nazev = (prompt('Název trasy:', navrhNazvu) || '').trim();
+  if (!nazev) return;
+  // Prořídíme body: stačí bod každých ~10 m (GPX jich mívá zbytečně moc)
+  const body = [];
+  let posledniD = -Infinity;
+  trasa.forEach((b, i) => {
+    if (b.d - posledniD >= 10 || i === trasa.length - 1) {
+      body.push([+b.lat.toFixed(5), +b.lon.toFixed(5), Math.round(b.ele * 10) / 10]);
+      posledniD = b.d;
+    }
+  });
+  const moje = nactiMojeTrasy();
+  const stejna = moje.findIndex(t => t.nazev === nazev);
+  if (stejna >= 0 && !confirm('Trasa „' + nazev + '“ už existuje. Přepsat?')) return;
+  if (stejna >= 0) moje[stejna] = { nazev, body }; else moje.push({ nazev, body });
+  try {
+    ulozMojeTrasy(moje);
+  } catch (e) {
+    stavTrasy('Trasu se nepodařilo uložit – v tabletu došlo místo pro trasy.');
+    return;
+  }
+  naplnSeznamTras('m:' + (stejna >= 0 ? stejna : moje.length - 1));
+  stavTrasy('Uloženo: ' + nazev + ' ⭐');
+});
+
+document.getElementById('btnSmazatTrasu').addEventListener('click', () => {
+  if (!sel.value.startsWith('m:')) return;
+  const i = Number(sel.value.slice(2));
+  const moje = nactiMojeTrasy();
+  if (!moje[i] || !confirm('Smazat trasu „' + moje[i].nazev + '“?')) return;
+  moje.splice(i, 1);
+  ulozMojeTrasy(moje);
+  naplnSeznamTras();
+  stavTrasy('Trasa smazána.');
+});
+
+// Uloženou trasu načteme rovnou z tabletu – bez internetu
+function nactiMojiTrasu(i) {
+  const t = nactiMojeTrasy()[i];
+  if (!t) return;
+  const body = t.body.map(b => ({ lat: b[0], lon: b[1], ele: b[2] }));
+  body[0].d = 0;
+  for (let k = 1; k < body.length; k++) {
+    body[k].d = body[k - 1].d + vzdalenostBodu(body[k - 1], body[k]);
+  }
+  trasa = body;
+  navrhNazvu = t.nazev;
+  ukazTrasu();
+}
 
 function stavTrasy(t) { napis('stavTrasa', t); }
 
@@ -1248,6 +1329,8 @@ function nactiGpx(text) {
     });
   }
   if (body.length < 2) { stavTrasy('V souboru jsem nenašel trasu.'); return; }
+  const jmeno = xml.getElementsByTagName('name')[0];
+  if (jmeno && jmeno.textContent.trim()) navrhNazvu = jmeno.textContent.trim();
 
   // Vzdálenost od startu – sčítáme úseky mezi body
   body[0].d = 0;
@@ -1284,14 +1367,19 @@ async function trasaZBrouteru(body) {
 
 document.getElementById('btnNacist').addEventListener('click', () => {
   pripravMapu();
-  trasaZBrouteru(TRASY[sel.value].body);
+  const [druh, cislo] = sel.value.split(':');
+  if (druh === 'm') { nactiMojiTrasu(Number(cislo)); return; }
+  navrhNazvu = TRASY[cislo].nazev;
+  trasaZBrouteru(TRASY[cislo].body);
 });
 
 document.getElementById('souborGpx').addEventListener('change', e => {
   const soubor = e.target.files[0];
   if (!soubor) return;
   pripravMapu();
+  navrhNazvu = soubor.name.replace(/\.gpx$/i, '');   // název souboru jako návrh
   soubor.text().then(nactiGpx);
+  e.target.value = '';                                // stejný soubor půjde vybrat znovu
 });
 
 // ----- Vlastní trasa: klepání do mapy -----
@@ -1317,6 +1405,7 @@ document.getElementById('btnSmazatBody').addEventListener('click', () => {
 
 document.getElementById('btnSpocitat').addEventListener('click', () => {
   if (kresleneBody.length < 2) { stavTrasy('Klepni aspoň 2 body (start a cíl).'); return; }
+  navrhNazvu = 'Moje trasa';
   trasaZBrouteru(kresleneBody);
 });
 
