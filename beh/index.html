@@ -46,7 +46,7 @@
   body.trasa { height: 100vh; height: 100dvh; box-sizing: border-box; overflow: hidden;
                display: flex; flex-direction: column; padding: 6px 10px; }
   body.trasa > h1, body.trasa > #btnPripojit, body.trasa > #btnTep, body.trasa > #btnHledat,
-  body.trasa > #stav, body.trasa .ladeni, body.trasa #vyberTrasy,
+  body.trasa > #stav, body.trasa > #btnVolny, body.trasa .ladeni, body.trasa #vyberTrasy,
   body.trasa #radekMax, body.trasa #stavTrasa { display: none; }
   body.trasa #panelTrasa { order: 1; flex: 1; min-height: 0; display: flex; flex-direction: column;
                            margin-top: 0; padding: 6px 8px; }
@@ -66,16 +66,41 @@
   body.nahled #btnStartTrasy { display: none; }
   body.trasa:not(.nahled) #btnNahled { display: none; }
   #btnNahled { background: #5e35b1; }
+
+  /* Rychlovolba */
+  .rv { background: #1565c0; min-width: 70px; font-weight: bold; }
+  .rv.aktivni { background: #ffca28; color: #111; }
+  .rv:disabled { background: #333; }
+  #btnVolny { background: #43a047; }
+  #btnKonecVolny { background: #6d4c41; display: none; }
+
+  /* ===== Režim VOLNÝ BĚH: velká čísla, ovládání dole ===== */
+  body.volny { height: 100vh; height: 100dvh; box-sizing: border-box; overflow: hidden;
+               display: flex; flex-direction: column; padding: 6px 10px; }
+  body.volny > h1, body.volny > #btnPripojit, body.volny > #btnTep, body.volny > #btnHledat,
+  body.volny > #btnVolny, body.volny > #stav, body.volny .ladeni, body.volny #panelTrasa,
+  body.volny #radekMax { display: none; }
+  body.volny .mrizka { flex: 1; min-height: 0; grid-template-columns: repeat(3, 1fr);
+                       margin-top: 0; gap: 8px; }
+  body.volny .dlazdice { display: flex; flex-direction: column; justify-content: center; }
+  body.volny .hodnota { font-size: 15vh; }
+  body.volny #btnKonecVolny { display: inline-block; }
+  body.volny #panelOvl, body.trasa #panelOvl { display: flex; align-items: center; justify-content: center;
+                         flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; padding: 4px 8px; }
+  body.volny #panelOvl .radek { margin: 0; }
+  body.volny #panelOvl button { padding: 14px 22px; font-size: 22px; }
+  body.volny .rv, body.trasa .rv { min-width: 80px; font-size: 26px !important; }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
-<h1>Běžecký pás <small style="color:#555">(verze 1.4)</small></h1>
+<h1>Běžecký pás <small style="color:#555">(verze 1.5)</small></h1>
 
 <button id="btnPripojit">Připojit pás</button>
 <button id="btnTep">Připojit hrudní pás</button>
 <button id="btnHledat">Diagnostika (všechna zařízení)</button>
+<button id="btnVolny">🏃 Volný běh</button>
 <div id="stav" class="popis">Nepřipojeno</div>
 
 <div class="mrizka">
@@ -91,7 +116,17 @@
 <div class="panel" id="panelOvl">
 
   <div class="radek" id="radekMax">Max. rychlost pro aplikaci:
-    <input type="number" id="maxRychlost" value="12" min="1" max="20" step="0.5"> km/h</div>
+    <input type="number" id="maxRychlost" value="16" min="1" max="20" step="0.5"> km/h</div>
+
+  <!-- Rychlovolba: jedním klepnutím nastaví rychlost -->
+  <div class="radek" id="rychlovolba">
+    <button class="rv" data-v="8">8</button>
+    <button class="rv" data-v="10">10</button>
+    <button class="rv" data-v="12">12</button>
+    <button class="rv" data-v="14">14</button>
+    <button class="rv" data-v="16">16</button>
+    <span class="popis">km/h</span>
+  </div>
 
   <div class="radek" id="radekRychlost">
     <button class="ovl" id="rMinus">−0,5</button>
@@ -104,6 +139,7 @@
     <button class="ovl" id="sPlus">+1</button>
   </div>
   <button class="ovl" id="btnStop">STOP</button>
+  <button id="btnKonecVolny">Konec</button>
 </div>
 
 <!-- ===== Trasa ===== -->
@@ -258,6 +294,7 @@ function odpovedPasu(ud) {
 function ukazCile() {
   napis('cilRychlost', cilR.toFixed(1));
   napis('cilSklon', cilS);
+  if (typeof ukazRychlovolbu === 'function') ukazRychlovolbu();
 }
 function maxR() {
   return Math.min(rozsah.rMax, Number(document.getElementById('maxRychlost').value) || 12);
@@ -270,6 +307,31 @@ function posliSklon() {
   const s = Math.round(cilS * 10) & 0xFFFF;
   posli([PRIKAZ.SKLON, s & 0xFF, s >> 8]);
 }
+
+// ----- Rychlovolba 8 / 10 / 12 / 14 / 16 km/h -----
+function ukazRychlovolbu() {
+  document.querySelectorAll('.rv').forEach(b => {
+    const v = Number(b.dataset.v);
+    b.disabled = v > maxR();                       // nad nastaveným maximem nejde
+    b.classList.toggle('aktivni', Math.abs(v - cilR) < 0.05);
+  });
+}
+document.querySelectorAll('.rv').forEach(b => b.addEventListener('click', () => {
+  cilR = Math.min(maxR(), Number(b.dataset.v)); ukazCile(); posliRychlost();
+}));
+const poleMax = document.getElementById('maxRychlost');
+try { const u = localStorage.getItem('behMax'); if (u) poleMax.value = u; } catch (e) {}
+poleMax.addEventListener('change', () => {
+  try { localStorage.setItem('behMax', poleMax.value); } catch (e) {}
+  ukazRychlovolbu();
+});
+
+// ----- Volný běh: celá obrazovka s velkými čísly -----
+function rezimVolny(zap) {
+  document.body.classList.toggle('volny', zap);
+}
+document.getElementById('btnVolny').addEventListener('click', () => rezimVolny(true));
+document.getElementById('btnKonecVolny').addEventListener('click', () => rezimVolny(false));
 
 document.getElementById('rPlus').addEventListener('click', () => {
   cilR = Math.min(maxR(), cilR + 0.5); ukazCile(); posliRychlost();
