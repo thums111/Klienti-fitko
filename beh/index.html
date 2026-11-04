@@ -284,6 +284,9 @@ document.getElementById('btnTep').addEventListener('click', async () => {
 let trasa = [], trasaBezi = false, trasaTimer = null;
 let startVzd = 0, integrovano = 0, posledniSklonPas = null, navrhNazvu = '';
 let mapa = null, cara = null, tecka = null;
+const ZAVODY = [
+  { nazev: 'Mattoni Liberec Trail Run 22 km', soubor: '../trasy/liberec-trail-22.gpx' },
+];
 const sel = document.getElementById('seznamTras');
 const stavT = t => napis('stavTrasa', t);
 
@@ -293,7 +296,8 @@ function mojeTrasy() {
 function naplnSeznam(vybrat) {
   sel.innerHTML = '';
   const m = mojeTrasy();
-  if (m.length === 0) sel.add(new Option('(zatím žádná uložená trasa)', ''));
+  // Závodní trasy uložené přímo na webu (složka trasy/) – jsou na všech zařízeních
+  ZAVODY.forEach(z => sel.add(new Option('🏁 ' + z.nazev, 'z:' + z.soubor)));
   m.forEach((t, i) => sel.add(new Option('⭐ ' + t.nazev, i)));
   if (vybrat !== undefined) sel.value = vybrat;
 }
@@ -324,7 +328,11 @@ function nastavTrasu(body) {
 document.getElementById('souborGpx').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
   navrhNazvu = f.name.replace(/\.gpx$/i, '');
-  f.text().then(text => {
+  f.text().then(nactiGpx);
+  e.target.value = '';
+});
+function nactiGpx(text) {
+  {
     const xml = new DOMParser().parseFromString(text, 'application/xml');
     let pts = [...xml.getElementsByTagName('trkpt')];
     if (!pts.length) pts = [...xml.getElementsByTagName('rtept')];
@@ -336,12 +344,21 @@ document.getElementById('souborGpx').addEventListener('change', e => {
     const jm = xml.getElementsByTagName('name')[0];
     if (jm && jm.textContent.trim()) navrhNazvu = jm.textContent.trim();
     nastavTrasu(body);
-  });
-  e.target.value = '';
-});
+  }
+}
 
 // Uložená trasa
-document.getElementById('btnNacist').addEventListener('click', () => {
+document.getElementById('btnNacist').addEventListener('click', async () => {
+  if (sel.value.startsWith('z:')) {
+    stavT('Načítám trasu…');
+    try {
+      const o = await fetch(sel.value.slice(2));
+      if (!o.ok) throw new Error(o.status);
+      navrhNazvu = sel.options[sel.selectedIndex].text.slice(3);
+      nactiGpx(await o.text());
+    } catch (e) { stavT('Trasu se nepodařilo načíst (' + e.message + ').'); }
+    return;
+  }
   const t = mojeTrasy()[sel.value];
   if (!t) { stavT('Vyber uloženou trasu, nebo načti GPX.'); return; }
   navrhNazvu = t.nazev;

@@ -211,7 +211,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 5.6)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 5.7)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -1192,6 +1192,8 @@ const TRASY = [
     body: [[14.393, 49.975], [14.290, 49.955], [14.180, 49.934]] },
   { nazev: 'Vrchlabí – Špindl (kopec)',
     body: [[15.609, 50.627], [15.609, 50.726]] },
+  // --- závodní trasy uložené jako GPX přímo na webu (složka trasy/) ---
+  { nazev: '🏁 Mattoni Liberec Trail Run 22 km', soubor: '../trasy/liberec-trail-22.gpx' },
   { nazev: 'Ještěd (stoupák)',
     body: [[15.010, 50.738], [14.9845, 50.7325]] },
 ];
@@ -1369,7 +1371,15 @@ document.getElementById('btnNacist').addEventListener('click', () => {
   pripravMapu();
   const [druh, cislo] = sel.value.split(':');
   if (druh === 'm') { nactiMojiTrasu(Number(cislo)); return; }
-  navrhNazvu = TRASY[cislo].nazev;
+  navrhNazvu = TRASY[cislo].nazev.replace('🏁 ', '');
+  if (TRASY[cislo].soubor) {
+    stavTrasy('Načítám trasu…');
+    fetch(TRASY[cislo].soubor)
+      .then(o => { if (!o.ok) throw new Error(o.status); return o.text(); })
+      .then(nactiGpx)
+      .catch(e => stavTrasy('Trasu se nepodařilo načíst (' + e.message + ').'));
+    return;
+  }
   trasaZBrouteru(TRASY[cislo].body);
 });
 
