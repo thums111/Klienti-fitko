@@ -172,7 +172,9 @@ function novaDataKola(udalost) {
 
   // bit 0: POZOR – obráceně! 0 = rychlost JE v balíčku
   if ((priznaky & 1) === 0) {
-    const rychlost = data.getUint16(pozice, true) / 100;  // jednotka 0,01 km/h
+    // Norma říká jednotku 0,01 km/h (dělit 100), ale Zycle posílá
+    // desetkrát větší číslo – proto dělíme jen 10.
+    const rychlost = data.getUint16(pozice, true) / 10;
     napis('rychlostKolo', rychlost.toFixed(1));  // jen pro srovnání
     pozice += 2;
   }
