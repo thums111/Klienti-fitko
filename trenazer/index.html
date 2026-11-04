@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenažér – krok 3</title>
+<title>Trenažér</title>
 <style>
   body {
     margin: 0;
@@ -70,6 +70,24 @@
   .postup    { height: 8px; background: #333; border-radius: 4px; margin-top: 8px; }
   #postupBar { height: 8px; width: 0; background: #43a047; border-radius: 4px; }
 
+  /* ===== Přepínač režimů ===== */
+  .rezim { background: #333; }
+  .rezim.aktivni { background: #fb8c00; }
+  .oddelovac { display: inline-block; width: 16px; }
+
+  /* ===== Režim VOLNÁ JÍZDA: jen data, přes celou plochu =====
+     Třída "volna" na <body> schová pravý sloupec a zvětší čísla.
+     Jednotka vh = 1 % výšky obrazovky, vw = 1 % šířky –
+     čísla se tak sama přizpůsobí velikosti displeje. */
+  body.volna #sloupecOvladani { display: none; }
+  body.volna .rozlozeni { display: block; }
+  body.volna .mrizka { gap: 14px; }
+  body.volna .dlazdice { padding: 1vh 6px; }
+  body.volna .hodnota { font-size: min(20vh, 16vw); }
+  body.volna .stav { display: inline-block; margin: 4px 10px; }
+  body.volna .popis { font-size: 22px; }
+  body.volna .souhrn { font-size: 24px; }
+
   /* ===== TABLET NA ŠÍŘKU =====
      Když je obrazovka širší než vyšší, dáme dva sloupce vedle sebe:
      vlevo hodnoty, vpravo ovládání. Vše se tak vejde bez posouvání. */
@@ -99,9 +117,13 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Krok 3: ERG a intervaly <small style="color:#555">(verze 3.1)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 3.2)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
+  <span class="oddelovac"></span>
+  <button class="rezim" id="btnVolna">Volná jízda</button>
+  <button class="rezim" id="btnIntervaly">Intervaly</button>
+  <button class="rezim" id="btnCela" title="Celá obrazovka">⛶</button>
 </div>
 
 <div class="rozlozeni">
@@ -142,7 +164,7 @@
 <div class="stav" id="stavPas">Pás: nepřipojeno</div>
 </div>   <!-- konec levého sloupce -->
 
-<div class="sloupec">   <!-- PRAVÝ sloupec: ovládání -->
+<div class="sloupec" id="sloupecOvladani">   <!-- PRAVÝ sloupec: ovládání -->
 <!-- ===== ERG: kolo drží nastavené watty ===== -->
 <div class="panel">
   <h2>ERG – pevný výkon</h2>
@@ -548,6 +570,52 @@ document.getElementById('btnInterval').addEventListener('click', () => {
   b.textContent = 'Zastavit';
   b.style.background = '#c62828';
 });
+
+// ===== Režimy zobrazení: Volná jízda / Intervaly =====
+function nastavRezim(rezim) {
+  if (rezim === 'volna') {
+    // Když běží intervaly, zeptáme se, jestli je opravdu ukončit
+    if (intervalBezi) {
+      if (!confirm('Běží intervaly. Ukončit je a přejít na volnou jízdu?')) return;
+      zastavIntervaly('Zastaveno');
+    }
+    if (ergZapnuto) prepniErg(false);   // ERG vypnout → volná jízda po rovině
+    else if (ovladani) volnaJizda(0);
+  }
+  document.body.classList.toggle('volna', rezim === 'volna');
+  document.getElementById('btnVolna').classList.toggle('aktivni', rezim === 'volna');
+  document.getElementById('btnIntervaly').classList.toggle('aktivni', rezim !== 'volna');
+  try { localStorage.setItem('rezim', rezim); } catch (e) {}
+}
+
+// Celá obrazovka – schová lištu prohlížeče i Androidu.
+// Prohlížeč to dovolí jen po kliknutí, proto to voláme z tlačítek.
+function celaObrazovka() {
+  const el = document.documentElement;
+  if (!document.fullscreenElement && el.requestFullscreen) {
+    el.requestFullscreen().catch(() => {});
+  }
+}
+
+document.getElementById('btnVolna').addEventListener('click', () => {
+  nastavRezim('volna'); celaObrazovka();
+});
+document.getElementById('btnIntervaly').addEventListener('click', () => {
+  nastavRezim('intervaly'); celaObrazovka();
+});
+document.getElementById('btnCela').addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else celaObrazovka();
+});
+
+// Při otevření stránky obnovíme naposledy použitý režim (bez posílání příkazů)
+(() => {
+  let r = 'intervaly';
+  try { r = localStorage.getItem('rezim') || 'intervaly'; } catch (e) {}
+  document.body.classList.toggle('volna', r === 'volna');
+  document.getElementById('btnVolna').classList.toggle('aktivni', r === 'volna');
+  document.getElementById('btnIntervaly').classList.toggle('aktivni', r !== 'volna');
+})();
 
 // Ať tablet během tréninku nezhasne obrazovku
 async function nezhasinej() {
