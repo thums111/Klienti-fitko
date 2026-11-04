@@ -48,6 +48,8 @@
   .kadence { color: #66bb6a; }
   .rychlost{ color: #42a5f5; }
   .tep     { color: #ff5252; }
+  .prevodC { color: #ce93d8; }
+  .lomitko { color: #555; margin: 0 0.08em; font-weight: normal; }
 
   .souhrn { font-size: 18px; margin-top: 16px; line-height: 1.6; }
   .stav   { margin-top: 6px; color: #888; font-size: 14px; }
@@ -161,7 +163,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 4.4)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 4.5)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -184,9 +186,8 @@
     <div class="popis">tep/min</div>
   </div>
   <div class="dlazdice">
-    <div class="hodnota kadence" id="kadence">--</div>
-    <div class="popis">ot/min · převod <b id="prevod">--</b></div>
-    <div class="popis" style="font-size:13px">rozvoj <span id="rozvoj">--</span> m · odpor <span id="odpor">--</span></div>
+    <div class="hodnota"><span class="kadence" id="kadence">--</span><span class="lomitko">/</span><span class="prevodC" id="prevod">--</span></div>
+    <div class="popis">ot/min / převod</div>
   </div>
   <div class="dlazdice">
     <div class="hodnota rychlost" id="rychlost">--</div>
@@ -379,11 +380,8 @@ function novaDataKola(udalost) {
   if (priznaky & (1 << 3)) pozice += 2;
   // bit 4: celková vzdálenost – 3 bajty – přeskočit
   if (priznaky & (1 << 4)) pozice += 3;
-  // bit 5: úroveň odporu – ukážeme surové číslo (test, co kolo posílá)
-  if (priznaky & (1 << 5)) {
-    napis('odpor', data.getInt16(pozice, true));
-    pozice += 2;
-  }
+  // bit 5: úroveň odporu – přeskočit
+  if (priznaky & (1 << 5)) pozice += 2;
 
   // bit 6: okamžitý výkon (může být i záporný, proto Int16)
   if (priznaky & (1 << 6)) {
@@ -395,19 +393,22 @@ function novaDataKola(udalost) {
   spocitejPrevod();
 }
 
-// ===== PŘEVOD (odhad z rychlosti a kadence) =====
-// Rozvoj = kolik metrů ujedeš na 1 otáčku klik.
-//   rychlost [m/min] ÷ kadence [ot/min] = metry na otáčku
-// Převodový poměr = rozvoj ÷ obvod kola (silniční kolo 700×25 ≈ 2,105 m).
-// Poměr 50/17 = 2,94 → z poměru dopočítáme pastorek k převodníku 50 nebo 34.
+// ===== PŘEVOD 1–20 (odhad z rychlosti a kadence) =====
+// Rozvoj = kolik metrů ujedeš na 1 otáčku klik:
+//   rychlost [m/min] ÷ kadence [ot/min]
+// Převodový poměr = rozvoj ÷ obvod kola (≈ 2,105 m).
+// Poměry převodů na kazetě rostou "geometricky" (každý o pár % víc),
+// proto je rozložíme do 20 stupňů logaritmicky:
+//   1 = nejlehčí (poměr ~1,0, jako 34×34), 20 = nejtěžší (~4,5, jako 50×11)
 const OBVOD = 2.105;
+const POMER_MIN = 1.0, POMER_MAX = 4.5;
 let kadenceAkt = 0;
 let pomery = [];          // posledních pár hodnot, ať číslo necuká
 
 function spocitejPrevod() {
   if (kadenceAkt < 30 || rychlostKola < 3) {   // stojíš nebo skoro nešlapeš
     pomery = [];
-    napis('prevod', '--'); napis('rozvoj', '--');
+    napis('prevod', '--');
     return;
   }
   const rozvoj = (rychlostKola * 1000 / 60) / kadenceAkt;
@@ -415,11 +416,9 @@ function spocitejPrevod() {
   if (pomery.length > 4) pomery.shift();
   const pomer = pomery.reduce((a, b) => a + b, 0) / pomery.length;
 
-  // Velký převodník 50, a když by pastorek vyšel větší než 28, malý 34
-  let predni = 50, zadni = Math.round(50 / pomer);
-  if (zadni > 28) { predni = 34; zadni = Math.round(34 / pomer); }
-  napis('prevod', predni + '×' + zadni);
-  napis('rozvoj', (pomer * OBVOD).toFixed(1));
+  const cast = Math.log(pomer / POMER_MIN) / Math.log(POMER_MAX / POMER_MIN);  // 0 až 1
+  const stupen = Math.max(1, Math.min(20, Math.round(1 + 19 * cast)));
+  napis('prevod', stupen);
 }
 
 // ===== VLASTNÍ RYCHLOST Z FYZIKY (jako Rouvy/Zwift) =====
