@@ -270,7 +270,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 6.5)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 6.6)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -1575,7 +1575,10 @@ function nactiGpx(text) {
   }
   if (body.length < 2) { stavTrasy('V souboru jsem nenašel trasu.'); return; }
   const jmeno = xml.getElementsByTagName('name')[0];
-  if (jmeno && jmeno.textContent.trim()) navrhNazvu = jmeno.textContent.trim();
+  // Název z GPX – ale technický název od BRouteru ("brouter_fastbike_0") ignorujeme,
+  // ať zůstane hezký název trasy (např. "Ještěd (stoupák)")
+  const nazevGpx = jmeno ? jmeno.textContent.trim() : '';
+  if (nazevGpx && !/^brouter/i.test(nazevGpx)) navrhNazvu = nazevGpx;
 
   // Vzdálenost od startu – sčítáme úseky mezi body
   body[0].d = 0;
@@ -2431,8 +2434,15 @@ var duchZnacka = null;
 var predjetoHlaseno = 0;  // ať hlas nehlásí předjetí pořád dokola
 
 function najdiDucha(nazev, delka) {
-  const kandidati = nactiHistorii().filter(j => j.rezim === 'trasa' && j.nazev === nazev &&
-    Math.abs((j.trasaDelka || 0) - delka) < Math.max(100, delka * 0.02));
+  const stejnaDelka = j => Math.abs((j.trasaDelka || 0) - delka) < Math.max(100, delka * 0.02);
+  // Oprava z verze 6.5: jízdy uložené pod "brouter_…" na stejně dlouhé trase přejmenujeme
+  const h = nactiHistorii();
+  let opraveno = false;
+  h.forEach(j => {
+    if (j.rezim === 'trasa' && /^brouter/i.test(j.nazev || '') && stejnaDelka(j)) { j.nazev = nazev; opraveno = true; }
+  });
+  if (opraveno) ulozHistorii(h);
+  const kandidati = h.filter(j => j.rezim === 'trasa' && j.nazev === nazev && stejnaDelka(j));
   if (!kandidati.length) return null;
   const dokoncene = kandidati.filter(j => j.dokoncena);
   const j = dokoncene.length
