@@ -146,6 +146,9 @@
   .trasaInfo b { font-size: 22px; }
   #tSklon { color: #ff7043; }
   #btnStartTrasy { background: #43a047; }
+  .obtiznost { white-space: nowrap; }
+  .obtiznost button { padding: 6px 14px; font-size: 22px; margin: 2px; }
+  #obtStupen { display: inline-block; min-width: 30px; color: #ff7043; }
   select { font-size: 16px; padding: 8px; background: #2a2a2a; color: #eee;
            border: 1px solid #444; border-radius: 6px; max-width: 46%; }
   .tlacSoubor { display: inline-block; color: #fff; border-radius: 10px; cursor: pointer; }
@@ -267,7 +270,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 6.4)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 6.5)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -410,12 +413,11 @@
     <span>
       <button id="btnStartTrasy">Start trasy</button>
       <button class="maly" id="btnSatelit">Satelit</button>
-      <select id="obtiznost" title="Obtížnost kopců – kolik ze sklonu cítíš v nohách">
-        <option value="100">⛰ kopce 100 %</option>
-        <option value="75">⛰ kopce 75 %</option>
-        <option value="50">⛰ kopce 50 %</option>
-        <option value="25">⛰ kopce 25 %</option>
-      </select>
+      <span class="obtiznost" title="Obtížnost kopců: 1 = skoro rovina, 20 = plný sklon">
+        ⛰ <button class="maly" id="obtMinus">−</button>
+        <b id="obtStupen">10</b><small>/20</small>
+        <button class="maly" id="obtPlus">+</button>
+      </span>
     </span>
   </div>
   <div class="stav" id="stavTrasa"></div>
@@ -2489,15 +2491,28 @@ function tikDucha() {
   }
 }
 
-// ----- OBTÍŽNOST KOPCŮ -----
-// Jako "trainer difficulty" ve Zwiftu: 50 % = z 12% stoupáku cítíš 6 %.
-const poleObtiznost = document.getElementById('obtiznost');
-try { const u = localStorage.getItem('obtiznost'); if (u) poleObtiznost.value = u; } catch (e) {}
-function obtiznost() { return (Number(poleObtiznost.value) || 100) / 100; }
-poleObtiznost.addEventListener('change', () => {
-  try { localStorage.setItem('obtiznost', poleObtiznost.value); } catch (e) {}
+// ----- OBTÍŽNOST KOPCŮ 1–20 -----
+// Jako "trainer difficulty" ve Zwiftu. Stupeň 20 = plný sklon, 10 = polovina,
+// 1 = jen 5 % sklonu (skoro rovina). Na displeji je pořád skutečný sklon.
+let obtStupen = 10;
+try {
+  const u = localStorage.getItem('obtStupen');
+  if (u) obtStupen = Number(u);
+  else if (localStorage.getItem('obtiznost'))       // z verze 6.4 (procenta) → stupně
+    obtStupen = Math.round(Number(localStorage.getItem('obtiznost')) / 5);
+} catch (e) {}
+obtStupen = Math.max(1, Math.min(20, obtStupen || 10));
+
+function obtiznost() { return obtStupen / 20; }
+function nastavObtiznost(n) {
+  obtStupen = Math.max(1, Math.min(20, n));
+  napis('obtStupen', obtStupen);
+  try { localStorage.setItem('obtStupen', obtStupen); } catch (e) {}
   posledniSklon = null;            // pošli nový sklon kolu hned, i během jízdy
-});
+}
+document.getElementById('obtMinus').addEventListener('click', () => nastavObtiznost(obtStupen - 1));
+document.getElementById('obtPlus').addEventListener('click', () => nastavObtiznost(obtStupen + 1));
+napis('obtStupen', obtStupen);
 
 // ----- KALIBRACE PŘEVODŮ -----
 // Zařadíš nejlehčí a nejtěžší převod, aplikace si změří jejich poměr
