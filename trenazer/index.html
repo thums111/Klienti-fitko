@@ -270,7 +270,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 6.7)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 6.8)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -2151,12 +2151,15 @@ function ukazSouhrn(j, indexVHistorii) {
       '<button class="maly" id="oZavrit">Zavřít</button>' +
       '<button class="maly" id="oHistorie">📊 Historie</button>' +
       '<button class="maly" id="oTcx" style="background:#1e88e5">⌚ Export pro Garmin (.tcx)</button>' +
+      (indexVHistorii >= 0 ? '<button class="maly" id="oPrejmenovat">✏️ Přejmenovat</button>' : '') +
       (indexVHistorii >= 0 ? '<button class="maly" id="oSmazat" style="background:#7a2020">🗑 Smazat jízdu</button>' : '') +
     '</div>';
   okno.style.display = 'flex';
   document.getElementById('oZavrit').onclick = zavriOkno;
   document.getElementById('oHistorie').onclick = ukazHistorii;
   document.getElementById('oTcx').onclick = () => stahniTcx(j);
+  const pj = document.getElementById('oPrejmenovat');
+  if (pj) pj.onclick = () => prejmenujJizdu(indexVHistorii);
   const sm = document.getElementById('oSmazat');
   if (sm) sm.onclick = () => {
     if (!confirm('Opravdu smazat tuhle jízdu?')) return;
@@ -2350,6 +2353,27 @@ function stahniTcx(j) {
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// Přejmenování jízdy. U tras nabídne opravit i ostatní jízdy se stejným starým
+// názvem na stejně dlouhé trase (typicky "brouter_fastbike_0" z verze 6.5).
+function prejmenujJizdu(i) {
+  const h = nactiHistorii();
+  const j = h[i];
+  if (!j) return;
+  const novy = (prompt('Nový název jízdy:', /^brouter/i.test(j.nazev) ? '' : j.nazev) || '').trim();
+  if (!novy || novy === j.nazev) return;
+  const stary = j.nazev;
+  const stejnaTrasa = x => x !== j && x.rezim === 'trasa' && x.nazev === stary &&
+    Math.abs((x.trasaDelka || 0) - (j.trasaDelka || 0)) < Math.max(100, (j.trasaDelka || 0) * 0.02);
+  const dalsi = j.rezim === 'trasa' ? h.filter(stejnaTrasa) : [];
+  j.nazev = novy;
+  if (dalsi.length && confirm('Na stejné trase (' + (j.trasaDelka / 1000).toFixed(1) + ' km) je ještě ' +
+      dalsi.length + '× „' + stary + '“. Přejmenovat je taky na „' + novy + '“?')) {
+    dalsi.forEach(x => x.nazev = novy);
+  }
+  ulozHistorii(h);
+  ukazSouhrn(j, i);
 }
 
 function stahniZalohu() {
