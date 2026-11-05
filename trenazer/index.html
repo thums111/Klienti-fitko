@@ -270,7 +270,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 6.6)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 6.7)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -2150,11 +2150,13 @@ function ukazSouhrn(j, indexVHistorii) {
     '<div class="tlacitkaOkna">' +
       '<button class="maly" id="oZavrit">Zavřít</button>' +
       '<button class="maly" id="oHistorie">📊 Historie</button>' +
+      '<button class="maly" id="oTcx" style="background:#1e88e5">⌚ Export pro Garmin (.tcx)</button>' +
       (indexVHistorii >= 0 ? '<button class="maly" id="oSmazat" style="background:#7a2020">🗑 Smazat jízdu</button>' : '') +
     '</div>';
   okno.style.display = 'flex';
   document.getElementById('oZavrit').onclick = zavriOkno;
   document.getElementById('oHistorie').onclick = ukazHistorii;
+  document.getElementById('oTcx').onclick = () => stahniTcx(j);
   const sm = document.getElementById('oSmazat');
   if (sm) sm.onclick = () => {
     if (!confirm('Opravdu smazat tuhle jízdu?')) return;
@@ -2296,6 +2298,59 @@ function kresliPokrok(c, jizdy) {
 // Do zálohy patří jen data trenažéru (ne ostatních aplikací na stejném webu).
 const KLICE_NASTAVENI = ['hmotnost', 'ftp', 'maxTepNast', 'zvukZap', 'hlasZap', 'trenink', 'zoomJizda',
   ...POLE.map(id => 'int_' + id)];
+
+
+// ----- EXPORT PRO GARMIN / STRAVU (.tcx) -----
+// TCX = textový formát od Garminu (XML). Garmin Connect i Strava ho umí naimportovat.
+// Body jdou po 5 s (tak je jízda uložená): čas, vzdálenost, tep, kadence, watty.
+function jizdaNaTcx(j) {
+  const konec = new Date(j.datum).getTime();
+  const start = konec - j.sekundy * 1000;              // jízda se ukládá na konci
+  const cas = ms => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const xml = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const body = j.vzorky.map((v, i) => {
+    const [w, tep, kad, m] = v;
+    return '<Trackpoint><Time>' + cas(start + (i + 1) * 5000) + '</Time>' +
+      '<DistanceMeters>' + m + '</DistanceMeters>' +
+      (tep > 0 ? '<HeartRateBpm><Value>' + tep + '</Value></HeartRateBpm>' : '') +
+      '<Cadence>' + Math.min(254, kad) + '</Cadence>' +
+      '<Extensions><ns3:TPX><ns3:Watts>' + w + '</ns3:Watts></ns3:TPX></Extensions>' +
+      '</Trackpoint>';
+  }).join('\n');
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" ' +
+    'xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2">\n' +
+    '<Activities><Activity Sport="Biking"><Id>' + cas(start) + '</Id>\n' +
+    '<Lap StartTime="' + cas(start) + '">' +
+      '<TotalTimeSeconds>' + j.sekundy + '</TotalTimeSeconds>' +
+      '<DistanceMeters>' + j.m + '</DistanceMeters>' +
+      '<Calories>' + j.kJ + '</Calories>' +                 // kJ ≈ kcal (účinnost těla ~24 %)
+      (j.prumTep ? '<AverageHeartRateBpm><Value>' + j.prumTep + '</Value></AverageHeartRateBpm>' : '') +
+      (j.maxTep ? '<MaximumHeartRateBpm><Value>' + j.maxTep + '</Value></MaximumHeartRateBpm>' : '') +
+      '<Intensity>Active</Intensity>' +
+      '<Cadence>' + Math.min(254, j.prumKad) + '</Cadence>' +
+      '<TriggerMethod>Manual</TriggerMethod>\n' +
+      '<Track>\n' + body + '\n</Track>' +
+      '<Extensions><ns3:LX><ns3:AvgWatts>' + j.prumW + '</ns3:AvgWatts>' +
+      '<ns3:MaxWatts>' + j.maxW + '</ns3:MaxWatts></ns3:LX></Extensions>' +
+    '</Lap>\n' +
+    '<Notes>' + xml(j.nazev + ' – trenažér') + '</Notes>' +
+    '</Activity></Activities></TrainingCenterDatabase>\n';
+}
+
+function stahniTcx(j) {
+  const d = new Date(j.datum);
+  const nazev = (d.toISOString().slice(0, 10) + '_' + j.nazev)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')        // bez diakritiky
+    .replace(/[^A-Za-z0-9_-]+/g, '_').replace(/_+/g, '_').replace(/_$/, '');
+  const blob = new Blob([jizdaNaTcx(j)], { type: 'application/vnd.garmin.tcx+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nazev + '.tcx';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
 
 function stahniZalohu() {
   const nastaveni = {};
