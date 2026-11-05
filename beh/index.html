@@ -95,7 +95,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
-<h1>Běžecký pás <small style="color:#555">(verze 1.5)</small></h1>
+<h1>Běžecký pás <small style="color:#555">(verze 1.6)</small></h1>
 
 <button id="btnPripojit">Připojit pás</button>
 <button id="btnTep">Připojit hrudní pás</button>
@@ -116,7 +116,7 @@
 <div class="panel" id="panelOvl">
 
   <div class="radek" id="radekMax">Max. rychlost pro aplikaci:
-    <input type="number" id="maxRychlost" value="16" min="1" max="20" step="0.5"> km/h</div>
+    <input type="number" id="maxRychlost" value="20" min="1" max="20" step="0.5"> km/h</div>
 
   <!-- Rychlovolba: jedním klepnutím nastaví rychlost -->
   <div class="radek" id="rychlovolba">
@@ -125,6 +125,8 @@
     <button class="rv" data-v="12">12</button>
     <button class="rv" data-v="14">14</button>
     <button class="rv" data-v="16">16</button>
+    <button class="rv" data-v="18">18</button>
+    <button class="rv" data-v="20">20</button>
     <span class="popis">km/h</span>
   </div>
 
@@ -308,7 +310,7 @@ function posliSklon() {
   posli([PRIKAZ.SKLON, s & 0xFF, s >> 8]);
 }
 
-// ----- Rychlovolba 8 / 10 / 12 / 14 / 16 km/h -----
+// ----- Rychlovolba 8 až 20 km/h -----
 function ukazRychlovolbu() {
   document.querySelectorAll('.rv').forEach(b => {
     const v = Number(b.dataset.v);
@@ -320,7 +322,8 @@ document.querySelectorAll('.rv').forEach(b => b.addEventListener('click', () => 
   cilR = Math.min(maxR(), Number(b.dataset.v)); ukazCile(); posliRychlost();
 }));
 const poleMax = document.getElementById('maxRychlost');
-try { const u = localStorage.getItem('behMax'); if (u) poleMax.value = u; } catch (e) {}
+// Staré uložené maximum 16 (dřívější výchozí) zvedneme na 20, ať jde celá rychlovolba
+try { let u = localStorage.getItem('behMax'); if (u === '16') { u = '20'; localStorage.setItem('behMax', u); } if (u) poleMax.value = u; } catch (e) {}
 poleMax.addEventListener('change', () => {
   try { localStorage.setItem('behMax', poleMax.value); } catch (e) {}
   ukazRychlovolbu();
