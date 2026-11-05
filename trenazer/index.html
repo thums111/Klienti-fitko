@@ -165,6 +165,47 @@
   .hodnota.casC { font-size: 44px; }
   body.volna .hodnota.casC { font-size: min(20vh, 7vw); }
 
+  /* ===== PROFI: zóny, okno se souhrnem, historie ===== */
+  .dlazdice { transition: background .6s, box-shadow .6s; }
+  .souhrn input[type=number] { width: 60px; font-size: 18px; text-align: center; }
+  .souhrn label { margin: 0 8px; }
+  #zonyBar { display: flex; height: 14px; border-radius: 7px; overflow: hidden;
+             max-width: 420px; margin: 6px auto; background: #333; }
+  #vyberTreninku { max-width: 100%; font-size: 18px; margin-bottom: 4px; }
+  #duchInfo b { font-size: 22px; }
+  #duchPopis { font-size: 13px; color: #888; }
+  .jezdec.duch div { opacity: .9; }
+
+  .okno { position: fixed; inset: 0; background: #000c; z-index: 5000;
+          display: flex; align-items: center; justify-content: center; }
+  .oknoObsah { background: #1a1a1a; border-radius: 14px; padding: 14px 20px;
+               width: 94%; max-width: 1100px; max-height: 92vh; overflow: auto; text-align: center; }
+  .oknoObsah h2 { margin: 4px 0; font-size: 24px; }
+  .oknoObsah h3 { margin: 14px 0 6px; font-size: 16px; color: #aaa; font-weight: normal; }
+  .oknoObsah .datum { color: #888; font-size: 14px; }
+  .souhrnMrizka { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 12px 0; }
+  .souhrnMrizka div { background: #262626; border-radius: 10px; padding: 8px 4px; }
+  .souhrnMrizka b { display: block; font-size: 26px; }
+  .souhrnMrizka span { font-size: 13px; color: #999; }
+  #grafJizdy { width: 100%; height: 34vh; display: block; }
+  #grafPokrok { width: 100%; height: 22vh; display: block; }
+  .legenda { font-size: 14px; margin: 2px 0 6px; }
+  .legenda span { margin: 0 8px; }
+  .zonyTab { max-width: 700px; margin: 0 auto; }
+  .zr { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 14px; }
+  .zn { width: 36px; border-radius: 5px; color: #111; font-weight: bold; padding: 2px 0; }
+  .zp { width: 90px; text-align: left; color: #aaa; }
+  .zb { flex: 1; height: 14px; background: #2a2a2a; border-radius: 4px; overflow: hidden; }
+  .zb span { display: block; height: 100%; }
+  .zc { width: 110px; text-align: right; color: #ccc; }
+  .seznamJizd { margin-top: 10px; text-align: left; }
+  .jizda { display: grid; grid-template-columns: 1.3fr 2fr .8fr .8fr .8fr .7fr; gap: 6px;
+           padding: 10px 8px; border-bottom: 1px solid #2a2a2a; cursor: pointer; font-size: 16px; }
+  .jizda:hover { background: #222; }
+  .jd { color: #888; font-size: 14px; }
+  .jn { font-weight: bold; }
+  .tlacitkaOkna { margin-top: 12px; }
+
   /* ===== TABLET NA ŠÍŘKU =====
      Když je obrazovka širší než vyšší, dáme dva sloupce vedle sebe:
      vlevo hodnoty, vpravo ovládání. Vše se tak vejde bez posouvání. */
@@ -218,7 +259,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 5.8)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 6.0)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -226,7 +267,8 @@
   <button class="rezim" id="btnIntervaly">Intervaly</button>
   <button class="rezim" id="btnTrasa">Trasa</button>
   <button class="rezim" id="btnCela" title="Celá obrazovka">⛶</button>
-  <button class="rezim" id="btnNastaveni" title="Hmotnost, souhrn, stav připojení">⚙</button>
+  <button class="rezim" id="btnNastaveni" title="Hmotnost, FTP, zvuky, stav připojení">⚙</button>
+  <button class="rezim" id="btnHistorie" title="Historie jízd a pokrok">📊</button>
 </div>
 
 <div class="rozlozeni">
@@ -266,7 +308,12 @@
 <div class="souhrn">
   Hmotnost jezdce:
   <input id="hmotnost" type="number" value="75" min="30" max="150"
-         style="width:60px;font-size:18px;text-align:center"> kg<br>
+         style="width:60px;font-size:18px;text-align:center"> kg ·
+  FTP <input id="ftp" type="number" value="200" min="50" max="600"> W ·
+  Max tep <input id="maxTepNast" type="number" value="170" min="100" max="230"><br>
+  <label><input type="checkbox" id="zvukZap" checked> 🔔 Pípání</label>
+  <label><input type="checkbox" id="hlasZap" checked> 🗣 Hlas</label><br>
+  Čas v zónách: <div id="zonyBar"></div>
   Vzdálenost: <b id="vzdalenost">0.00</b> km<br>
   Prům. výkon: <b id="prumVykon">--</b> W<br>
   Prům. tep: <b id="prumTep">--</b> &nbsp;|&nbsp;
@@ -295,8 +342,9 @@
 <div class="panel" id="panelInterval">
   <h2>Intervalový trénink</h2>
   <div id="nastaveni">
+  <select id="vyberTreninku"></select>
   <!-- Tabulka: každý řádek = jedna fáze, barevný proužek vlevo -->
-  <table class="tabInt">
+  <table class="tabInt" id="tabVlastni">
     <tr><th></th><th>Fáze</th><th>Minuty</th><th>Watty</th></tr>
     <tr class="fRoz"><td class="pruh"></td><td>Rozjetí</td>
       <td><input id="rozMin" type="number" value="10"></td>
@@ -346,6 +394,7 @@
     <span>Výška <b id="tVyska">--</b> m</span>
     <span><b id="tUjeto">0.0</b> / <b id="tCelkem">--</b> km</span>
     <span>Nastoupáno <b id="tStoupani">0</b> m</span>
+    <span id="duchInfo" style="display:none">👻 <b id="duchRozdil">--</b><br><span id="duchPopis"></span></span>
     <span>
       <button id="btnStartTrasy">Start trasy</button>
       <button class="maly" id="btnSatelit">Satelit</button>
@@ -355,6 +404,9 @@
 </div>
 </div>   <!-- konec pravého sloupce -->
 </div>   <!-- konec rozložení -->
+
+<!-- Okno přes celou obrazovku: souhrn jízdy a historie -->
+<div id="okno" class="okno" style="display:none"><div class="oknoObsah" id="oknoObsah"></div></div>
 
 <script>
 // ===== Pomocné funkce =====
@@ -424,6 +476,7 @@ function novyTep(udalost) {
   if (tep > tepMax) tepMax = tep;
 
   napis('tep', tep);
+  tepAkt = tep; tepCas = Date.now();      // pro zóny a záznam jízdy
   napis('prumTep', Math.round(tepSoucet / tepPocet));
   napis('maxTep', tepMax);
 }
@@ -989,7 +1042,7 @@ POLE.forEach(id => {
   el.addEventListener('input', ukazCelkem);
 });
 
-function sestavFaze() {
+function sestavFazeTabulka() {
   const f = [];
   if (cislo('rozMin') > 0) f.push({ nazev: 'Rozjetí', s: cislo('rozMin') * 60, w: cislo('rozW') });
   const n = cislo('opak');
@@ -1000,6 +1053,100 @@ function sestavFaze() {
   }
   if (cislo('vyjMin') > 0) f.push({ nazev: 'Vyjetí', s: cislo('vyjMin') * 60, w: cislo('vyjW') });
   return f;
+}
+
+
+// =====================================================================
+// ===== PROFI: FTP, MAX TEP a KNIHOVNA TRÉNINKŮ =====
+// =====================================================================
+// FTP = výkon, který udržíš zhruba hodinu. Od něj se počítají zóny
+// i watty v hotových trénincích (např. 115 % FTP).
+const poleFtp = document.getElementById('ftp');
+const poleMaxTep = document.getElementById('maxTepNast');
+[[poleFtp, 'ftp'], [poleMaxTep, 'maxTepNast']].forEach(([el, klic]) => {
+  try { const u = localStorage.getItem(klic); if (u) el.value = u; } catch (e) {}
+  el.addEventListener('change', () => {
+    try { localStorage.setItem(klic, el.value); } catch (e) {}
+    ukazCelkem();
+  });
+});
+const ftp = () => Number(poleFtp.value) || 200;
+const maxTepN = () => Number(poleMaxTep.value) || 170;
+const wFtp = pct => Math.round(ftp() * pct / 5) * 5;     // zaokrouhlíme na 5 W
+
+// Trénink zapsaný jako kroky: [typ, minuty, % FTP]
+//   R = rozjetí, P = práce, O = odpočinek, V = vyjetí
+function sestavZKroku(kroky) {
+  const pocetPraci = kroky.filter(k => k[0] === 'P').length;
+  let i = 0;
+  return kroky.map(([typ, min, pct]) => ({
+    nazev: typ === 'R' ? 'Rozjetí' : typ === 'V' ? 'Vyjetí' : typ === 'O' ? 'Odpočinek'
+         : 'Práce ' + (++i) + '/' + pocetPraci,
+    s: Math.round(min * 60),
+    w: wFtp(pct),
+  }));
+}
+// n× práce, mezi nimi odpočinek (po poslední už ne)
+function serie(n, prace, odp) {
+  const out = [];
+  for (let i = 0; i < n; i++) { out.push(prace); if (i < n - 1 && odp) out.push(odp); }
+  return out;
+}
+
+const KNIHOVNA = [
+  { nazev: '✏️ Vlastní (tabulka)' },
+  { nazev: 'VO2max 5× 4 min', kroky: () => [
+      ['R', 10, .55], ...serie(5, ['P', 4, 1.15], ['O', 3, .50]), ['V', 10, .50]] },
+  { nazev: 'VO2max 30/30 (2× 10)', kroky: () => [
+      ['R', 10, .55], ...serie(10, ['P', .5, 1.20], ['O', .5, .50]), ['O', 5, .50],
+      ...serie(10, ['P', .5, 1.20], ['O', .5, .50]), ['V', 10, .50]] },
+  { nazev: 'Anaerobní 40/20 (3× 8)', kroky: () => [
+      ['R', 10, .55], ...serie(8, ['P', 40 / 60, 1.25], ['O', 20 / 60, .50]), ['O', 5, .50],
+      ...serie(8, ['P', 40 / 60, 1.25], ['O', 20 / 60, .50]), ['O', 5, .50],
+      ...serie(8, ['P', 40 / 60, 1.25], ['O', 20 / 60, .50]), ['V', 10, .50]] },
+  { nazev: 'Pyramida 1-2-3-4-3-2-1', kroky: () => [
+      ['R', 10, .55], ...[1, 2, 3, 4, 3, 2, 1].flatMap((m, i, a) =>
+        i < a.length - 1 ? [['P', m, 1.10], ['O', m, .50]] : [['P', m, 1.10]]),
+      ['V', 10, .50]] },
+  { nazev: 'Sweet spot 3× 12 min', kroky: () => [
+      ['R', 10, .55], ...serie(3, ['P', 12, .90], ['O', 4, .55]), ['V', 10, .50]] },
+  { nazev: 'Práh 2× 20 min', kroky: () => [
+      ['R', 10, .55], ...serie(2, ['P', 20, .97], ['O', 5, .55]), ['V', 10, .50]] },
+  { nazev: 'Over-under 3× 9 min', kroky: () => {
+      const blok = [['P', 2, .95], ['P', 1, 1.05], ['P', 2, .95], ['P', 1, 1.05], ['P', 2, .95], ['P', 1, 1.05]];
+      return [['R', 10, .55], ...blok, ['O', 5, .55], ...blok, ['O', 5, .55], ...blok, ['V', 10, .50]];
+  } },
+  { nazev: 'Vytrvalost 60 min (Z2)', kroky: () => [
+      ['R', 5, .55], ['P', 50, .68], ['V', 5, .50]] },
+  { nazev: 'Aktivace před závodem 30 min', kroky: () => [
+      ['R', 10, .55], ...serie(3, ['P', 1, 1.20], ['O', 2, .50]), ['P', 5, .90], ['V', 8, .50]] },
+];
+
+const vyberTreninku = document.getElementById('vyberTreninku');
+KNIHOVNA.forEach((t, i) => vyberTreninku.add(new Option(t.nazev, i)));
+try { vyberTreninku.value = localStorage.getItem('trenink') || '0'; } catch (e) {}
+if (!KNIHOVNA[vyberTreninku.value]) vyberTreninku.value = '0';
+
+function ukazTabulku() {
+  const vlastni = !KNIHOVNA[vyberTreninku.value].kroky;
+  document.getElementById('tabVlastni').style.display = vlastni ? '' : 'none';
+}
+vyberTreninku.addEventListener('change', () => {
+  try { localStorage.setItem('trenink', vyberTreninku.value); } catch (e) {}
+  ukazTabulku();
+  ukazCelkem();
+});
+ukazTabulku();
+
+const nazevTreninku = () => {
+  const t = KNIHOVNA[vyberTreninku.value];
+  return t.kroky ? t.nazev : 'Vlastní intervaly';
+};
+
+// Hlavní funkce: buď hotový trénink z knihovny, nebo tvoje tabulka
+function sestavFaze() {
+  const t = KNIHOVNA[vyberTreninku.value];
+  return (t && t.kroky) ? sestavZKroku(t.kroky()) : sestavFazeTabulka();
 }
 
 const mmss = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -1049,6 +1196,7 @@ function spustFazi() {
   ergZapnuto = true;
   nastavVykon(f.w);
   napis('faze', f.nazev + ' – ' + f.w + ' W');
+  ohlasFazi(f);
   const dalsi = faze[index + 1];
   napis('dalsi', dalsi ? 'Další: ' + dalsi.nazev + ' – ' + dalsi.w + ' W' : 'Poslední fáze');
   document.getElementById('faze').style.color = f.nazev.startsWith('Práce') ? '#ff7043' : '#81c784';
@@ -1063,6 +1211,8 @@ function tik() {
 
   // 3 s před koncem fáze krátce zavibruje (na tabletu/mobilu)
   if (zbyva > 0 && zbyva <= 3 && navigator.vibrate) navigator.vibrate(150);
+  if (zbyva > 0 && zbyva <= 3) pipni(880, 0.12);           // pí – pí – pí
+  if (zbyva === 10 && f.s >= 60 && f.nazev.startsWith('Práce')) rekni('Ještě deset sekund');
 
   if (zbyva <= 0) {
     index++;
@@ -1074,6 +1224,8 @@ function tik() {
 function zastavIntervaly(text) {
   clearInterval(intervalBezi);
   intervalBezi = null;
+  if (text.startsWith('Hotovo')) rekni('Hotovo. Skvělá práce!');
+  ukonciJizdu(true, { dokoncena: text.startsWith('Hotovo') });
   posunZnacku();              // schová značku
   prepniErg(false);           // zpět na volnou jízdu
   document.getElementById('nastaveni').style.display = '';    // nastavení zpět
@@ -1092,6 +1244,7 @@ document.getElementById('btnInterval').addEventListener('click', () => {
   faze = sestavFaze();
   obnovPokusy();                // nový trénink = kolo zkusíme řídit znovu
   vynulujStatistiku();          // start intervalů = čas a km od nuly
+  jizdaInfo = { rezim: 'intervaly', nazev: nazevTreninku() };
   if (faze.length === 0) return;
   index = 0;
   spustFazi();
@@ -1116,6 +1269,8 @@ function ukazRezim(rezim) {
 
 // Vynuluje čas, km a průměry – nový trénink začíná od nuly
 function vynulujStatistiku() {
+  autoUlozJizdu();              // rozjetá jízda (3+ min) se uloží do historie
+  vynulujProfi();
   sekundy = 0; metry = 0;
   vykonSoucet = 0; vykonPocet = 0;
   tepSoucet = 0; tepPocet = 0; tepMax = 0;
@@ -1553,7 +1708,11 @@ function kresliProfil(d) {
     g2.fillStyle = barva;
     g2.fill();
   }
-  // Svislá čára = kde jsem
+  // Svislá čára = kde jsem (a modrá = duch)
+  if (typeof duchMetry === 'number' && duchMetry !== null) {
+    g2.fillStyle = '#29b6f6';
+    g2.fillRect(x(Math.min(duchMetry, celkem)) - 1, 0, 3, H);
+  }
   g2.fillStyle = '#fff';
   g2.fillRect(x(d) - 1, 0, 3, H);
   g2.font = '13px system-ui';
@@ -1594,6 +1753,7 @@ function tikTrasy() {
     // Mapa jede s tebou – plynule, posun trvá 1 s (stejně jako krok výpočtu)
     if (sledovat) mapa.panTo([p.lat, p.lon], { animate: true, duration: 1, easeLinearity: 1 });
   }
+  tikDucha();
   kresliProfil(trasaMetry);
 
   if (trasaMetry >= celkem) zastavTrasu('🏁 Cíl! ' + (celkem / 1000).toFixed(1) + ' km');
@@ -1602,6 +1762,15 @@ function tikTrasy() {
 function zastavTrasu(text) {
   clearInterval(trasaTimer);
   trasaBezi = false;
+  const vCili = text.startsWith('🏁');
+  if (vCili) {
+    pipni(1320, 0.6);
+    rekni(duch ? (trasaMetry >= (duchMetry || 0) ? 'Cíl! Porazil jsi ducha.' : 'Cíl! Duch byl tentokrát rychlejší.') : 'Cíl!');
+  }
+  ukonciJizdu(true, { dokoncena: vCili });
+  if (duchZnacka && mapa) mapa.removeLayer(duchZnacka);
+  duchZnacka = null; duch = null; duchMetry = null;
+  document.getElementById('duchInfo').style.display = 'none';
   sklon = 0;
   posledniSklon = null;
   volnaJizda(0);
@@ -1621,6 +1790,9 @@ document.getElementById('btnStartTrasy').addEventListener('click', () => {
 
   trasaMetry = 0; stoupani = 0; predchoziVyska = null; posledniSklon = null;
   vynulujStatistiku();          // start trasy = čas a km od nuly
+  jizdaInfo = { rezim: 'trasa', nazev: navrhNazvu || 'Trasa', trasaDelka: Math.round(trasa[trasa.length - 1].d) };
+  pripravDucha();
+  rekni(duch ? 'Jedeme. Duch jede s tebou.' : 'Jedeme');
   v = rychlostKola / 3.6;                 // ať se nezačíná z nuly
   trasaBezi = true;
   document.getElementById('vyberTrasy').style.display = 'none';
@@ -1638,6 +1810,493 @@ document.getElementById('btnStartTrasy').addEventListener('click', () => {
   tikTrasy();
   trasaTimer = setInterval(tikTrasy, 1000);
 });
+
+
+// =====================================================================
+// ===== PROFI: ZÓNY, ZVUKY, ZÁZNAM, HISTORIE, DUCH =====
+// =====================================================================
+
+// ----- Zóny -----
+// Výkonové zóny podle FTP (Coggan), tepové podle max tepu.
+const ZONY_W = [
+  { do: 0.55, b: '#9e9e9e', n: 'Z1', p: 'regenerace' },
+  { do: 0.75, b: '#42a5f5', n: 'Z2', p: 'vytrvalost' },
+  { do: 0.90, b: '#66bb6a', n: 'Z3', p: 'tempo' },
+  { do: 1.05, b: '#ffca28', n: 'Z4', p: 'práh' },
+  { do: 1.20, b: '#ff7043', n: 'Z5', p: 'VO2max' },
+  { do: 1.50, b: '#e53935', n: 'Z6', p: 'anaerobní' },
+  { do: 99,   b: '#ab47bc', n: 'Z7', p: 'sprint' },
+];
+const ZONY_T = [
+  { do: 0.60, b: '#9e9e9e', n: 'Z1' },
+  { do: 0.70, b: '#42a5f5', n: 'Z2' },
+  { do: 0.80, b: '#66bb6a', n: 'Z3' },
+  { do: 0.90, b: '#ffca28', n: 'Z4' },
+  { do: 99,   b: '#e53935', n: 'Z5' },
+];
+const zonaW = w => ZONY_W.findIndex(z => w / ftp() < z.do);
+const zonaT = t => ZONY_T.findIndex(z => t / maxTepN() < z.do);
+
+var tepAkt = 0, tepCas = 0;          // poslední tep a kdy přišel (ms)
+var posledni3 = [];                  // výkon za poslední 3 s – ať barva necuká
+var casVZonach = [0, 0, 0, 0, 0, 0, 0], casVZonachT = [0, 0, 0, 0, 0];
+var zaznam = [];                     // 1 řádek za sekundu jízdy: [W, tep, kadence, km/h×10, metry]
+var jizdaInfo = null;                // {rezim, nazev, trasaDelka}
+
+// Obarví dlaždici podle zóny: světlé pozadí + proužek dole + "Z4" v popisku
+function obarvi(idHodnoty, zakladPopis, zona, text) {
+  const dl = document.getElementById(idHodnoty).parentElement;
+  const popis = dl.querySelector('.popis');
+  if (!zona) {
+    dl.style.background = ''; dl.style.boxShadow = '';
+    popis.textContent = zakladPopis;
+    return;
+  }
+  dl.style.background = zona.b + '2e';
+  dl.style.boxShadow = 'inset 0 -6px 0 ' + zona.b;
+  popis.textContent = zakladPopis + ' · ' + text;
+}
+
+// Každou sekundu: barvy zón, čas v zónách a záznam jízdy
+setInterval(() => {
+  posledni3.push(posledniVykon);
+  if (posledni3.length > 3) posledni3.shift();
+  const w3 = posledni3.reduce((a, b) => a + b, 0) / posledni3.length;
+  const tepPlatny = tepAkt > 0 && Date.now() - tepCas < 5000;
+
+  if (posledniVykon > 0 || w3 > 0) {
+    const z = zonaW(w3);
+    obarvi('vykon', 'W', ZONY_W[z], ZONY_W[z].n + ' ' + Math.round(100 * w3 / ftp()) + ' %');
+  } else obarvi('vykon', 'W', null);
+
+  if (tepPlatny) {
+    const z = zonaT(tepAkt);
+    obarvi('tep', 'tep/min', ZONY_T[z], ZONY_T[z].n);
+  } else obarvi('tep', 'tep/min', null);
+
+  // Záznam jen když šlapeš – stejně jako běží čas (auto-pauza)
+  if (posledniVykon > 0) {
+    casVZonach[zonaW(posledniVykon)]++;
+    if (tepPlatny) casVZonachT[zonaT(tepAkt)]++;
+    zaznam.push([Math.round(posledniVykon), tepPlatny ? tepAkt : 0,
+                 Math.round(kadenceAkt), Math.round(rychlostKola * 10), Math.round(metry)]);
+    if (zaznam.length % 5 === 0) kresliZonyBar();
+  }
+}, 1000);
+
+// Proužek "čas v zónách" pod ⚙
+function kresliZonyBar() {
+  const celkem = casVZonach.reduce((a, b) => a + b, 0);
+  const el = document.getElementById('zonyBar');
+  if (!celkem) { el.innerHTML = ''; return; }
+  el.innerHTML = casVZonach.map((s, i) => s ? '<span style="flex:' + s + ';background:' +
+    ZONY_W[i].b + '" title="' + ZONY_W[i].n + ' ' + mmss(s) + '"></span>' : '').join('');
+}
+
+// ----- Zvuky a hlas -----
+const zvukZap = document.getElementById('zvukZap');
+const hlasZap = document.getElementById('hlasZap');
+[[zvukZap, 'zvukZap'], [hlasZap, 'hlasZap']].forEach(([el, klic]) => {
+  try { const u = localStorage.getItem(klic); if (u !== null) el.checked = u === '1'; } catch (e) {}
+  el.addEventListener('change', () => { try { localStorage.setItem(klic, el.checked ? '1' : '0'); } catch (e) {} });
+});
+
+// Prohlížeč pustí zvuk až po prvním klepnutí – proto si "zvukovou kartu"
+// připravíme při prvním kliknutí kamkoli.
+var zvukCtx = null;
+function zvukovaKarta() {
+  try {
+    zvukCtx = zvukCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (zvukCtx.state === 'suspended') zvukCtx.resume();
+  } catch (e) {}
+  return zvukCtx;
+}
+document.addEventListener('click', zvukovaKarta, { once: true });
+
+// Pípnutí: tón f Hz, délka v sekundách
+function pipni(f = 880, delka = 0.12) {
+  if (!zvukZap.checked) return;
+  const ctx = zvukovaKarta();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const osc = ctx.createOscillator(), zesil = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = f;
+  zesil.gain.setValueAtTime(0.35, t);
+  zesil.gain.exponentialRampToValueAtTime(0.001, t + delka);   // plynulé doznění
+  osc.connect(zesil).connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + delka + 0.05);
+}
+
+// Hlas: Android i Windows mají český hlas vestavěný
+function rekni(text) {
+  if (!hlasZap.checked || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'cs-CZ';
+    const cesky = speechSynthesis.getVoices().find(h => (h.lang || '').toLowerCase().startsWith('cs'));
+    if (cesky) u.voice = cesky;
+    u.rate = 1.05;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+// "4 minuty", "1 minuta", "30 sekund" – česky skloňovaně
+function delkaSlovy(s) {
+  if (s < 60) return s + ' sekund';
+  const m = Math.round(s / 60);
+  if (s % 60 && s < 600) return Math.floor(s / 60) + ' minut ' + (s % 60) + ' sekund';
+  return m + (m === 1 ? ' minuta' : m < 5 ? ' minuty' : ' minut');
+}
+function wattySlovy(w) { return w + ' wattů'; }
+
+// Zavolá se při začátku každé fáze intervalů
+function ohlasFazi(f) {
+  pipni(1320, 0.45);
+  const druh = f.nazev.split(' ')[0];
+  if (druh === 'Práce') rekni('Práce. ' + wattySlovy(f.w) + ', ' + delkaSlovy(f.s));
+  else rekni(druh + '. ' + delkaSlovy(f.s));
+}
+
+// ----- Výpočty jízdy -----
+// NP (normalizovaný výkon): klouzavý průměr 30 s, na 4. mocninu, průměr, 4. odmocnina.
+// Lépe než obyčejný průměr ukazuje, jak "drahá" jízda s intervaly byla.
+function spoctiNP(watty) {
+  if (watty.length < 30) return 0;
+  let soucet = 0, n = 0, okno = 0;
+  for (let i = 0; i < watty.length; i++) {
+    okno += watty[i];
+    if (i >= 30) okno -= watty[i - 30];
+    if (i >= 29) { soucet += Math.pow(okno / 30, 4); n++; }
+  }
+  return Math.round(Math.pow(soucet / n, 0.25));
+}
+
+function sestavJizdu(navic) {
+  if (zaznam.length < 60) return null;               // kratší než minuta neukládáme
+  const w = zaznam.map(r => r[0]);
+  const tepy = zaznam.map(r => r[1]).filter(t => t > 0);
+  const kad = zaznam.map(r => r[2]).filter(k => k > 0);
+  const prum = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : 0;
+  const np = spoctiNP(w);
+  const f = ftp();
+  const IF = np / f;
+  // Vzorky po 5 s (průměry) – na graf a ducha stačí, a šetří místo
+  const vzorky = [];
+  for (let i = 0; i < zaznam.length; i += 5) {
+    const blok = zaznam.slice(i, i + 5);
+    const tb = blok.map(r => r[1]).filter(t => t > 0);
+    vzorky.push([prum(blok.map(r => r[0])), prum(tb), prum(blok.map(r => r[2])),
+                 blok[blok.length - 1][4]]);
+  }
+  const info = jizdaInfo || {
+    rezim: aktualniRezim,
+    nazev: aktualniRezim === 'volna' ? 'Volná jízda' : aktualniRezim === 'trasa' ? 'Jízda (bez trasy)' : 'ERG jízda',
+  };
+  return Object.assign({
+    datum: new Date().toISOString(),
+    rezim: info.rezim, nazev: info.nazev, trasaDelka: info.trasaDelka || 0,
+    sekundy: zaznam.length,
+    m: zaznam[zaznam.length - 1][4],
+    prumW: prum(w), maxW: Math.max(...w), np,
+    kJ: Math.round(w.reduce((a, b) => a + b, 0) / 1000),
+    tss: Math.round(zaznam.length * np * IF / (f * 3600) * 100),
+    ftp: f,
+    prumTep: prum(tepy), maxTep: tepy.length ? Math.max(...tepy) : 0,
+    prumKad: prum(kad),
+    zony: casVZonach.slice(), zonyT: casVZonachT.slice(),
+    vzorky,
+  }, navic || {});
+}
+
+// ----- Historie (v tabletu / PC, localStorage) -----
+function nactiHistorii() {
+  try { return JSON.parse(localStorage.getItem('historie') || '[]'); } catch (e) { return []; }
+}
+function ulozHistorii(h) {
+  // Když dojde místo, smažeme nejstarší jízdy a zkusíme znovu
+  while (true) {
+    try { localStorage.setItem('historie', JSON.stringify(h)); return true; }
+    catch (e) { if (h.length <= 1) return false; h.splice(0, Math.max(1, Math.floor(h.length / 10))); }
+  }
+}
+function pridejDoHistorie(j) {
+  const h = nactiHistorii();
+  h.push(j);
+  if (h.length > 120) h.splice(0, h.length - 120);
+  ulozHistorii(h);
+}
+
+// Ukončí jízdu: uloží ji a (volitelně) ukáže souhrn s grafem
+function ukonciJizdu(ukazat, navic) {
+  const j = sestavJizdu(navic);
+  zaznam = [];
+  if (!j) return null;
+  pridejDoHistorie(j);
+  if (ukazat) ukazSouhrn(j, nactiHistorii().length - 1);
+  return j;
+}
+
+// Při přepnutí režimu se jízda delší než 3 minuty uloží sama – nic se neztratí
+function autoUlozJizdu() {
+  if (zaznam.length >= 180) ukonciJizdu(false);
+}
+
+function vynulujProfi() {
+  zaznam = [];
+  jizdaInfo = null;
+  casVZonach = [0, 0, 0, 0, 0, 0, 0];
+  casVZonachT = [0, 0, 0, 0, 0];
+  posledni3 = [];
+  kresliZonyBar();
+}
+
+// ----- Okno (souhrn, historie) -----
+const okno = document.getElementById('okno');
+const oknoObsah = document.getElementById('oknoObsah');
+function zavriOkno() { okno.style.display = 'none'; oknoObsah.innerHTML = ''; }
+okno.addEventListener('click', e => { if (e.target === okno) zavriOkno(); });
+
+const datumCz = iso => {
+  const d = new Date(iso);
+  return d.getDate() + '. ' + (d.getMonth() + 1) + '. ' + d.getFullYear() + ' ' +
+         d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+};
+const hmmss = s => s >= 3600
+  ? Math.floor(s / 3600) + ':' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0')
+  : mmss(s);
+
+function zonyHtml(casy, zony, nadpis) {
+  const celkem = casy.reduce((a, b) => a + b, 0);
+  if (!celkem) return '';
+  const max = Math.max(...casy);
+  return '<h3>' + nadpis + '</h3><div class="zonyTab">' + casy.map((s, i) =>
+    '<div class="zr"><span class="zn" style="background:' + zony[i].b + '">' + zony[i].n + '</span>' +
+    '<span class="zp">' + (zony[i].p || '') + '</span>' +
+    '<span class="zb"><span style="width:' + (100 * s / max) + '%;background:' + zony[i].b + '"></span></span>' +
+    '<span class="zc">' + mmss(s) + ' · ' + Math.round(100 * s / celkem) + ' %</span></div>').join('') + '</div>';
+}
+
+function ukazSouhrn(j, indexVHistorii) {
+  const dlazdice = [
+    ['Čas', hmmss(j.sekundy)], ['Vzdálenost', (j.m / 1000).toFixed(1) + ' km'],
+    ['Prům. výkon', j.prumW + ' W'], ['NP', j.np + ' W'], ['Max výkon', j.maxW + ' W'],
+    ['Práce', j.kJ + ' kJ'], ['TSS', j.tss], ['Prům. kadence', j.prumKad],
+    ['Prům. tep', j.prumTep || '--'], ['Max tep', j.maxTep || '--'],
+  ];
+  oknoObsah.innerHTML =
+    '<h2>' + (j.dokoncena ? '🏁 ' : '') + j.nazev + '</h2>' +
+    '<div class="datum">' + datumCz(j.datum) + ' · FTP ' + j.ftp + ' W</div>' +
+    '<div class="souhrnMrizka">' + dlazdice.map(([n, h]) =>
+      '<div><b>' + h + '</b><span>' + n + '</span></div>').join('') + '</div>' +
+    '<canvas id="grafJizdy"></canvas>' +
+    '<div class="legenda"><span style="color:#ffca28">━ výkon</span> <span style="color:#ff5252">━ tep</span> <span style="color:#888">┅ FTP</span></div>' +
+    zonyHtml(j.zony, ZONY_W, 'Čas ve výkonových zónách') +
+    zonyHtml(j.zonyT || [], ZONY_T, 'Čas v tepových zónách') +
+    '<div class="tlacitkaOkna">' +
+      '<button class="maly" id="oZavrit">Zavřít</button>' +
+      '<button class="maly" id="oHistorie">📊 Historie</button>' +
+      (indexVHistorii >= 0 ? '<button class="maly" id="oSmazat" style="background:#7a2020">🗑 Smazat jízdu</button>' : '') +
+    '</div>';
+  okno.style.display = 'flex';
+  document.getElementById('oZavrit').onclick = zavriOkno;
+  document.getElementById('oHistorie').onclick = ukazHistorii;
+  const sm = document.getElementById('oSmazat');
+  if (sm) sm.onclick = () => {
+    if (!confirm('Opravdu smazat tuhle jízdu?')) return;
+    const h = nactiHistorii();
+    h.splice(indexVHistorii, 1);
+    ulozHistorii(h);
+    ukazHistorii();
+  };
+  kresliGrafJizdy(document.getElementById('grafJizdy'), j);
+}
+
+// Graf jízdy: výkon (žlutě, levá osa), tep (červeně, pravá osa), FTP čárkovaně
+function kresliGrafJizdy(c, j) {
+  const W = c.width = c.clientWidth * 2, H = c.height = c.clientHeight * 2;   // ×2 = ostré
+  const g2 = c.getContext('2d');
+  const v = j.vzorky;
+  if (v.length < 2) return;
+  const maxW = Math.max(j.ftp * 1.3, ...v.map(r => r[0])) * 1.05;
+  const tepy = v.map(r => r[1]).filter(t => t > 0);
+  const tMin = tepy.length ? Math.min(...tepy) - 10 : 60, tMax = tepy.length ? Math.max(...tepy) + 5 : 200;
+  const L = 70, P = 70, T = 16, D = 40;           // okraje
+  const x = i => L + i / (v.length - 1) * (W - L - P);
+  const yW = w => H - D - w / maxW * (H - T - D);
+  const yT = t => H - D - (t - tMin) / (tMax - tMin) * (H - T - D);
+  g2.font = '22px system-ui';
+
+  // Mřížka po 100 W
+  g2.strokeStyle = '#333'; g2.fillStyle = '#888'; g2.lineWidth = 1;
+  for (let w = 0; w <= maxW; w += 100) {
+    g2.beginPath(); g2.moveTo(L, yW(w)); g2.lineTo(W - P, yW(w)); g2.stroke();
+    g2.fillText(w, 8, yW(w) + 7);
+  }
+  // Časová osa po 10 min (nebo 5 min u krátkých jízd)
+  const krokMin = j.sekundy > 3600 ? 15 : j.sekundy > 1200 ? 10 : 5;
+  for (let m = krokMin; m * 60 < j.sekundy; m += krokMin) {
+    const xi = x(m * 60 / 5);
+    g2.fillText(m + "'", xi - 12, H - 10);
+  }
+  // FTP čára
+  g2.setLineDash([10, 8]); g2.strokeStyle = '#888';
+  g2.beginPath(); g2.moveTo(L, yW(j.ftp)); g2.lineTo(W - P, yW(j.ftp)); g2.stroke();
+  g2.setLineDash([]);
+
+  // Výkon: plocha obarvená podle zón
+  for (let i = 0; i < v.length - 1; i++) {
+    g2.fillStyle = ZONY_W[Math.max(0, zonaW(v[i][0]))].b + '99';
+    g2.fillRect(x(i), yW(v[i][0]), x(i + 1) - x(i) + 0.5, H - D - yW(v[i][0]));
+  }
+  g2.strokeStyle = '#ffca28'; g2.lineWidth = 3;
+  g2.beginPath();
+  v.forEach((r, i) => i ? g2.lineTo(x(i), yW(r[0])) : g2.moveTo(x(i), yW(r[0])));
+  g2.stroke();
+
+  // Tep
+  if (tepy.length) {
+    g2.strokeStyle = '#ff5252'; g2.lineWidth = 3;
+    g2.beginPath();
+    let zacato = false;
+    v.forEach((r, i) => {
+      if (!r[1]) { zacato = false; return; }
+      if (zacato) g2.lineTo(x(i), yT(r[1])); else { g2.moveTo(x(i), yT(r[1])); zacato = true; }
+    });
+    g2.stroke();
+    g2.fillStyle = '#ff5252';
+    for (let t = Math.ceil(tMin / 20) * 20; t <= tMax; t += 20) g2.fillText(t, W - P + 10, yT(t) + 7);
+  }
+}
+
+function ukazHistorii() {
+  const h = nactiHistorii();
+  const bezi = zaznam.length >= 60;
+  // Pokrok: průměrný výkon (sloupce) a NP (tečky) posledních 20 jízd
+  oknoObsah.innerHTML =
+    '<h2>📊 Historie jízd</h2>' +
+    (bezi ? '<button id="oUkoncit" style="background:#43a047">🏁 Ukončit a uložit aktuální jízdu (' + mmss(zaznam.length) + ')</button>' : '') +
+    (h.length ? '<h3>Pokrok – posledních ' + Math.min(20, h.length) + ' jízd</h3><canvas id="grafPokrok"></canvas>' +
+      '<div class="legenda"><span style="color:#ffca28">▮ prům. výkon</span> <span style="color:#fff">● NP</span> <span style="color:#ff5252">● prům. tep</span></div>' : '') +
+    '<div class="seznamJizd">' + (h.length ? h.map((j, i) => [j, i]).reverse().map(([j, i]) =>
+      '<div class="jizda" data-i="' + i + '">' +
+        '<span class="jd">' + datumCz(j.datum) + '</span>' +
+        '<span class="jn">' + (j.dokoncena ? '🏁 ' : '') + j.nazev + '</span>' +
+        '<span>' + hmmss(j.sekundy) + '</span>' +
+        '<span>' + (j.m / 1000).toFixed(1) + ' km</span>' +
+        '<span style="color:#ffca28">' + j.prumW + ' W</span>' +
+        '<span style="color:#ff5252">' + (j.prumTep || '--') + ' ♥</span>' +
+      '</div>').join('') : '<p>Zatím žádná uložená jízda. Jízdy delší než minuta se ukládají samy.</p>') +
+    '</div>' +
+    '<div class="tlacitkaOkna"><button class="maly" id="oZavrit">Zavřít</button></div>';
+  okno.style.display = 'flex';
+  document.getElementById('oZavrit').onclick = zavriOkno;
+  const uk = document.getElementById('oUkoncit');
+  if (uk) uk.onclick = () => { ukonciJizdu(true); vynulujStatistiku(); };
+  oknoObsah.querySelectorAll('.jizda').forEach(el => {
+    el.onclick = () => { const i = Number(el.dataset.i); ukazSouhrn(nactiHistorii()[i], i); };
+  });
+  const gp = document.getElementById('grafPokrok');
+  if (gp) kresliPokrok(gp, h.slice(-20));
+}
+
+function kresliPokrok(c, jizdy) {
+  const W = c.width = c.clientWidth * 2, H = c.height = c.clientHeight * 2;
+  const g2 = c.getContext('2d');
+  const maxW = Math.max(...jizdy.map(j => Math.max(j.np, j.prumW)), 100) * 1.15;
+  const tepy = jizdy.map(j => j.prumTep).filter(t => t > 0);
+  const tMin = tepy.length ? Math.min(...tepy) - 15 : 60, tMax = tepy.length ? Math.max(...tepy) + 10 : 200;
+  const sirka = (W - 40) / jizdy.length;
+  g2.font = '20px system-ui';
+  jizdy.forEach((j, i) => {
+    const x = 20 + i * sirka;
+    const h = j.prumW / maxW * (H - 50);
+    g2.fillStyle = '#ffca28aa';
+    g2.fillRect(x + sirka * 0.15, H - 30 - h, sirka * 0.7, h);
+    g2.fillStyle = '#fff';
+    g2.beginPath(); g2.arc(x + sirka / 2, H - 30 - j.np / maxW * (H - 50), 7, 0, 7); g2.fill();
+    if (j.prumTep) {
+      g2.fillStyle = '#ff5252';
+      g2.beginPath(); g2.arc(x + sirka / 2, H - 30 - (j.prumTep - tMin) / (tMax - tMin) * (H - 50), 6, 0, 7); g2.fill();
+    }
+    const d = new Date(j.datum);
+    g2.fillStyle = '#888';
+    if (jizdy.length <= 12 || i % 2 === 0) g2.fillText(d.getDate() + '.' + (d.getMonth() + 1) + '.', x + sirka / 2 - 22, H - 6);
+  });
+}
+
+document.getElementById('btnHistorie').addEventListener('click', ukazHistorii);
+
+// ----- DUCH na trase -----
+// Najde tvou nejlepší dokončenou jízdu na stejné trase (jinak poslední pokus)
+// a pouští ji vedle tebe: modrá šipka na mapě a modrá čára v profilu.
+var duch = null;          // {vzorky, popis}
+var duchMetry = null;     // kde je duch teď (m)
+var duchZnacka = null;
+var predjetoHlaseno = 0;  // ať hlas nehlásí předjetí pořád dokola
+
+function najdiDucha(nazev, delka) {
+  const kandidati = nactiHistorii().filter(j => j.rezim === 'trasa' && j.nazev === nazev &&
+    Math.abs((j.trasaDelka || 0) - delka) < Math.max(100, delka * 0.02));
+  if (!kandidati.length) return null;
+  const dokoncene = kandidati.filter(j => j.dokoncena);
+  const j = dokoncene.length
+    ? dokoncene.reduce((a, b) => (b.sekundy < a.sekundy ? b : a))
+    : kandidati[kandidati.length - 1];
+  return { vzorky: j.vzorky, popis: (dokoncene.length ? 'nejlepší ' + hmmss(j.sekundy) : 'minulý pokus') +
+           ' (' + new Date(j.datum).getDate() + '. ' + (new Date(j.datum).getMonth() + 1) + '.)' };
+}
+
+function pripravDucha() {
+  if (duchZnacka && mapa) mapa.removeLayer(duchZnacka);
+  duchZnacka = null; duchMetry = null; predjetoHlaseno = 0;
+  duch = najdiDucha(navrhNazvu || 'Trasa', trasa[trasa.length - 1].d);
+  const info = document.getElementById('duchInfo');
+  info.style.display = duch ? '' : 'none';
+  if (!duch || !mapa) return;
+  document.getElementById('duchPopis').textContent = duch.popis;
+  duchZnacka = L.marker([trasa[0].lat, trasa[0].lon], { icon: L.divIcon({
+    className: 'jezdec duch', iconSize: [34, 34], iconAnchor: [17, 17],
+    html: '<div><svg viewBox="0 0 34 34" width="34" height="34">' +
+          '<circle cx="17" cy="17" r="15" fill="#29b6f6" fill-opacity=".75" stroke="#fff" stroke-width="2"/>' +
+          '<text x="17" y="23" font-size="16" text-anchor="middle">👻</text></svg></div>' }),
+    interactive: false, zIndexOffset: 900 }).addTo(mapa);
+}
+
+// Kde byl duch ve stejném čase jízdy (vzorky jsou po 5 s, dopočítáme mezi nimi)
+function poziceDucha(s) {
+  const v = duch.vzorky;
+  const i = s / 5 - 1;                      // vzorek k = konec 5s bloku
+  if (i <= 0) return v[0][3] * Math.max(0, s / 5);
+  if (i >= v.length - 1) return v[v.length - 1][3];
+  const a = Math.floor(i), t = i - a;
+  return v[a][3] + (v[a + 1][3] - v[a][3]) * t;
+}
+
+function tikDucha() {
+  if (!duch) return;
+  duchMetry = poziceDucha(sekundy);
+  const rozdil = Math.round(trasaMetry - duchMetry);
+  const el = document.getElementById('duchRozdil');
+  el.textContent = (rozdil >= 0 ? '+' : '') + rozdil + ' m';
+  el.style.color = rozdil >= 0 ? '#66bb6a' : '#ff7043';
+  if (duchZnacka) {
+    const p = bodNa(duchMetry);
+    duchZnacka.setLatLng([p.lat, p.lon]);
+  }
+  // Hlas při předjetí (s pásmem 20 m, ať to necvaká sem a tam)
+  // (hlásí se jen skutečné předjetí – z "za" na "před" a naopak)
+  if (rozdil > 20 && predjetoHlaseno !== 1) {
+    if (predjetoHlaseno === -1) rekni('Předjel jsi ducha');
+    predjetoHlaseno = 1;
+  }
+  if (rozdil < -20 && predjetoHlaseno !== -1) {
+    if (predjetoHlaseno === 1) rekni('Duch tě předjel');
+    predjetoHlaseno = -1;
+  }
+}
 
 // Ať tablet během tréninku nezhasne obrazovku
 async function nezhasinej() {
