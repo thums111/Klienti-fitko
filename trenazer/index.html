@@ -206,6 +206,14 @@
   .jn { font-weight: bold; }
   .tlacitkaOkna { margin-top: 12px; }
 
+  /* ===== Rádio ===== */
+  #radioPanel { position: fixed; top: 58px; right: 14px; z-index: 4000; background: #262626ee;
+                border-radius: 12px; padding: 6px 12px; display: flex; align-items: center; gap: 10px;
+                box-shadow: 0 4px 14px #000a; font-size: 16px; }
+  #radioPlay { background: #fb8c00; font-size: 22px; padding: 6px 16px; margin: 0; }
+  #radioStav { min-width: 110px; text-align: left; }
+  #radioHlasitost { width: 140px; accent-color: #fb8c00; }
+
   /* ===== TABLET NA ŠÍŘKU =====
      Když je obrazovka širší než vyšší, dáme dva sloupce vedle sebe:
      vlevo hodnoty, vpravo ovládání. Vše se tak vejde bez posouvání. */
@@ -259,7 +267,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 6.1)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 6.2)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -269,6 +277,7 @@
   <button class="rezim" id="btnCela" title="Celá obrazovka">⛶</button>
   <button class="rezim" id="btnNastaveni" title="Hmotnost, FTP, zvuky, stav připojení">⚙</button>
   <button class="rezim" id="btnHistorie" title="Historie jízd a pokrok">📊</button>
+  <button class="rezim" id="btnRadio" title="Rádio">📻</button>
 </div>
 
 <div class="rozlozeni">
@@ -404,6 +413,13 @@
 </div>
 </div>   <!-- konec pravého sloupce -->
 </div>   <!-- konec rozložení -->
+
+<!-- Rádio: malý panel vpravo nahoře -->
+<div id="radioPanel" style="display:none">
+  <button id="radioPlay">▶</button>
+  <span id="radioStav">Evropa 2</span>
+  <input id="radioHlasitost" type="range" min="0" max="100" value="70" title="Hlasitost">
+</div>
 
 <!-- Okno přes celou obrazovku: souhrn jízdy a historie -->
 <div id="okno" class="okno" style="display:none"><div class="oknoObsah" id="oknoObsah"></div></div>
@@ -1939,6 +1955,8 @@ function rekni(text) {
     const cesky = speechSynthesis.getVoices().find(h => (h.lang || '').toLowerCase().startsWith('cs'));
     if (cesky) u.voice = cesky;
     u.rate = 1.05;
+    radioZtis(true);
+    u.onend = u.onerror = () => radioZtis(false);
     speechSynthesis.speak(u);
   } catch (e) {}
 }
@@ -2317,6 +2335,71 @@ function smazVsechnyJizdy() {
 }
 
 document.getElementById('btnHistorie').addEventListener('click', ukazHistorii);
+
+// ----- 📻 RÁDIO -----
+// Internetové rádio = obyčejný zvukový proud (MP3), přehraje ho prvek <audio>.
+// Další stanici přidáš jedním řádkem do seznamu.
+const STANICE = [
+  { nazev: 'Evropa 2', proudy: ['https://ice.actve.net/fm-evropa2-128',
+                                'https://ice.actve.net/web-e2-csweb'] },
+];
+const radio = new Audio();
+radio.preload = 'none';
+let radioChce = false;        // uživatel chce, aby hrálo
+let radioProud = 0, radioPokusy = 0;
+const radioHlasitost = document.getElementById('radioHlasitost');
+try { const u = localStorage.getItem('radioHlasitost'); if (u) radioHlasitost.value = u; } catch (e) {}
+radio.volume = radioHlasitost.value / 100;
+
+function radioStav(t) { napis('radioStav', t); }
+function radioTlacitka(hraje) {
+  document.getElementById('btnRadio').classList.toggle('aktivni', hraje);
+  document.getElementById('radioPlay').textContent = hraje ? '⏸' : '▶';
+}
+
+function radioPust() {
+  radioChce = true;
+  const st = STANICE[0];
+  radio.src = st.proudy[radioProud] + '?t=' + Date.now();   // ?t= ať se nevezme stará mezipaměť
+  radioStav('Ladím ' + st.nazev + '…');
+  radioTlacitka(true);
+  radio.play().catch(radioChyba);
+}
+function radioZastav(text) {
+  radioChce = false;
+  radio.pause();
+  radio.removeAttribute('src'); radio.load();               // úplně odpojit proud – nežere data
+  radioStav(text || '⏹ ' + STANICE[0].nazev);
+  radioTlacitka(false);
+}
+// Výpadek: zkusíme záložní adresu, pak znovu po 5 s. Po 6 neúspěších to vzdáme.
+function radioChyba() {
+  if (!radioChce) return;
+  radioPokusy++;
+  if (radioPokusy > 6) { radioPokusy = 0; radioZastav('Rádio nejde naladit – je internet?'); return; }
+  radioProud = (radioProud + 1) % STANICE[0].proudy.length;
+  radioStav('Spojení vypadlo, zkouším znovu…');
+  setTimeout(() => { if (radioChce) radioPust(); }, radioPokusy <= 2 ? 300 : 5000);
+}
+radio.addEventListener('error', radioChyba);
+radio.addEventListener('stalled', () => { if (radioChce) radioStav('Načítám… (slabý signál?)'); });
+radio.addEventListener('playing', () => { radioPokusy = 0; radioStav('▶ ' + STANICE[0].nazev); });
+
+document.getElementById('radioPlay').addEventListener('click', () => radioChce ? radioZastav() : radioPust());
+radioHlasitost.addEventListener('input', () => {
+  radio.volume = radioHlasitost.value / 100;
+  try { localStorage.setItem('radioHlasitost', radioHlasitost.value); } catch (e) {}
+});
+document.getElementById('btnRadio').addEventListener('click', () => {
+  const p = document.getElementById('radioPanel');
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+});
+
+// Když mluví trenér (hlas), rádio se na chvíli ztiší
+function radioZtis(ano) {
+  radio.volume = (radioHlasitost.value / 100) * (ano ? 0.25 : 1);
+}
+
 
 // ----- DUCH na trase -----
 // Najde tvou nejlepší dokončenou jízdu na stejné trase (jinak poslední pokus)
