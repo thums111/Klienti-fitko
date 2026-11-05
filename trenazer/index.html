@@ -132,6 +132,13 @@
 
   /* ===== Trasa ===== */
   #mapa { height: 40vh; border-radius: 8px; margin-top: 6px; background: #222; }
+  /* Větší tlačítka +/− na mapě – ať se trefíš i při šlapání */
+  #mapa .leaflet-control-zoom a { width: 52px; height: 52px; line-height: 52px; font-size: 30px; }
+  .tlacSledovat { background: #333; color: #fff; border: none; border-radius: 10px;
+                  font-size: 18px; padding: 12px 16px; box-shadow: 0 2px 6px #0008; cursor: pointer; }
+  .tlacSledovat.zap { background: #fb8c00; }
+  /* Šipka jezdce: otáčí se po směru jízdy */
+  .jezdec div { width: 34px; height: 34px; transition: transform .8s linear; }
   #profil { width: 100%; height: 14vh; display: block; margin-top: 6px; }
   .trasaInfo { display: flex; justify-content: space-around; align-items: center;
                flex-wrap: wrap; font-size: 17px; margin: 4px 0; }
@@ -211,7 +218,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 5.7)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 5.8)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -1291,19 +1298,65 @@ function nactiMojiTrasu(i) {
 
 function stavTrasy(t) { napis('stavTrasa', t); }
 
+// ----- Sledování pozice -----
+let sledovat = true;
+let zoomJizda = 17;           // přiblížení při jízdě (17 ≈ ulice, 19 ≈ jednotlivé domy)
+try { zoomJizda = Number(localStorage.getItem('zoomJizda')) || 17; } catch (e) {}
+let posledniSmer = 0;
+
+function nastavSledovani(zap) {
+  sledovat = zap;
+  const b = document.getElementById('btnSledovat');
+  if (b) b.classList.toggle('zap', zap);
+  if (zap && trasaBezi && tecka) mapa.setView(tecka.getLatLng(), zoomJizda);
+}
+
+// Směr jízdy (azimut) z bodu a do bodu b ve stupních: 0 = sever, 90 = východ
+function smer(a, b) {
+  const rad = Math.PI / 180;
+  const y = Math.sin((b.lon - a.lon) * rad) * Math.cos(b.lat * rad);
+  const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) -
+            Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lon - a.lon) * rad);
+  return (Math.atan2(y, x) / rad + 360) % 360;
+}
+
 // ----- Mapa (Leaflet) -----
 function pripravMapu() {
   if (mapa || typeof L === 'undefined') {
     if (mapa) setTimeout(() => mapa.invalidateSize(), 100);  // po zobrazení přepočítat velikost
     return;
   }
-  mapa = L.map('mapa', { zoomControl: true }).setView([49.8, 15.5], 7);
+  mapa = L.map('mapa', { zoomControl: true, maxZoom: 20 }).setView([49.8, 15.5], 7);
+  // maxNativeZoom = nejbližší přiblížení, které server opravdu má.
+  // Dál už Leaflet jen zvětší poslední dlaždice (trochu rozmazané, ale nezmizí).
   vrstvaMapa = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapa);
+    { maxZoom: 20, maxNativeZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapa);
   vrstvaSatelit = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    { maxZoom: 19, attribution: '© Esri' });
+    { maxZoom: 20, maxNativeZoom: 18, attribution: '© Esri' });
   mapa.on('click', klikDoMapy);
+
+  // Tlačítko "Sledovat" vpravo nahoře v mapě (vlastní ovládací prvek Leafletu)
+  const Sledovat = L.Control.extend({
+    onAdd() {
+      const b = L.DomUtil.create('button', 'tlacSledovat zap');
+      b.id = 'btnSledovat';
+      b.textContent = '📍 Sledovat';
+      L.DomEvent.disableClickPropagation(b);
+      b.addEventListener('click', () => nastavSledovani(!sledovat));
+      return b;
+    }
+  });
+  new Sledovat({ position: 'topright' }).addTo(mapa);
+
+  // Posuneš mapou prstem → sledování se vypne (ať ti neuskakuje pod rukou).
+  // Přiblížení (+/− nebo dva prsty) sledování nechá a zapamatuje si ho.
+  mapa.on('dragstart', () => { if (trasaBezi) nastavSledovani(false); });
+  mapa.on('zoomend', () => {
+    if (!trasaBezi) return;
+    zoomJizda = mapa.getZoom();
+    try { localStorage.setItem('zoomJizda', zoomJizda); } catch (e) {}
+  });
   setTimeout(() => mapa.invalidateSize(), 100);
 }
 
@@ -1435,8 +1488,13 @@ function ukazTrasu() {
     if (tecka) mapa.removeLayer(tecka);
     const ll = trasa.map(b => [b.lat, b.lon]);
     cara = L.polyline(ll, { color: '#fb8c00', weight: 5 }).addTo(mapa);
-    tecka = L.circleMarker(ll[0], { radius: 9, color: '#fff', fillColor: '#e53935',
-                                    fillOpacity: 1, weight: 3 }).addTo(mapa);
+    // Jezdec = červené kolečko s bílou šipkou, která ukazuje směr jízdy
+    tecka = L.marker(ll[0], { icon: L.divIcon({
+      className: 'jezdec', iconSize: [34, 34], iconAnchor: [17, 17],
+      html: '<div><svg viewBox="0 0 34 34" width="34" height="34">' +
+            '<circle cx="17" cy="17" r="15" fill="#e53935" stroke="#fff" stroke-width="3"/>' +
+            '<path d="M17 6 L25 24 L17 20 L9 24 Z" fill="#fff"/></svg></div>' }),
+      interactive: false, zIndexOffset: 1000 }).addTo(mapa);
     mapa.fitBounds(cara.getBounds(), { padding: [20, 20] });
   }
   trasaMetry = 0;
@@ -1524,7 +1582,17 @@ function tikTrasy() {
   napis('tStoupani', Math.round(stoupani));
   if (tecka) {
     tecka.setLatLng([p.lat, p.lon]);
-    mapa.panTo([p.lat, p.lon], { animate: true });
+    // Natočení šipky: směr k bodu 25 m před tebou
+    const dal = bodNa(trasaMetry + 25);
+    if (Math.abs(dal.lat - p.lat) + Math.abs(dal.lon - p.lon) > 1e-7) {
+      // nejkratší cestou (z 350° na 10° je to +20°, ne −340°)
+      const rozdil = ((smer(p, dal) - posledniSmer) % 360 + 540) % 360 - 180;
+      posledniSmer += rozdil;
+      const el = tecka.getElement();
+      if (el) el.firstChild.style.transform = 'rotate(' + posledniSmer + 'deg)';
+    }
+    // Mapa jede s tebou – plynule, posun trvá 1 s (stejně jako krok výpočtu)
+    if (sledovat) mapa.panTo([p.lat, p.lon], { animate: true, duration: 1, easeLinearity: 1 });
   }
   kresliProfil(trasaMetry);
 
@@ -1558,7 +1626,8 @@ document.getElementById('btnStartTrasy').addEventListener('click', () => {
   document.getElementById('vyberTrasy').style.display = 'none';
   if (mapa) {
     mapa.invalidateSize();               // řádek s výběrem zmizel → mapa je větší
-    mapa.setView([trasa[0].lat, trasa[0].lon], 16);
+    mapa.setView([trasa[0].lat, trasa[0].lon], zoomJizda);
+    nastavSledovani(true);
   }
   kresleni = false;
   document.getElementById('kresleniInfo').style.display = 'none';
