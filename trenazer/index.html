@@ -259,7 +259,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 6.0)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 6.1)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -2012,13 +2012,23 @@ function sestavJizdu(navic) {
 }
 
 // ----- Historie (v tabletu / PC, localStorage) -----
+// Klíč "trenazerHistorie" – ať se historie nikdy nepoplete s jinou aplikací na stejném webu.
+// (Verze 6.0 ukládala pod "historie" – jednorázově přesuneme.)
+try {
+  const stara = localStorage.getItem('historie');
+  if (stara && !localStorage.getItem('trenazerHistorie')) {
+    localStorage.setItem('trenazerHistorie', stara);
+    localStorage.removeItem('historie');
+  }
+} catch (e) {}
+
 function nactiHistorii() {
-  try { return JSON.parse(localStorage.getItem('historie') || '[]'); } catch (e) { return []; }
+  try { return JSON.parse(localStorage.getItem('trenazerHistorie') || '[]'); } catch (e) { return []; }
 }
 function ulozHistorii(h) {
   // Když dojde místo, smažeme nejstarší jízdy a zkusíme znovu
   while (true) {
-    try { localStorage.setItem('historie', JSON.stringify(h)); return true; }
+    try { localStorage.setItem('trenazerHistorie', JSON.stringify(h)); return true; }
     catch (e) { if (h.length <= 1) return false; h.splice(0, Math.max(1, Math.floor(h.length / 10))); }
   }
 }
@@ -2190,7 +2200,15 @@ function ukazHistorii() {
         '<span style="color:#ff5252">' + (j.prumTep || '--') + ' ♥</span>' +
       '</div>').join('') : '<p>Zatím žádná uložená jízda. Jízdy delší než minuta se ukládají samy.</p>') +
     '</div>' +
-    '<div class="tlacitkaOkna"><button class="maly" id="oZavrit">Zavřít</button></div>';
+    '<div class="tlacitkaOkna">' +
+      '<button class="maly" id="oZavrit">Zavřít</button>' +
+      '<button class="maly" id="oZaloha" style="background:#1e88e5">💾 Zálohovat do souboru</button>' +
+      '<label class="maly tlacSoubor" style="background:#1e88e5">📂 Obnovit ze souboru' +
+        '<input type="file" id="oObnovit" accept=".json,application/json"></label>' +
+      (h.length ? '<button class="maly" id="oSmazatVse" style="background:#7a2020">🗑 Smazat všechny jízdy</button>' : '') +
+    '</div>' +
+    '<div class="datum">Uloženo ' + h.length + ' jízd · zabírá ' +
+      Math.max(1, Math.round((localStorage.getItem('trenazerHistorie') || '').length / 1024)) + ' kB</div>';
   okno.style.display = 'flex';
   document.getElementById('oZavrit').onclick = zavriOkno;
   const uk = document.getElementById('oUkoncit');
@@ -2200,6 +2218,10 @@ function ukazHistorii() {
   });
   const gp = document.getElementById('grafPokrok');
   if (gp) kresliPokrok(gp, h.slice(-20));
+  document.getElementById('oZaloha').onclick = stahniZalohu;
+  document.getElementById('oObnovit').onchange = e => { if (e.target.files[0]) obnovZalohu(e.target.files[0]); };
+  const sv = document.getElementById('oSmazatVse');
+  if (sv) sv.onclick = smazVsechnyJizdy;
 }
 
 function kresliPokrok(c, jizdy) {
@@ -2225,6 +2247,73 @@ function kresliPokrok(c, jizdy) {
     g2.fillStyle = '#888';
     if (jizdy.length <= 12 || i % 2 === 0) g2.fillText(d.getDate() + '.' + (d.getMonth() + 1) + '.', x + sirka / 2 - 22, H - 6);
   });
+}
+
+
+// ----- Záloha, obnovení, smazání všeho -----
+// Do zálohy patří jen data trenažéru (ne ostatních aplikací na stejném webu).
+const KLICE_NASTAVENI = ['hmotnost', 'ftp', 'maxTepNast', 'zvukZap', 'hlasZap', 'trenink', 'zoomJizda',
+  ...POLE.map(id => 'int_' + id)];
+
+function stahniZalohu() {
+  const nastaveni = {};
+  KLICE_NASTAVENI.forEach(k => { try { const v = localStorage.getItem(k); if (v !== null) nastaveni[k] = v; } catch (e) {} });
+  const zaloha = { aplikace: 'trenazer', vytvoreno: new Date().toISOString(),
+                   historie: nactiHistorii(), trasy: nactiMojeTrasy(), nastaveni };
+  const blob = new Blob([JSON.stringify(zaloha)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'trenazer-zaloha-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// Obnovení SLUČUJE: jízdy, které už máš, se nezdvojí (pozná je podle data),
+// trasy se doplní podle názvu. Hodí se i na přenos tablet ↔ PC.
+function obnovZalohu(soubor) {
+  soubor.text().then(text => {
+    let z;
+    try { z = JSON.parse(text); } catch (e) { alert('Tohle není soubor se zálohou trenažéru.'); return; }
+    if (!z || z.aplikace !== 'trenazer') { alert('Tohle není soubor se zálohou trenažéru.'); return; }
+
+    const h = nactiHistorii();
+    const uz = new Set(h.map(j => j.datum));
+    const nove = (z.historie || []).filter(j => j && j.datum && !uz.has(j.datum));
+    const vse = h.concat(nove).sort((a, b) => a.datum < b.datum ? -1 : 1);
+    ulozHistorii(vse);
+
+    const t = nactiMojeTrasy();
+    const nazvy = new Set(t.map(x => x.nazev));
+    const noveTrasy = (z.trasy || []).filter(x => x && x.nazev && !nazvy.has(x.nazev));
+    try { ulozMojeTrasy(t.concat(noveTrasy)); } catch (e) {}
+    naplnSeznamTras();
+
+    let zprava = 'Obnoveno: ' + nove.length + ' jízd a ' + noveTrasy.length + ' tras.';
+    if (z.nastaveni && Object.keys(z.nastaveni).length &&
+        confirm(zprava + '\n\nNačíst i nastavení ze zálohy (FTP, max tep, hmotnost, zvuky)?')) {
+      Object.entries(z.nastaveni).forEach(([k, v]) => {
+        if (KLICE_NASTAVENI.includes(k)) try { localStorage.setItem(k, v); } catch (e) {}
+      });
+      if (zaznam.length < 60 || confirm('Stránka se teď načte znovu, aby se nastavení projevilo. Rozjetá jízda se uloží.')) {
+        if (zaznam.length >= 60) ukonciJizdu(false);
+        location.reload();
+        return;
+      }
+    } else {
+      alert(zprava);
+    }
+    ukazHistorii();
+  });
+}
+
+function smazVsechnyJizdy() {
+  const h = nactiHistorii();
+  if (!h.length) return;
+  if (!confirm('Smazat VŠECH ' + h.length + ' uložených jízd?\n\nTrasy a nastavení zůstanou.')) return;
+  if (!confirm('Opravdu? Tohle nejde vrátit. (Pokud chceš, zruš to a nejdřív si stáhni zálohu.)')) return;
+  ulozHistorii([]);
+  ukazHistorii();
 }
 
 document.getElementById('btnHistorie').addEventListener('click', ukazHistorii);
