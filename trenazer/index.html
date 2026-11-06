@@ -311,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 9.1)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 9.2)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -370,6 +370,10 @@
     × <input id="korekceW" type="text" inputmode="decimal" value="1.00"
     style="width:70px;font-size:18px;text-align:center">
     <small style="color:#888">(1,20 = kolo ukazuje o 20 % méně, než šlapeš)</small><br></span>
+  📈 VO2max z Garminu <span id="vo2SportText">(kolo)</span>:
+    <input id="vo2Garmin" type="text" inputmode="decimal" placeholder="např. 47"
+    style="width:70px;font-size:18px;text-align:center">
+    <small style="color:#888" id="vo2KalibInfo">(nezkalibrováno)</small><br>
   <span class="jenBeh">🏃 Prahové tempo <input id="prahTempo" type="text" value="5:00"
     style="width:70px;font-size:18px;text-align:center"> min/km ·
   max. rychlost pásu <input id="maxRychlostPasu" type="number" value="20" min="4" max="25" step="0.5"> km/h<br></span>
@@ -2475,6 +2479,54 @@ function vo2Cislo(j) {
   const o = odhadVo2(j, Number(poleHmotnost.value) || 75, maxTepN());
   return o.hodnota || 0;
 }
+// ===== Kalibrace VO2max podle Garminu =====
+// Každý má trochu jiný vztah tepu a výkonu (někomu tep "vyskočí" a drží se vysoko).
+// Zadáš jednou hodnotu z Garminu, aplikace ji porovná s odhadem z posledních jízd
+// a zapamatuje si osobní násobek. Pak sedí číslo i trend.
+const klicVo2 = () => 'vo2Faktor:' + sport;
+function vo2Faktor() {
+  try { return Number(localStorage.getItem(klicVo2())) || 1; } catch (e) { return 1; }
+}
+function ukazVo2Kalibraci() {
+  napis('vo2SportText', jeBeh() ? '(běh)' : '(kolo)');
+  const f = vo2Faktor();
+  let g = '';
+  try { g = localStorage.getItem('vo2Garmin:' + sport) || ''; } catch (e) {}
+  document.getElementById('vo2Garmin').value = g;
+  napis('vo2KalibInfo', f !== 1 ? '(kalibrováno ×' + f.toFixed(2).replace('.', ',') + ')' : '(nezkalibrováno)');
+}
+document.getElementById('vo2Garmin').addEventListener('change', e => {
+  const txt = String(e.target.value).trim().replace(',', '.');
+  if (!txt) {                                   // prázdné = zrušit kalibraci
+    try { localStorage.removeItem(klicVo2()); localStorage.removeItem('vo2Garmin:' + sport); } catch (e2) {}
+    ukazVo2Kalibraci(); return;
+  }
+  const g = Number(txt);
+  if (!(g >= 20 && g <= 90)) { alert('Zadej číslo VO2max z Garminu, např. 47.'); ukazVo2Kalibraci(); return; }
+  const surove = nactiHistorii().filter(j => (j.sport || 'kolo') === sport)
+    .map(j => vo2Jizdy(j)).filter(x => x > 0).slice(-3);
+  if (!surove.length) {
+    alert('Zatím nemám žádnou jízdu s odhadem VO2max (' + (jeBeh() ? 'běh' : 'kolo') +
+          '). Odjeď aspoň 20 minut s hrudním pásem a zkus to pak znovu.');
+    ukazVo2Kalibraci(); return;
+  }
+  const prum = surove.reduce((a, b) => a + b, 0) / surove.length;
+  const f = Math.max(0.7, Math.min(1.5, g / prum));
+  try { localStorage.setItem(klicVo2(), f); localStorage.setItem('vo2Garmin:' + sport, g); } catch (e2) {}
+  ukazVo2Kalibraci();
+  alert('Hotovo: odhad z ' + surove.length + (surove.length === 1 ? ' jízdy' : ' jízd') + ' byl ' +
+        prum.toFixed(1).replace('.', ',') + ', Garmin ' + g + ' → násobek ×' + f.toFixed(2).replace('.', ',') +
+        '.\nOd teď ukazuju VO2max už s touto kalibrací.');
+});
+// VO2max k zobrazení = surový odhad × osobní kalibrace
+function vo2Zobraz(j) {
+  const x = vo2Jizdy(j);
+  if (!x) return 0;
+  let f = 1;
+  try { f = Number(localStorage.getItem('vo2Faktor:' + (j.sport || 'kolo'))) || 1; } catch (e) {}
+  return x * f;
+}
+
 // Starší jízdy (před verzí 8.9) odhad uložený nemají – spočítáme ho dodatečně
 function vo2Jizdy(j) { return j.vo2v === 2 ? j.vo2 : vo2Cislo(j); }
 
@@ -2581,7 +2633,7 @@ function souhrnBehu(j) {
 }
 
 function vo2Text(j) {
-  const x = vo2Jizdy(j);
+  const x = vo2Zobraz(j);
   if (x) return Math.round(x);
   const o = odhadVo2(j, Number(poleHmotnost.value) || 75, maxTepN());
   return '<small style="font-size:13px;font-weight:normal;color:#888">-- ' + (o.chyba || '') + '</small>';
@@ -2746,7 +2798,7 @@ function ukazHistorii() {
   const h = nactiHistorii();
   const hSport = h.filter(j => (j.sport || 'kolo') === sport);   // graf pokroku jen pro aktuální sport
   const bezi = zaznam.length >= 60;
-  const vo2Body = hSport.map(j => [j, vo2Jizdy(j)]).filter(x => x[1] > 0).slice(-20);
+  const vo2Body = hSport.map(j => [j, vo2Zobraz(j)]).filter(x => x[1] > 0).slice(-20);
   // Pokrok: průměrný výkon (sloupce) a NP (tečky) posledních 20 jízd
   oknoObsah.innerHTML =
     '<h2>📊 Historie jízd</h2>' +
@@ -2865,7 +2917,7 @@ function kresliPokrok(c, jizdy) {
 
 // ----- Záloha, obnovení, smazání všeho -----
 // Do zálohy patří jen data trenažéru (ne ostatních aplikací na stejném webu).
-const KLICE_NASTAVENI = ['hmotnost', 'ftp', 'maxTepNast', 'korekceW:Zycle Infinity', 'korekceW:Trinfit', 'zvukZap', 'hlasZap', 'trenink', 'zoomJizda',
+const KLICE_NASTAVENI = ['hmotnost', 'ftp', 'maxTepNast', 'korekceW:Zycle Infinity', 'korekceW:Trinfit', 'vo2Faktor:kolo', 'vo2Faktor:beh', 'vo2Garmin:kolo', 'vo2Garmin:beh', 'zvukZap', 'hlasZap', 'trenink', 'zoomJizda',
   'sport', 'prahTempo', 'maxRychlostPasu', 'treninkBeh',
   ...POLE.map(id => 'int_' + id), ...POLE.map(id => 'intb_' + id)];
 
@@ -3410,6 +3462,7 @@ function nastavSport(s, prvni) {
   ['rozW', 'praceW', 'odpW', 'vyjW'].forEach(id => document.getElementById(id).step = beh ? '0.1' : '1');
   nactiIntervaly();
   naplnKnihovnu();
+  ukazVo2Kalibraci();
 
   // Trasy podle míst: na běh pěšky/trail, na kolo cyklotrasy
   const pr = document.getElementById('profilTrasy');
