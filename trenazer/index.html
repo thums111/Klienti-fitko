@@ -311,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 9.2)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 9.3)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -2424,6 +2424,7 @@ function sestavJizdu(navic) {
     vzorky,
   }, navic || {});
   jz.vo2 = vo2Cislo(jz); jz.vo2v = 2;
+  if (!jeBeh()) jz.korekce = korekceW;     // s jakou korekcí wattů se jelo
   return jz;
 }
 
@@ -2503,8 +2504,11 @@ document.getElementById('vo2Garmin').addEventListener('change', e => {
   }
   const g = Number(txt);
   if (!(g >= 20 && g <= 90)) { alert('Zadej číslo VO2max z Garminu, např. 47.'); ukazVo2Kalibraci(); return; }
-  const surove = nactiHistorii().filter(j => (j.sport || 'kolo') === sport)
-    .map(j => vo2Jizdy(j)).filter(x => x > 0).slice(-3);
+  // Na kalibraci bereme jen jízdy, kde už byla korekce wattů uložená (od verze 9.3);
+  // starší jízdy jen když žádné novější nejsou.
+  const vSportu = nactiHistorii().filter(j => (j.sport || 'kolo') === sport && vo2Jizdy(j) > 0);
+  const nove = vSportu.filter(j => j.sport === 'beh' || j.korekce !== undefined);
+  const surove = (nove.length ? nove : vSportu).map(j => vo2Jizdy(j)).slice(-3);
   if (!surove.length) {
     alert('Zatím nemám žádnou jízdu s odhadem VO2max (' + (jeBeh() ? 'běh' : 'kolo') +
           '). Odjeď aspoň 20 minut s hrudním pásem a zkus to pak znovu.');
