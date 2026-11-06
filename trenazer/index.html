@@ -118,6 +118,9 @@
      Jednotka vh = 1 % výšky obrazovky, vw = 1 % šířky –
      čísla se tak sama přizpůsobí velikosti displeje. */
   body.volna #sloupecOvladani { display: none; }
+  /* Na běhu ale ve volném běhu necháme rychlovolbu rychlosti a sklonu pásu */
+  body.volna.beh #sloupecOvladani { display: block; margin-top: 10px; }
+  body.volna #panelInterval { display: none; }
   body.volna .rozlozeni { display: block; }
   body.volna .mrizka { gap: 14px; }
   body.volna .dlazdice { padding: 1vh 6px; }
@@ -303,7 +306,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 8.6)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 8.7)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
