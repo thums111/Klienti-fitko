@@ -311,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 9.7)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 9.8)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -822,9 +822,10 @@ function dataPasu(ud) {
   if (f & 0x0004) i += 3;                                // celková vzdálenost (3 bajty)
   if (f & 0x0008) {                                      // sklon (0,1 %) + úhel rampy
     const hlaseny = d.getInt16(i, true) / 10; i += 4;
-    // Pás hlásí 1 %, ale my jsme mu poslali 0 % → ve skutečnosti stojí na rovině
-    sklonPasuAkt = (posunSklonuPasu > 0 && hlaseny <= posunSklonuPasu &&
-                    (posledniSklonPasu ?? 0) < posunSklonuPasu) ? 0 : hlaseny;
+    // Tunturi na rovině hlásí 1 %. Když jsme mu poslali 0 % (nebo ještě nic),
+    // stojí ve skutečnosti na 0 % → ukážeme 0 a nepočítáme nastoupané metry.
+    const spodni = Math.max(1, posunSklonuPasu);
+    sklonPasuAkt = (hlaseny <= spodni && (posledniSklonPasu ?? 0) < spodni) ? 0 : hlaseny;
     napis('kadence', sklonPasuAkt.toFixed(sklonPasuAkt % 1 ? 1 : 0));
   }
   if (f & 0x0010) i += 4;                                // převýšení +/−
