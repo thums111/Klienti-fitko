@@ -311,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 9.4)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 9.5)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -854,6 +854,8 @@ async function pripojBezeckyPas() {
   try {
     const s = await (await sluzba.getCharacteristic(0x2AD5)).readValue();
     pasRozsah.sMin = s.getInt16(0, true) / 10; pasRozsah.sMax = s.getInt16(2, true) / 10;
+    // Tunturi hlásí nejnižší sklon 1 %, i když rovinu (0 %) umí → spodní hranice vždy 0 %
+    if (pasRozsah.sMin > 0) pasRozsah.sMin = 0;
   } catch (e) {}
   try {
     ovladani = await sluzba.getCharacteristic(0x2AD9);
