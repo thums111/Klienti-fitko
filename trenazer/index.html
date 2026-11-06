@@ -311,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 9.3)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 9.4)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -1654,6 +1654,29 @@ function odemkniOtaceni() {
 }
 odemkniOtaceni();
 document.addEventListener('click', odemkniOtaceni, { once: true });
+
+// Automatická aktualizace: po otevření se podíváme na GitHub, jestli tam není novější verze.
+// Když ano, stránka se jednou sama znovu načte (obejde paměť prohlížeče).
+(function hlidejVerzi() {
+  const moje = (document.querySelector('h1 small') || {}).textContent || '';
+  const zkontroluj = () => fetch(location.pathname + '?kontrola=' + Date.now(), { cache: 'no-store' })
+    .then(r => r.ok ? r.text() : '')
+    .then(t => {
+      const m = t.match(/\(verze [0-9.]+\)/);
+      if (m && moje && m[0] !== moje && !zaznam.length) {
+        // pojistka proti nekonečnému načítání: stejnou verzi zkusíme jen jednou za minutu
+        try {
+          const posl = JSON.parse(sessionStorage.getItem('aktualizace') || '{}');
+          if (posl.v === m[0] && Date.now() - posl.t < 60000) return;
+          sessionStorage.setItem('aktualizace', JSON.stringify({ v: m[0], t: Date.now() }));
+        } catch (e) {}
+        location.replace(location.pathname + '?v=' + m[0].replace(/\D/g, ''));
+      }
+    }).catch(() => {});
+  setTimeout(zkontroluj, 1500);
+  // když se aplikace vrátí z pozadí (tablet byl uspaný), zkontrolujeme znovu
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) zkontroluj(); });
+})();
 
 document.getElementById('btnVolna').addEventListener('click', () => {
   nastavRezim('volna'); celaObrazovka();
