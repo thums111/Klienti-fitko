@@ -208,6 +208,9 @@
   .jd { color: #888; font-size: 14px; }
   .jn { font-weight: bold; }
   .tlacitkaOkna { margin-top: 12px; }
+  .vyberKola { margin-top: 10px; color: #aaa; }
+  .volbaKola { background: #333; }
+  .volbaKola.aktivni { background: #fb8c00; color: #fff; }
 
   /* ===== Rádio ===== */
   #radioPanel { position: fixed; top: 58px; right: 14px; z-index: 4000; background: #262626ee;
@@ -270,7 +273,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 6.9)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 7.0)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -2172,7 +2175,9 @@ function ukazSouhrn(j, indexVHistorii) {
       '<button class="maly" id="oHistorie">📊 Historie</button>' +
       '<button class="maly" id="oTcx" style="background:#1e88e5">⌚ Export pro Garmin (.tcx)</button>' +
       (indexVHistorii >= 0 ? '<button class="maly" id="oPrejmenovat">✏️ Přejmenovat</button>' : '') +
-      (indexVHistorii >= 0 ? '<button class="maly" id="oKolo">🚲 Změnit kolo</button>' : '') +
+      (indexVHistorii >= 0 ? '<div class="vyberKola">🚲 Kolo: ' + seznamKol().map(k =>
+        '<button class="maly volbaKola' + (k === j.kolo ? ' aktivni' : '') + '" data-kolo="' + k + '">' + k + '</button>'
+      ).join('') + '</div>' : '') +
       (indexVHistorii >= 0 ? '<button class="maly" id="oSmazat" style="background:#7a2020">🗑 Smazat jízdu</button>' : '') +
     '</div>';
   okno.style.display = 'flex';
@@ -2181,8 +2186,8 @@ function ukazSouhrn(j, indexVHistorii) {
   document.getElementById('oTcx').onclick = () => stahniTcx(j);
   const pj = document.getElementById('oPrejmenovat');
   if (pj) pj.onclick = () => prejmenujJizdu(indexVHistorii);
-  const ok = document.getElementById('oKolo');
-  if (ok) ok.onclick = () => zmenKolo(indexVHistorii);
+  oknoObsah.querySelectorAll('.volbaKola').forEach(b =>
+    b.onclick = () => zmenKolo(indexVHistorii, b.dataset.kolo));
   const sm = document.getElementById('oSmazat');
   if (sm) sm.onclick = () => {
     if (!confirm('Opravdu smazat tuhle jízdu?')) return;
@@ -2401,13 +2406,15 @@ function prejmenujJizdu(i) {
 }
 
 // U starších jízd (bez údaje o kole) si kolo doplníš: každé klepnutí = další kolo v řadě
-function zmenKolo(i) {
+function seznamKol() {
+  return [...new Set(['Zycle Infinity', 'Trinfit', jmenoKolaHezky,
+                      ...nactiHistorii().map(x => x.kolo)].filter(Boolean))];
+}
+function zmenKolo(i, kolo) {
   const h = nactiHistorii();
   const j = h[i];
-  if (!j) return;
-  const kola = [...new Set(['Zycle Infinity', 'Trinfit', jmenoKolaHezky,
-                            ...h.map(x => x.kolo)].filter(Boolean))];
-  j.kolo = kola[(kola.indexOf(j.kolo) + 1) % kola.length];
+  if (!j || !kolo) return;
+  j.kolo = kolo;
   ulozHistorii(h);
   ukazSouhrn(j, i);
 }
@@ -2548,6 +2555,14 @@ var duchMetry = null;     // kde je duch teď (m)
 var duchZnacka = null;
 var predjetoHlaseno = 0;  // ať hlas nehlásí předjetí pořád dokola
 
+// Názvy porovnáváme volně: "Ještěd", "ještěd", "Jested" i "Ještěd (stoupák)" = stejná trasa.
+// (bez diakritiky, malými písmeny, bez textu v závorce; délka trasy musí sedět)
+function stejnyNazev(a, b) {
+  const n = t => (t || '').split('(')[0].normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return n(a) !== '' && n(a) === n(b);
+}
+
 function najdiDucha(nazev, delka) {
   const stejnaDelka = j => Math.abs((j.trasaDelka || 0) - delka) < Math.max(100, delka * 0.02);
   // Oprava z verze 6.5: jízdy uložené pod "brouter_…" na stejně dlouhé trase přejmenujeme
@@ -2557,7 +2572,7 @@ function najdiDucha(nazev, delka) {
     if (j.rezim === 'trasa' && /^brouter/i.test(j.nazev || '') && stejnaDelka(j)) { j.nazev = nazev; opraveno = true; }
   });
   if (opraveno) ulozHistorii(h);
-  const naTrase = h.filter(j => j.rezim === 'trasa' && j.nazev === nazev && stejnaDelka(j));
+  const naTrase = h.filter(j => j.rezim === 'trasa' && stejnyNazev(j.nazev, nazev) && stejnaDelka(j));
   // Duch jen ze stejného kola – Trinfit a Zycle se poctivě porovnat nedají.
   // Jízdy bez údaje o kole (ze starších verzí) bereme jen, když ze stejného kola nic není.
   let kandidati = naTrase.filter(j => j.kolo && j.kolo === jmenoKolaHezky);
