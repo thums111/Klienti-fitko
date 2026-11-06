@@ -288,7 +288,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 8.0)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 8.1)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -445,7 +445,9 @@
   </div>
   <div id="kresleniInfo" class="radek" style="display:none">
     Klepej do mapy – body trasy: <b id="pocetBodu">0</b>
-    <button class="maly" id="btnSpocitat">Spočítat trasu</button>
+    <button class="maly" id="btnMojePoloha" title="Znovu zjistit polohu a dát ji jako start">📍 Moje poloha</button>
+    <button class="maly" id="btnZpetNaStart">↩ Zpět na start</button>
+    <button class="maly" id="btnSpocitat" style="background:#43a047">Spočítat trasu</button>
     <button class="maly" id="btnSmazatBody">Smazat</button>
   </div>
   <div id="mapa"></div>
@@ -1895,30 +1897,70 @@ document.getElementById('souborGpx').addEventListener('change', e => {
 });
 
 // ----- Vlastní trasa: klepání do mapy -----
+// ----- Kreslení trasy: start = tvoje aktuální poloha -----
+var startPoloha = null;      // [lon, lat] – kde právě jsi
+var znackaStart = null;
+
+function ukazStart() {
+  if (!startPoloha || !mapa) return;
+  if (znackaStart) mapa.removeLayer(znackaStart);
+  znackaStart = L.circleMarker([startPoloha[1], startPoloha[0]],
+    { radius: 11, color: '#fff', weight: 3, fillColor: '#43a047', fillOpacity: 1 }).addTo(mapa);
+  if (znackaStart.bindTooltip) znackaStart.bindTooltip('📍 Start – tady jsi', { permanent: true, direction: 'top' });
+}
+// Body trasy: start (poloha) je vždy první a drží se, i když ostatní body smažeš
+function zacniOdStartu() {
+  znackyBodu.forEach(z => mapa.removeLayer(z));
+  znackyBodu = [];
+  kresleneBody = startPoloha ? [startPoloha.slice()] : [];
+  napis('pocetBodu', kresleneBody.length);
+}
+async function zjistiStart() {
+  stavTrasy('📍 Zjišťuji tvoji polohu…');
+  try {
+    startPoloha = await mojePoloha();
+    ukazStart();
+    zacniOdStartu();
+    mapa.setView([startPoloha[1], startPoloha[0]], 14);
+    stavTrasy('📍 Start je tvoje poloha. Klepej do mapy, kudy chceš ' + (jeBeh() ? 'běžet' : 'jet') + '.');
+  } catch (chyba) {
+    stavTrasy('Polohu se nepodařilo zjistit (' + chyba.message + ') – klepni start do mapy sám.');
+  }
+}
+
 document.getElementById('btnKreslit').addEventListener('click', () => {
   pripravMapu();
   kresleni = !kresleni;
   document.getElementById('kresleniInfo').style.display = kresleni ? '' : 'none';
   document.getElementById('btnKreslit').textContent = kresleni ? 'Hotovo' : 'Kreslit';
+  if (kresleni) {
+    if (!startPoloha) zjistiStart();
+    else { ukazStart(); if (!kresleneBody.length) zacniOdStartu(); mapa.setView([startPoloha[1], startPoloha[0]], 14); }
+  } else if (znackaStart) {
+    mapa.removeLayer(znackaStart); znackaStart = null;
+  }
 });
-
+document.getElementById('btnMojePoloha').addEventListener('click', zjistiStart);
+document.getElementById('btnZpetNaStart').addEventListener('click', () => {
+  if (!kresleneBody.length) return;
+  const s0 = kresleneBody[0];
+  kresleneBody.push(s0.slice());
+  znackyBodu.push(L.circleMarker([s0[1], s0[0]], { radius: 6, color: '#fb8c00' }).addTo(mapa));
+  napis('pocetBodu', kresleneBody.length);
+  stavTrasy('↩ Cíl = start (okruh). Teď dej Spočítat trasu.');
+});
 function klikDoMapy(e) {
   if (!kresleni) return;
   kresleneBody.push([e.latlng.lng, e.latlng.lat]);
   znackyBodu.push(L.circleMarker(e.latlng, { radius: 6, color: '#fb8c00' }).addTo(mapa));
   napis('pocetBodu', kresleneBody.length);
 }
-
-document.getElementById('btnSmazatBody').addEventListener('click', () => {
-  znackyBodu.forEach(z => mapa.removeLayer(z));
-  kresleneBody = []; znackyBodu = [];
-  napis('pocetBodu', 0);
-});
-
+document.getElementById('btnSmazatBody').addEventListener('click', zacniOdStartu);
 document.getElementById('btnSpocitat').addEventListener('click', () => {
-  if (kresleneBody.length < 2) { stavTrasy('Klepni aspoň 2 body (start a cíl).'); return; }
+  if (kresleneBody.length < 2) { stavTrasy('Klepni aspoň 1 bod do mapy (start už máš).'); return; }
   navrhNazvu = 'Moje trasa';
-  trasaZBrouteru(kresleneBody);
+  // na běh pěší cesty a trail, na kolo silnice
+  trasaZBrouteru(kresleneBody, jeBeh() ? 'hiking-mountain' : 'fastbike');
 });
 
 // ----- Zobrazení trasy -----
