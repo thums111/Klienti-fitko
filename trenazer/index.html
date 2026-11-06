@@ -311,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 8.9)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 9.0)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -2401,7 +2401,7 @@ function sestavJizdu(navic) {
     zony: casVZonach.slice(), zonyT: casVZonachT.slice(),
     vzorky,
   }, navic || {});
-  jz.vo2 = vo2Cislo(jz);
+  jz.vo2 = vo2Cislo(jz); jz.vo2v = 2;
   return jz;
 }
 
@@ -2441,11 +2441,13 @@ function odhadVo2(j, kg, hrMax) {
     if (t.some(x => !x)) continue;
     if (Math.max(...t) - Math.min(...t) > 5) continue;                   // tep se ještě hýbe
     const tPrum = t.reduce((a, b) => a + b, 0) / t.length;
-    if (tPrum < 0.6 * hrMax || tPrum > 0.97 * hrMax) continue;
+    // Nad 90 % max. tepu už tep roste rychleji než spotřeba kyslíku (a při dlouhém kopci
+    // ještě "ujíždí" – cardiac drift). Takové úseky by odhad stáhly dolů, tak je vynecháme.
+    if (tPrum < 0.6 * hrMax || tPrum > 0.9 * hrMax) continue;
     const podil = (tPrum - KLIDOVY_TEP) / (hrMax - KLIDOVY_TEP);
     odhady.push(3.5 + (dPrum - 3.5) / podil);
   }
-  if (odhady.length < 5) return { chyba: 'málo rovnoměrných úseků se zvýšeným tepem' };
+  if (odhady.length < 5) return { chyba: 'chce to aspoň 3 minuty rovnoměrně v tepu ' + Math.round(0.6 * hrMax) + '–' + Math.round(0.9 * hrMax) };
   odhady.sort((a, b) => a - b);
   const med = odhady[Math.floor(odhady.length / 2)];
   if (med < 15 || med > 90) return { chyba: 'nesedí data (zkontroluj max tep a hmotnost)' };
@@ -2456,7 +2458,7 @@ function vo2Cislo(j) {
   return o.hodnota || 0;
 }
 // Starší jízdy (před verzí 8.9) odhad uložený nemají – spočítáme ho dodatečně
-function vo2Jizdy(j) { return j.vo2 !== undefined ? j.vo2 : vo2Cislo(j); }
+function vo2Jizdy(j) { return j.vo2v === 2 ? j.vo2 : vo2Cislo(j); }
 
 // ----- Historie (v tabletu / PC, localStorage) -----
 // Klíč "trenazerHistorie" – ať se historie nikdy nepoplete s jinou aplikací na stejném webu.
