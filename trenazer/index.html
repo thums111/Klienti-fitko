@@ -203,7 +203,7 @@
   .souhrnMrizka b { display: block; font-size: 26px; }
   .souhrnMrizka span { font-size: 13px; color: #999; }
   #grafJizdy { width: 100%; height: 34vh; display: block; }
-  #grafPokrok { width: 100%; height: 22vh; display: block; }
+  #grafPokrok, #grafVo2 { width: 100%; height: 22vh; display: block; }
   .legenda { font-size: 14px; margin: 2px 0 6px; }
   .legenda span { margin: 0 8px; }
   .zonyTab { max-width: 700px; margin: 0 auto; }
@@ -311,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 8.8)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 8.9)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -2260,7 +2260,7 @@ setInterval(() => {
     if (!jeBeh()) casVZonach[zonaW(posledniVykon)]++;
     if (tepPlatny) casVZonachT[zonaT(tepAkt)]++;
     zaznam.push([Math.round(posledniVykon), tepPlatny ? tepAkt : 0,
-                 Math.round(kadenceAkt), Math.round(rychlostKola * 10), Math.round(metry)]);
+                 Math.round(jeBeh() ? sklonPasuAkt * 10 : kadenceAkt), Math.round(rychlostKola * 10), Math.round(metry)]);
     if (zaznam.length % 5 === 0) kresliZonyBar();
   }
 }, 1000);
@@ -2384,7 +2384,7 @@ function sestavJizdu(navic) {
       ? (aktualniRezim === 'volna' ? 'Volný běh' : aktualniRezim === 'trasa' ? 'Běh (bez trasy)' : 'Běh na pásu')
       : (aktualniRezim === 'volna' ? 'Volná jízda' : aktualniRezim === 'trasa' ? 'Jízda (bez trasy)' : 'ERG jízda'),
   };
-  return Object.assign({
+  const jz = Object.assign({
     datum: new Date().toISOString(),
     rezim: info.rezim, nazev: info.nazev, trasaDelka: info.trasaDelka || 0,
     kolo: jmenoKolaHezky || '',
@@ -2401,7 +2401,62 @@ function sestavJizdu(navic) {
     zony: casVZonach.slice(), zonyT: casVZonachT.slice(),
     vzorky,
   }, navic || {});
+  jz.vo2 = vo2Cislo(jz);
+  return jz;
 }
+
+// =====================================================================
+// ===== ODHAD VO2max – podobně jako Garmin (Firstbeat) =====
+// =====================================================================
+// 1) Najdeme minutové úseky, kdy jedeš/běžíš rovnoměrně a tep je ustálený.
+// 2) Z výkonu spočítáme, kolik kyslíku tělo v tu chvíli potřebuje (ml/kg/min):
+//      kolo: 7 + 10,8 × W/kg                       (vzorec ACSM pro kolo)
+//      běh:  3,5 + 0,2 × v + 0,9 × v × sklon        (ACSM, v = m/min, sklon = 0,05 pro 5 %)
+// 3) Tep řekne, na kolik procent rezervy jsi (klidový → maximální tep).
+//    Stejné procento kyslíkové rezervy → dopočítáme, kolik by bylo na 100 %.
+// 4) Ze všech úseků vezmeme prostřední hodnotu (medián) – jeden ujetý úsek nic nezkazí.
+const KLIDOVY_TEP = 55;
+function odhadVo2(j, kg, hrMax) {
+  const v = j.vzorky || [];
+  if (!j.sekundy || j.sekundy < 1200 || v.length < 200) return { chyba: 'potřebuje aspoň 20 minut' };
+  const beh = j.sport === 'beh';
+  const narok = v.map((r, i) => {
+    if (i === v.length - 1) return 0;                  // poslední vzorek bývá kratší než 5 s
+    if (beh) {
+      const mmin = Math.max(0, r[3] - (i ? v[i - 1][3] : 0)) / 5 * 60;
+      const sklon = Math.max(0, (r[2] || 0) / 1000);   // uložený sklon ×10 v % → podíl
+      if (mmin < 50) return 0;
+      return mmin < 110 ? 3.5 + 0.1 * mmin + 1.8 * mmin * sklon      // chůze
+                        : 3.5 + 0.2 * mmin + 0.9 * mmin * sklon;     // běh
+    }
+    return r[0] > 30 ? 7 + 10.8 * r[0] / kg : 0;
+  });
+  const odhady = [];
+  for (let i = 0; i + 12 <= v.length; i += 6) {        // okno 60 s, posun 30 s
+    const d = narok.slice(i, i + 12);
+    if (d.some(x => x <= 0)) continue;
+    const dPrum = d.reduce((a, b) => a + b, 0) / 12;
+    if ((Math.max(...d) - Math.min(...d)) / dPrum > 0.2) continue;       // nerovnoměrné
+    const t = v.slice(i + 6, i + 12).map(r => r[1]);                     // tep z 2. půlminuty
+    if (t.some(x => !x)) continue;
+    if (Math.max(...t) - Math.min(...t) > 5) continue;                   // tep se ještě hýbe
+    const tPrum = t.reduce((a, b) => a + b, 0) / t.length;
+    if (tPrum < 0.6 * hrMax || tPrum > 0.97 * hrMax) continue;
+    const podil = (tPrum - KLIDOVY_TEP) / (hrMax - KLIDOVY_TEP);
+    odhady.push(3.5 + (dPrum - 3.5) / podil);
+  }
+  if (odhady.length < 5) return { chyba: 'málo rovnoměrných úseků se zvýšeným tepem' };
+  odhady.sort((a, b) => a - b);
+  const med = odhady[Math.floor(odhady.length / 2)];
+  if (med < 15 || med > 90) return { chyba: 'nesedí data (zkontroluj max tep a hmotnost)' };
+  return { hodnota: Math.round(med * 10) / 10, useku: odhady.length };
+}
+function vo2Cislo(j) {
+  const o = odhadVo2(j, Number(poleHmotnost.value) || 75, maxTepN());
+  return o.hodnota || 0;
+}
+// Starší jízdy (před verzí 8.9) odhad uložený nemají – spočítáme ho dodatečně
+function vo2Jizdy(j) { return j.vo2 !== undefined ? j.vo2 : vo2Cislo(j); }
 
 // ----- Historie (v tabletu / PC, localStorage) -----
 // Klíč "trenazerHistorie" – ať se historie nikdy nepoplete s jinou aplikací na stejném webu.
@@ -2501,9 +2556,16 @@ function souhrnBehu(j) {
     ['Nejrychlejší minuta', tempoText(nej) + ' /km'], ['Nastoupáno', (j.nastoupano || 0) + ' m'],
     ['Kalorie (odhad)', Math.round((Number(poleHmotnost.value) || 75) * j.m / 1000) + ' kcal'],
     ['Prům. tep', j.prumTep || '--'], ['Max tep', j.maxTep || '--'], ['Pás', j.kolo || '--'],
+    ['VO2max (odhad)', vo2Text(j)],
   ];
 }
 
+function vo2Text(j) {
+  const x = vo2Jizdy(j);
+  if (x) return Math.round(x);
+  const o = odhadVo2(j, Number(poleHmotnost.value) || 75, maxTepN());
+  return '<small style="font-size:13px;font-weight:normal;color:#888">-- ' + (o.chyba || '') + '</small>';
+}
 function ukazSouhrn(j, indexVHistorii) {
   const behJ = j.sport === 'beh';
   const dlazdice = behJ ? souhrnBehu(j) : [
@@ -2511,6 +2573,7 @@ function ukazSouhrn(j, indexVHistorii) {
     ['Prům. výkon', j.prumW + ' W'], ['NP', j.np + ' W'], ['Max výkon', j.maxW + ' W'],
     ['Práce', j.kJ + ' kJ'], ['TSS', j.tss], ['Prům. kadence', j.prumKad],
     ['Prům. tep', j.prumTep || '--'], ['Max tep', j.maxTep || '--'],
+    ['VO2max (odhad)', vo2Text(j)],
   ];
   oknoObsah.innerHTML =
     '<h2>' + (j.dokoncena ? '🏁 ' : '') + j.nazev + '</h2>' +
@@ -2663,6 +2726,7 @@ function ukazHistorii() {
   const h = nactiHistorii();
   const hSport = h.filter(j => (j.sport || 'kolo') === sport);   // graf pokroku jen pro aktuální sport
   const bezi = zaznam.length >= 60;
+  const vo2Body = hSport.map(j => [j, vo2Jizdy(j)]).filter(x => x[1] > 0).slice(-20);
   // Pokrok: průměrný výkon (sloupce) a NP (tečky) posledních 20 jízd
   oknoObsah.innerHTML =
     '<h2>📊 Historie jízd</h2>' +
@@ -2671,6 +2735,8 @@ function ukazHistorii() {
         jeBeh() ? ['běh', 'běhy', 'běhů'] : ['jízda', 'jízdy', 'jízd']) + ')</h3><canvas id="grafPokrok"></canvas>' +
       (jeBeh() ? '<div class="legenda"><span style="color:#4dd0e1">▮ prům. rychlost</span> <span style="color:#ff5252">● prům. tep</span></div>'
                : '<div class="legenda"><span style="color:#ffca28">▮ prům. výkon</span> <span style="color:#fff">● NP</span> <span style="color:#ff5252">● prům. tep</span></div>') : '') +
+    (vo2Body.length >= 1 ? '<h3>VO2max – ' + (jeBeh() ? 'běh' : 'kolo') + ' (odhad, posledních ' + vo2Body.length + ')</h3>' +
+      '<canvas id="grafVo2"></canvas>' : '') +
     '<div class="seznamJizd">' + (h.length ? h.map((j, i) => [j, i]).reverse().map(([j, i]) =>
       '<div class="jizda" data-i="' + i + '">' +
         '<span class="jd">' + datumCz(j.datum) + '</span>' +
@@ -2703,10 +2769,48 @@ function ukazHistorii() {
   });
   const gp = document.getElementById('grafPokrok');
   if (gp) kresliPokrok(gp, hSport.slice(-20));
+  const gv = document.getElementById('grafVo2');
+  if (gv) kresliVo2(gv, vo2Body);
   document.getElementById('oZaloha').onclick = stahniZalohu;
   document.getElementById('oObnovit').onchange = e => { if (e.target.files[0]) obnovZalohu(e.target.files[0]); };
   const sv = document.getElementById('oSmazatVse');
   if (sv) sv.onclick = smazVsechnyJizdy;
+}
+
+// Vývoj VO2max: tečky = jednotlivé jízdy, čára = klouzavý průměr posledních 5 (jako trend v Garminu)
+function kresliVo2(c, body) {
+  const W = c.width = c.clientWidth * 2, H = c.height = c.clientHeight * 2;
+  const g2 = c.getContext('2d');
+  const hodn = body.map(b => b[1]);
+  const lo = Math.floor(Math.min(...hodn) - 3), hi = Math.ceil(Math.max(...hodn) + 3);
+  const X = i => 50 + (body.length === 1 ? (W - 80) / 2 : i * (W - 80) / (body.length - 1));
+  const Y = x => 20 + (hi - x) / (hi - lo) * (H - 60);
+  g2.font = '20px system-ui';
+  // vodorovné linky po 1 (nebo 2) jednotkách
+  const krok = hi - lo > 12 ? 2 : 1;
+  for (let y = Math.ceil(lo / krok) * krok; y <= hi; y += krok) {
+    g2.strokeStyle = '#333'; g2.lineWidth = 1;
+    g2.beginPath(); g2.moveTo(45, Y(y)); g2.lineTo(W - 10, Y(y)); g2.stroke();
+    g2.fillStyle = '#888'; g2.fillText(y, 5, Y(y) + 7);
+  }
+  // trend
+  g2.strokeStyle = '#ab47bc'; g2.lineWidth = 5; g2.beginPath();
+  hodn.forEach((x, i) => {
+    const okno = hodn.slice(Math.max(0, i - 4), i + 1);
+    const t = okno.reduce((a, b) => a + b, 0) / okno.length;
+    i ? g2.lineTo(X(i), Y(t)) : g2.moveTo(X(i), Y(t));
+  });
+  g2.stroke();
+  body.forEach(([j, x], i) => {
+    g2.fillStyle = '#e1bee7';
+    g2.beginPath(); g2.arc(X(i), Y(x), 8, 0, 7); g2.fill();
+    const d = new Date(j.datum);
+    g2.fillStyle = '#888';
+    if (body.length <= 12 || i % 2 === 0) g2.fillText(d.getDate() + '.' + (d.getMonth() + 1) + '.', X(i) - 22, H - 8);
+  });
+  // poslední hodnota velkým písmem
+  g2.fillStyle = '#e1bee7'; g2.font = 'bold 34px system-ui';
+  g2.fillText(Math.round(hodn[hodn.length - 1]), Math.min(W - 60, X(hodn.length - 1) + 14), Y(hodn[hodn.length - 1]) - 12);
 }
 
 function kresliPokrok(c, jizdy) {
