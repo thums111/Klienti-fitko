@@ -146,6 +146,10 @@
   .trasaInfo b { font-size: 22px; }
   #tSklon { color: #ff7043; }
   #btnStartTrasy { background: #43a047; }
+  #mistaInfo label { white-space: nowrap; }
+  #mistaInfo input[type=checkbox] { width: auto; transform: scale(1.4); margin: 0 6px 0 10px; }
+  #mista { width: 340px; max-width: 60%; font-size: 18px; padding: 8px; background: #2a2a2a;
+           color: #eee; border: 1px solid #555; border-radius: 6px; }
   .obtiznost { white-space: nowrap; }
   .obtiznost button { padding: 6px 14px; font-size: 22px; margin: 2px; }
   #obtStupen { display: inline-block; min-width: 30px; color: #ff7043; }
@@ -273,7 +277,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 7.0)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 7.1)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -396,9 +400,20 @@
     <select id="seznamTras"></select>
     <button class="maly" id="btnNacist">Načíst</button>
     <label class="maly tlacSoubor">GPX<input type="file" id="souborGpx" accept=".gpx"></label>
+    <button class="maly" id="btnMista">🔤 Podle míst</button>
     <button class="maly" id="btnKreslit">Kreslit</button>
     <button class="maly" id="btnUlozitTrasu">💾 Uložit</button>
     <button class="maly" id="btnSmazatTrasu" style="display:none">🗑 Smazat</button>
+  </div>
+  <div id="mistaInfo" class="radek" style="display:none">
+    <input id="mista" type="text" placeholder="např. Liberec, Chrastava, zpět" autocomplete="off">
+    <label><input type="checkbox" id="odsud"> 📍 ze své polohy</label>
+    <select id="profilTrasy" title="Po čem trasa povede">
+      <option value="trekking">🚲 po cyklotrasách</option>
+      <option value="fastbike-lowtraffic">🛣 silnice, malý provoz</option>
+      <option value="fastbike">🛣 silnice, nejrychleji</option>
+    </select>
+    <button class="maly" id="btnNajitMista" style="background:#43a047">Najít trasu</button>
   </div>
   <div id="kresleniInfo" class="radek" style="display:none">
     Klepej do mapy – body trasy: <b id="pocetBodu">0</b>
@@ -1614,10 +1629,13 @@ function vzdalenostBodu(a, b) {
 }
 
 // Požádáme BRouter o trasu mezi body. Vrátí GPX i s výškami.
-async function trasaZBrouteru(body) {
+// profil: 'fastbike' = silnice (výchozí – přednastavené trasy ať zůstanou stejné),
+// 'trekking' = cyklotrasy, 'fastbike-lowtraffic' = silnice s malým provozem
+async function trasaZBrouteru(body, profil = 'fastbike') {
   const lonlats = body.map(b => b[0].toFixed(5) + ',' + b[1].toFixed(5)).join('|');
   const url = 'https://brouter.de/brouter?lonlats=' + lonlats +
-              '&profile=fastbike&alternativeidx=0&format=gpx';
+              '&profile=' + profil +
+              '&alternativeidx=0&format=gpx';
   stavTrasy('Počítám trasu…');
   try {
     const odpoved = await fetch(url);
@@ -2717,6 +2735,92 @@ btnKalib.addEventListener('click', () => {
   ulozKalibraci();
   napis('kalibInfo', 'kalibrováno ✓');
 });
+
+
+// ----- TRASA PODLE MÍST: "Liberec, Chrastava, zpět" -----
+// Místa najde OpenStreetMap (služba Nominatim, zdarma), trasu spočítá BRouter.
+// Nominatim chce nejvýš 1 dotaz za sekundu – proto se ptáme postupně s pauzou.
+const poleMista = document.getElementById('mista');
+const poleProfil = document.getElementById('profilTrasy');
+const zaskrtOdsud = document.getElementById('odsud');
+try {
+  poleMista.value = localStorage.getItem('mista') || '';
+  poleProfil.value = localStorage.getItem('profilTrasy') || 'trekking';
+  zaskrtOdsud.checked = localStorage.getItem('odsud') === '1';
+} catch (e) {}
+poleProfil.addEventListener('change', () => { try { localStorage.setItem('profilTrasy', poleProfil.value); } catch (e) {} });
+zaskrtOdsud.addEventListener('change', () => { try { localStorage.setItem('odsud', zaskrtOdsud.checked ? '1' : '0'); } catch (e) {} });
+
+const pauza = ms => new Promise(r => setTimeout(r, ms));
+
+// Najde jedno místo. "u" = předchozí bod – hledáme přednostně v jeho okolí,
+// ať "Chrastava" je ta u Liberce a ne jiná stejného jména.
+async function najdiMisto(nazev, u) {
+  let url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=cs&q=' +
+            encodeURIComponent(nazev);
+  if (u) url += '&viewbox=' + [u[0] - 0.6, u[1] + 0.4, u[0] + 0.6, u[1] - 0.4].map(x => x.toFixed(3)).join(',');
+  const odp = await fetch(url);
+  if (!odp.ok) throw new Error('hledání míst nefunguje (' + odp.status + ')');
+  const v = await odp.json();
+  if (!v.length) return null;
+  return { bod: [Number(v[0].lon), Number(v[0].lat)], jmeno: v[0].display_name.split(',')[0] };
+}
+
+// Aktuální poloha z tabletu/PC (prohlížeč se jednou zeptá na povolení)
+function mojePoloha() {
+  return new Promise((ok, chyba) => {
+    if (!navigator.geolocation) { chyba(new Error('zařízení neumí zjistit polohu')); return; }
+    navigator.geolocation.getCurrentPosition(
+      p => ok([p.coords.longitude, p.coords.latitude]),
+      e => chyba(new Error(e.code === 1 ? 'poloha nepovolena' : 'polohu se nepodařilo zjistit')),
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
+  });
+}
+
+async function trasaPodleMist() {
+  const text = poleMista.value.trim();
+  try { localStorage.setItem('mista', text); } catch (e) {}
+  const casti = text.split(/[,;\n]+/).map(t => t.trim()).filter(Boolean);
+  if (!casti.length && !zaskrtOdsud.checked) { stavTrasy('Napiš místa oddělená čárkou, např. Liberec, Chrastava, zpět'); return; }
+  pripravMapu();
+
+  const body = [], jmena = [];
+  try {
+    if (zaskrtOdsud.checked) {
+      stavTrasy('Zjišťuji tvoji polohu…');
+      body.push(await mojePoloha());
+      jmena.push('Odsud');
+    }
+    for (const c of casti) {
+      // "zpět" / "domů" / "start" = návrat na první bod (okruh)
+      if (/^(zpět|zpet|zpátky|zpatky|domů|domu|start|okruh)$/i.test(c)) {
+        if (!body.length) continue;
+        body.push(body[0]); jmena.push('zpět');
+        continue;
+      }
+      stavTrasy('Hledám: ' + c + '…');
+      if (jmena.length) await pauza(1100);              // pravidla Nominatimu: 1 dotaz/s
+      const m = await najdiMisto(c, body[body.length - 1]);
+      if (!m) { stavTrasy('Místo „' + c + '“ jsem nenašel – zkus ho napsat jinak (např. „Chrastava, Liberec“).'); return; }
+      body.push(m.bod); jmena.push(m.jmeno);
+    }
+  } catch (chyba) {
+    stavTrasy('Nepodařilo se: ' + chyba.message);
+    return;
+  }
+  if (body.length < 2) { stavTrasy('Potřebuju aspoň dvě místa (start a cíl), nebo zaškrtni „ze své polohy“.'); return; }
+
+  navrhNazvu = jmena.join(' – ');
+  await trasaZBrouteru(body, poleProfil.value);
+}
+
+document.getElementById('btnMista').addEventListener('click', () => {
+  const r = document.getElementById('mistaInfo');
+  r.style.display = r.style.display === 'none' ? '' : 'none';
+  if (r.style.display === '') poleMista.focus();
+});
+document.getElementById('btnNajitMista').addEventListener('click', trasaPodleMist);
+poleMista.addEventListener('keydown', e => { if (e.key === 'Enter') trasaPodleMist(); });
 
 // Ať tablet během tréninku nezhasne obrazovku
 async function nezhasinej() {
