@@ -95,7 +95,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
-<h1>Běžecký pás <small style="color:#555">(verze 1.6)</small></h1>
+<h1>Běžecký pás <small style="color:#555">(verze 1.7)</small></h1>
 
 <button id="btnPripojit">Připojit pás</button>
 <button id="btnTep">Připojit hrudní pás</button>
@@ -226,6 +226,9 @@ document.getElementById('btnPripojit').addEventListener('click', async () => {
       const s = await (await sl.getCharacteristic(0x2AD5)).readValue();
       rozsah.sMin = s.getInt16(0, true) / 10; rozsah.sMax = s.getInt16(2, true) / 10;
       napis('rozsahS', rozsah.sMin + ' až ' + rozsah.sMax + ' %');
+      // Některé pásy hlásí nejnižší sklon 1 %, i když rovinu (0 %) umí.
+      // Proto spodní hranici bereme vždy 0 % (z kopce ale nejdeme).
+      if (rozsah.sMin > 0) rozsah.sMin = 0;
     } catch (e) { napis('rozsahS', 'neuvádí'); }
 
     // Ovládání
