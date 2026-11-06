@@ -224,6 +224,17 @@
   #radioStav { min-width: 110px; text-align: left; }
   #radioHlasitost { width: 140px; accent-color: #fb8c00; }
 
+  /* ===== Kolo / běh ===== */
+  .jenBeh { display: none; }
+  body.beh .jenBeh { display: inline; }
+  body.beh div.jenBeh { display: block; }
+  body.beh button.jenBeh { display: inline-block; }
+  body.beh .jenKolo { display: none !important; }
+  #btnSport { background: #00897b; }
+  body.beh .vykon { color: #4dd0e1; }       /* tempo */
+  body.beh .kadence { color: #a5d6a7; }     /* sklon pásu */
+  .rv { min-width: 44px; }
+
   /* ===== TABLET NA ŠÍŘKU =====
      Když je obrazovka širší než vyšší, dáme dva sloupce vedle sebe:
      vlevo hodnoty, vpravo ovládání. Vše se tak vejde bez posouvání. */
@@ -277,9 +288,11 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 7.2)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 8.0)</small></h1>
+  <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
-  <button id="btnPas">Připojit pás</button>
+  <button id="btnPas">❤ Připojit tep</button>
+  <button class="jenBeh" id="btnStopPas" style="background:#c62828" title="Zastavit běžecký pás">⏹ STOP</button>
   <span class="oddelovac"></span>
   <button class="rezim" id="btnVolna">Volná jízda</button>
   <button class="rezim" id="btnIntervaly">Intervaly</button>
@@ -330,11 +343,14 @@
          style="width:60px;font-size:18px;text-align:center"> kg ·
   FTP <input id="ftp" type="number" value="200" min="50" max="600"> W ·
   Max tep <input id="maxTepNast" type="number" value="170" min="100" max="230"><br>
+  <span class="jenBeh">🏃 Prahové tempo <input id="prahTempo" type="text" value="5:00"
+    style="width:70px;font-size:18px;text-align:center"> min/km ·
+  max. rychlost pásu <input id="maxRychlostPasu" type="number" value="20" min="4" max="25" step="0.5"> km/h<br></span>
   <label><input type="checkbox" id="zvukZap" checked> 🔔 Pípání</label>
   <label><input type="checkbox" id="hlasZap" checked> 🗣 Hlas</label><br>
-  Převody: <span id="kalibInfo">--</span> · stupňů
+  <span class="jenKolo">Převody: <span id="kalibInfo">--</span> · stupňů
   <input id="prevodPocet" type="number" value="20" min="5" max="30">
-  <button class="maly" id="btnKalib">⚙ Kalibrovat převody</button><br>
+  <button class="maly" id="btnKalib">⚙ Kalibrovat převody</button><br></span>
   Čas v zónách: <div id="zonyBar"></div>
   Vzdálenost: <b id="vzdalenost">0.00</b> km<br>
   Prům. výkon: <b id="prumVykon">--</b> W<br>
@@ -346,17 +362,28 @@
 
 <div class="stav" id="stavKolo">Kolo: nepřipojeno</div>
 <div class="stav" id="stavOvladani">Ovládání: --</div>
-<div class="stav" id="stavPas">Pás: nepřipojeno</div>
+<div class="stav" id="stavPas">Tep: nepřipojeno</div>
 </div>   <!-- konec levého sloupce -->
 
 <div class="sloupec" id="sloupecOvladani">   <!-- PRAVÝ sloupec: ovládání -->
 <!-- ===== ERG: kolo drží nastavené watty ===== -->
 <div class="panel" id="panelErg">
-  <h2>ERG – pevný výkon</h2>
+  <h2 id="ergNadpis">ERG – pevný výkon</h2>
   <button class="maly" id="minus10">−10</button>
-  <span class="cil"><span id="cilW">150</span> W</span>
+  <span class="cil"><span id="cilW">150</span> <span id="cilJednotka">W</span></span>
   <button class="maly" id="plus10">+10</button>
-  <button id="btnErg">Zapnout ERG</button>
+  <button id="btnErg" class="jenKolo">Zapnout ERG</button>
+  <div class="jenBeh" id="pasOvladani">
+    <div class="radek">
+      <button class="maly rv" data-v="6">6</button><button class="maly rv" data-v="8">8</button>
+      <button class="maly rv" data-v="10">10</button><button class="maly rv" data-v="12">12</button>
+      <button class="maly rv" data-v="14">14</button><button class="maly rv" data-v="16">16</button>
+      <button class="maly rv" data-v="18">18</button> km/h
+    </div>
+    <div class="radek">Sklon <button class="maly" id="sklonMinus">−1</button>
+      <b id="cilSklonPasu">0</b> %
+      <button class="maly" id="sklonPlus">+1</button></div>
+  </div>
   <div id="ergInfo"></div>
 </div>
 
@@ -367,7 +394,7 @@
   <select id="vyberTreninku"></select>
   <!-- Tabulka: každý řádek = jedna fáze, barevný proužek vlevo -->
   <table class="tabInt" id="tabVlastni">
-    <tr><th></th><th>Fáze</th><th>Minuty</th><th>Watty</th></tr>
+    <tr><th></th><th>Fáze</th><th>Minuty</th><th id="hlavickaCil">Watty</th></tr>
     <tr class="fRoz"><td class="pruh"></td><td>Rozjetí</td>
       <td><input id="rozMin" type="number" value="10"></td>
       <td><input id="rozW" type="number" value="120"></td></tr>
@@ -412,6 +439,7 @@
       <option value="trekking">🚲 po cyklotrasách</option>
       <option value="fastbike-lowtraffic">🛣 silnice, malý provoz</option>
       <option value="fastbike">🛣 silnice, nejrychleji</option>
+      <option value="hiking-mountain">🥾 pěšky / trail</option>
     </select>
     <button class="maly" id="btnNajitMista" style="background:#43a047">Najít trasu</button>
   </div>
@@ -466,10 +494,21 @@ let sekundy = 0;          // čas jízdy
 let posledniVykon = 0;    // aktuální výkon (pro časovač)
 let hladkyVykon = null;   // vyhlazený výkon – podle něj se řídí ERG
 
+// ===== SPORT: 🚴 kolo / 🏃 běh =====
+var sport = 'kolo';
+try { sport = localStorage.getItem('sport') === 'beh' ? 'beh' : 'kolo'; } catch (e) {}
+function jeBeh() { return sport === 'beh'; }
+var rychlostPasu = 0;      // km/h z běžeckého pásu
+var sklonPasuAkt = 0;      // % sklon hlášený pásem
+var nastoupanoBeh = 0;     // m – převýšení ze sklonu pásu
+var tepHrudniCas = 0;      // kdy naposledy přišel tep z hrudního pásu
+// Pohyb (auto-pauza): na kole výkon > 0, na pásu rychlost > 0,5 km/h
+function jedu() { return jeBeh() ? rychlostPasu > 0.5 : posledniVykon > 0; }
+
 // Časovač: každou sekundu.
 // Čas běží jen když šlapete (výkon > 0) – jako auto-pauza.
 setInterval(() => {
-  if (posledniVykon > 0) {
+  if (jedu()) {
     sekundy++;
     vykonSoucet += posledniVykon;
     vykonPocet++;
@@ -522,6 +561,7 @@ function novyTep(udalost) {
 
   napis('tep', tep);
   tepAkt = tep; tepCas = Date.now();      // pro zóny a záznam jízdy
+  tepHrudniCas = tepCas;
   napis('prumTep', Math.round(tepSoucet / tepPocet));
   napis('maxTep', tepMax);
 }
@@ -678,11 +718,13 @@ setInterval(() => {
 
 // ===== Tlačítka =====
 document.getElementById('btnPas').addEventListener('click', () =>
-  pripojZarizeni(0x180D, 0x2A37, novyTep, 'stavPas', 'Pás'));
+  pripojZarizeni(0x180D, 0x2A37, novyTep, 'stavPas', 'Tep'));
 
 document.getElementById('btnKolo').addEventListener('click', async () => {
+  if (jeBeh()) { pripojBezeckyPas(); return; }      // 🏃 běžecký pás
   const sluzba = await pripojZarizeni(0x1826, 0x2AD2, novaDataKola, 'stavKolo', 'Kolo');
   if (sluzba) {
+    pripojeneZarizeni = sluzba.device;
     // Každý výrobce si normu vykládá trochu jinak – podle jména kola
     // nastavíme, jak číst rychlost.
     const jmeno = (sluzba.device.name || '').toLowerCase();
@@ -694,6 +736,116 @@ document.getElementById('btnKolo').addEventListener('click', async () => {
     pripravOvladani(sluzba);
   }
 });
+
+
+// =====================================================================
+// ===== 🏃 BĚŽECKÝ PÁS (FTMS Treadmill) =====
+// =====================================================================
+// Stejná norma jako u kola (služba 0x1826), jen jiný "šuplík" s daty:
+//   0x2ACD = Treadmill Data (rychlost, vzdálenost, sklon, tep…)
+//   0x2AD4 / 0x2AD5 = rozsah rychlosti / sklonu, který pás umí
+//   0x2AD9 = Control Point – příkazy 0x02 rychlost, 0x03 sklon, 0x08 stop
+// Na rozdíl od kola pásu NIKDY neposíláme "start" sami od sebe – pás by se rozjel.
+const PAS = { RYCHLOST: 0x02, SKLON: 0x03, STOP: 0x08 };
+var pasRozsah = { rMin: 0.8, rMax: 20, sMin: 0, sMax: 15 };
+var pripojeneZarizeni = null;   // kolo nebo pás – ať ho při přepnutí sportu odpojíme
+
+// Rychlost → tempo "5:12" (min/km)
+function tempoText(kmh) {
+  if (!kmh || kmh < 0.5) return '--';
+  const s = Math.round(3600 / kmh);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+// Čtení dat z pásu – příznaky říkají, co v balíčku je (jako u kola)
+function dataPasu(ud) {
+  const d = ud.target.value;
+  const bajty = [];
+  for (let i = 0; i < d.byteLength; i++) bajty.push(d.getUint8(i).toString(16).padStart(2, '0'));
+  napis('surovaData', bajty.join(' '));
+  const f = d.getUint16(0, true);
+  let i = 2;
+  if (!(f & 0x0001)) {                                   // bit 0 obráceně: 0 = rychlost JE
+    const v = d.getUint16(i, true) / 100; i += 2;        // 0,01 km/h
+    rychlostPasu = v;
+    rychlostKola = v;           // podle "rychlosti stroje" se počítají km, trasa i duch
+    napis('rychlost', v.toFixed(1));
+    napis('vykon', tempoText(v));
+  }
+  if (f & 0x0002) i += 2;                                // průměrná rychlost
+  if (f & 0x0004) i += 3;                                // celková vzdálenost (3 bajty)
+  if (f & 0x0008) {                                      // sklon (0,1 %) + úhel rampy
+    sklonPasuAkt = d.getInt16(i, true) / 10; i += 4;
+    napis('kadence', sklonPasuAkt.toFixed(sklonPasuAkt % 1 ? 1 : 0));
+  }
+  if (f & 0x0010) i += 4;                                // převýšení +/−
+  if (f & 0x0020) i += 1;                                // okamžité tempo
+  if (f & 0x0040) i += 1;                                // průměrné tempo
+  if (f & 0x0080) i += 5;                                // energie
+  if (f & 0x0100) {                                      // tep z madel pásu
+    const t = d.getUint8(i); i += 1;
+    // jen když není připojený hrudní pás (ten je přesnější)
+    if (t > 0 && Date.now() - tepHrudniCas > 5000) { tepAkt = t; tepCas = Date.now(); napis('tep', t); }
+  }
+  if (f & 0x0200) i += 1;                                // MET
+  if (f & 0x0400) i += 2;                                // uplynulý čas
+  if (f & 0x0800) i += 2;                                // zbývající čas
+  if (f & 0x1000) {                                      // síla na pás + výkon
+    i += 2;
+    posledniVykon = Math.max(0, d.getInt16(i, true)); i += 2;
+  }
+}
+
+async function pripojBezeckyPas() {
+  const sluzba = await pripojZarizeni(0x1826, 0x2ACD, dataPasu, 'stavKolo', 'Běžecký pás');
+  if (!sluzba) return;
+  pripojeneZarizeni = sluzba.device;
+  jmenoKola = (sluzba.device.name || '').toLowerCase();
+  jmenoKolaHezky = sluzba.device.name || 'Běžecký pás';
+  try {
+    const r = await (await sluzba.getCharacteristic(0x2AD4)).readValue();
+    pasRozsah.rMin = r.getUint16(0, true) / 100; pasRozsah.rMax = r.getUint16(2, true) / 100;
+  } catch (e) {}
+  try {
+    const s = await (await sluzba.getCharacteristic(0x2AD5)).readValue();
+    pasRozsah.sMin = s.getInt16(0, true) / 10; pasRozsah.sMax = s.getInt16(2, true) / 10;
+  } catch (e) {}
+  try {
+    ovladani = await sluzba.getCharacteristic(0x2AD9);
+    await ovladani.startNotifications();
+    ovladani.addEventListener('characteristicvaluechanged', odpovedKola);
+    await posli([PRIKAZ.PREVZIT_RIZENI]);
+    napis('stavOvladani', 'Ovládání pásu: připraveno · rychlost ' + pasRozsah.rMin + '–' +
+      pasRozsah.rMax + ' km/h · sklon ' + pasRozsah.sMin + ' až ' + pasRozsah.sMax + ' %');
+  } catch (e) {
+    ovladani = null;
+    napis('stavOvladani', 'Pás posílá jen data – ovládat ho aplikace nemůže');
+  }
+}
+
+function maxRychlostPasu() {
+  return Math.min(pasRozsah.rMax, Number(document.getElementById('maxRychlostPasu').value) || 20);
+}
+// Rychlost pásu (km/h): 2 bajty v setinách
+function posliRychlostPasu(kmh) {
+  kmh = Math.round(Math.max(pasRozsah.rMin, Math.min(maxRychlostPasu(), kmh)) * 10) / 10;
+  const v = Math.round(kmh * 100);
+  posli([PAS.RYCHLOST, v & 0xFF, (v >> 8) & 0xFF]);
+  return kmh;
+}
+// Sklon pásu: pás bere jen celá procenta a nejde z kopce → zaokrouhlit a omezit
+var posledniSklonPasu = null;
+function posliSklonPasu(proc) {
+  const p = Math.round(Math.max(Math.max(0, pasRozsah.sMin), Math.min(pasRozsah.sMax, proc)));
+  if (p === posledniSklonPasu) return;
+  posledniSklonPasu = p;
+  const s = (p * 10) & 0xFFFF;
+  posli([PAS.SKLON, s & 0xFF, (s >> 8) & 0xFF]);
+}
+function zastavPas() {
+  posli([PAS.STOP, 0x01]);              // 0x01 = zastavit (pás zpomalí sám, plynule)
+  posledniSklonPasu = null;
+}
 
 // =====================================================================
 // ===== KROK 3: OVLÁDÁNÍ KOLA (FTMS Control Point) =====
@@ -999,7 +1151,7 @@ function odpovedKola(udalost) {
       // 5 = "řízení není povoleno": kolo nás "zapomnělo" (třeba po pauze).
       // Znovu převezmeme řízení a příkaz zopakujeme.
       posli([PRIKAZ.PREVZIT_RIZENI]);
-      posli([PRIKAZ.START]);
+      if (!jeBeh()) posli([PRIKAZ.START]);
       posliSimulaci(posledniSklonPoslany);
     } else if (vysledek === 3) {
       // 3 = "neplatná hodnota": tenhle sklon kolo neumí → zúžíme rozsah
@@ -1018,7 +1170,7 @@ function odpovedKola(udalost) {
   }
   if (vysledek === 5) {                    // i u jiných příkazů: znovu převzít řízení
     posli([PRIKAZ.PREVZIT_RIZENI]);
-    posli([PRIKAZ.START]);
+    if (!jeBeh()) posli([PRIKAZ.START]);   // pás se sám od sebe rozjíždět nesmí
   }
   if (vysledek !== 1) {
     napis('stavOvladani', 'Kolo odmítlo příkaz 0x' + prikaz.toString(16) +
@@ -1031,6 +1183,7 @@ function odpovedKola(udalost) {
 // Např. 250 W = 0x00FA → bajty [0xFA, 0x00]
 let posledniCil = null;
 function nastavVykon(w) {
+  if (jeBeh()) { cilZmenen = Date.now(); posliRychlostPasu(w); return; }   // 🏃 rychlost pásu
   w = Math.round(w);
   cilZmenen = Date.now();
   if (posledniCil !== null && posledniCil !== w) skokNaCil(posledniCil, w);
@@ -1043,6 +1196,7 @@ function nastavVykon(w) {
 // Tím ERG vypneme a odpor zase řídí rychlost a převody.
 // Bajty: vítr (2), sklon (2, v setinách %), valivý odpor (1), vzduch (1)
 function volnaJizda(sklonProcent = 0) {
+  if (jeBeh()) { posliSklonPasu(sklonProcent); napis('cilSklonPasu', posledniSklonPasu); return; }
   zastavRegulator();
   if (!umiSimulaci) {
     // Kolo neumí simulaci: na trase převedeme sklon na úroveň odporu
@@ -1061,13 +1215,18 @@ function volnaJizda(sklonProcent = 0) {
 let cilW = 150;
 let ergZapnuto = false;
 
-function ukazCil() { napis('cilW', cilW); }
+function ukazCil() {
+  napis('cilW', jeBeh() ? Number(cilW).toFixed(1) : cilW);
+  napis('cilJednotka', jeBeh() ? 'km/h' : 'W');
+}
 
 document.getElementById('plus10').addEventListener('click', () => {
+  if (jeBeh()) { if (ovladani) { cilW = posliRychlostPasu(cilW + 0.5); ukazCil(); } return; }
   cilW += 10; ukazCil();
   if (ergZapnuto) nastavVykon(cilW);
 });
 document.getElementById('minus10').addEventListener('click', () => {
+  if (jeBeh()) { if (ovladani) { cilW = posliRychlostPasu(cilW - 0.5); ukazCil(); } return; }
   cilW = Math.max(50, cilW - 10); ukazCil();
   if (ergZapnuto) nastavVykon(cilW);
 });
@@ -1087,7 +1246,7 @@ function prepniErg(zapnout) {
   }
 }
 document.getElementById('btnErg').addEventListener('click', () => {
-  if (!ovladani) { napis('stavOvladani', 'Nejdřív připoj kolo'); return; }
+  if (!ovladani) { napis('stavOvladani', (jeBeh() ? 'Nejdřív připoj běžecký pás' : 'Nejdřív připoj kolo')); return; }
   prepniErg(!ergZapnuto);
 });
 
@@ -1097,11 +1256,25 @@ const POLE = ['rozMin','rozW','opak','praceMin','praceW','odpMin','odpW','vyjMin
 const cislo = id => Number(document.getElementById(id).value) || 0;
 
 // Nastavení si pamatujeme v prohlížeči
+// Každý sport má svou tabulku (kolo ve wattech, běh v km/h)
+const klicInt = id => (jeBeh() ? 'intb_' : 'int_') + id;
+const VYCHOZI_INT = {
+  kolo: { rozMin: 10, rozW: 120, opak: 5, praceMin: 4, praceW: 250, odpMin: 3, odpW: 110, vyjMin: 10, vyjW: 110 },
+  beh:  { rozMin: 10, rozW: 8.5, opak: 5, praceMin: 3, praceW: 13, odpMin: 2, odpW: 8, vyjMin: 10, vyjW: 8 },
+};
+function nactiIntervaly() {
+  POLE.forEach(id => {
+    const el = document.getElementById(id);
+    let u = null;
+    try { u = localStorage.getItem(klicInt(id)); } catch (e) {}
+    el.value = u !== null ? u : VYCHOZI_INT[sport][id];
+  });
+}
 POLE.forEach(id => {
   const el = document.getElementById(id);
-  try { const u = localStorage.getItem('int_' + id); if (u !== null) el.value = u; } catch (e) {}
+  try { const u = localStorage.getItem(klicInt(id)); if (u !== null) el.value = u; } catch (e) {}
   el.addEventListener('change', () => {
-    try { localStorage.setItem('int_' + id, el.value); } catch (e) {}
+    try { localStorage.setItem(klicInt(id), el.value); } catch (e) {}
     ukazCelkem();
   });
   el.addEventListener('input', ukazCelkem);
@@ -1148,7 +1321,7 @@ function sestavZKroku(kroky) {
     nazev: typ === 'R' ? 'Rozjetí' : typ === 'V' ? 'Vyjetí' : typ === 'O' ? 'Odpočinek'
          : 'Práce ' + (++i) + '/' + pocetPraci,
     s: Math.round(min * 60),
-    w: wFtp(pct),
+    w: cilZPct(pct),
   }));
 }
 // n× práce, mezi nimi odpočinek (po poslední už ne)
@@ -1187,34 +1360,84 @@ const KNIHOVNA = [
       ['R', 10, .55], ...serie(3, ['P', 1, 1.20], ['O', 2, .50]), ['P', 5, .90], ['V', 8, .50]] },
 ];
 
+
+// Běžecké tréninky: [typ, minuty, % prahové RYCHLOSTI]
+// (prahová rychlost = rychlost při prahovém tempu, např. 4:50/km = 12,4 km/h)
+const KNIHOVNA_BEH = [
+  { nazev: '✏️ Vlastní (tabulka)' },
+  { nazev: 'VO2max 5× 3 min', kroky: () => [
+      ['R', 10, .70], ...serie(5, ['P', 3, 1.08], ['O', 2, .60]), ['V', 10, .65]] },
+  { nazev: 'VO2max 30/30 (2× 10)', kroky: () => [
+      ['R', 10, .70], ...serie(10, ['P', .5, 1.15], ['O', .5, .60]), ['O', 4, .60],
+      ...serie(10, ['P', .5, 1.15], ['O', .5, .60]), ['V', 10, .65]] },
+  { nazev: 'Pyramida 1-2-3-2-1', kroky: () => [
+      ['R', 10, .70], ...[1, 2, 3, 2, 1].flatMap((m, i, a) =>
+        i < a.length - 1 ? [['P', m, 1.08], ['O', m, .60]] : [['P', m, 1.08]]),
+      ['V', 10, .65]] },
+  { nazev: 'Tempo 3× 10 min', kroky: () => [
+      ['R', 10, .70], ...serie(3, ['P', 10, .97], ['O', 3, .65]), ['V', 10, .65]] },
+  { nazev: 'Práh 2× 15 min', kroky: () => [
+      ['R', 10, .70], ...serie(2, ['P', 15, 1.00], ['O', 4, .65]), ['V', 10, .65]] },
+  { nazev: 'Rovinky 8× 20 s', kroky: () => [
+      ['R', 15, .70], ...serie(8, ['P', 1 / 3, 1.25], ['O', 1, .60]), ['V', 10, .65]] },
+  { nazev: 'Dlouhý klus 50 min (Z2)', kroky: () => [
+      ['R', 5, .70], ['P', 50, .78], ['V', 5, .65]] },
+  { nazev: 'Aktivace před závodem 30 min', kroky: () => [
+      ['R', 10, .70], ...serie(3, ['P', 1, 1.10], ['O', 2, .65]), ['P', 5, .97], ['V', 8, .65]] },
+];
+// Prahová rychlost z prahového tempa "4:50" → 12,4 km/h
+function prahRychlost() {
+  const m = (document.getElementById('prahTempo').value || '').trim().match(/^(\d+)[:.,](\d{1,2})$/);
+  const sek = m ? Number(m[1]) * 60 + Number(m[2]) : 300;
+  return 3600 / Math.max(150, sek);
+}
+// Cíl kroku: na kole watty z FTP, na běhu rychlost (km/h, na desetiny)
+function cilZPct(pct) {
+  return jeBeh() ? Math.round(prahRychlost() * pct * 10) / 10 : wFtp(pct);
+}
+function knihovna() { return jeBeh() ? KNIHOVNA_BEH : KNIHOVNA; }
+const klicTreninku = () => jeBeh() ? 'treninkBeh' : 'trenink';
+
 const vyberTreninku = document.getElementById('vyberTreninku');
-KNIHOVNA.forEach((t, i) => vyberTreninku.add(new Option(t.nazev, i)));
-try { vyberTreninku.value = localStorage.getItem('trenink') || '0'; } catch (e) {}
-if (!KNIHOVNA[vyberTreninku.value]) vyberTreninku.value = '0';
+function naplnKnihovnu() {
+  vyberTreninku.innerHTML = '';
+  knihovna().forEach((t, i) => vyberTreninku.add(new Option(t.nazev, i)));
+  try { vyberTreninku.value = localStorage.getItem(klicTreninku()) || '0'; } catch (e) {}
+  if (!knihovna()[vyberTreninku.value]) vyberTreninku.value = '0';
+  ukazTabulku();
+  ukazCelkem();
+}
+knihovna().forEach((t, i) => vyberTreninku.add(new Option(t.nazev, i)));
+try { vyberTreninku.value = localStorage.getItem(klicTreninku()) || '0'; } catch (e) {}
+if (!knihovna()[vyberTreninku.value]) vyberTreninku.value = '0';
 
 function ukazTabulku() {
-  const vlastni = !KNIHOVNA[vyberTreninku.value].kroky;
+  const vlastni = !knihovna()[vyberTreninku.value].kroky;
   document.getElementById('tabVlastni').style.display = vlastni ? '' : 'none';
 }
 vyberTreninku.addEventListener('change', () => {
-  try { localStorage.setItem('trenink', vyberTreninku.value); } catch (e) {}
+  try { localStorage.setItem(klicTreninku(), vyberTreninku.value); } catch (e) {}
   ukazTabulku();
   ukazCelkem();
 });
 ukazTabulku();
 
 const nazevTreninku = () => {
-  const t = KNIHOVNA[vyberTreninku.value];
-  return t.kroky ? t.nazev : 'Vlastní intervaly';
+  const t = knihovna()[vyberTreninku.value];
+  return (jeBeh() ? '🏃 ' : '') + (t.kroky ? t.nazev : 'Vlastní intervaly');
 };
 
 // Hlavní funkce: buď hotový trénink z knihovny, nebo tvoje tabulka
 function sestavFaze() {
-  const t = KNIHOVNA[vyberTreninku.value];
+  const t = knihovna()[vyberTreninku.value];
   return (t && t.kroky) ? sestavZKroku(t.kroky()) : sestavFazeTabulka();
 }
 
 const mmss = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+// "250 W" na kole, "12.5 km/h (4:48)" na běhu
+function cilText(c) {
+  return jeBeh() ? Number(c).toFixed(1) + ' km/h (' + tempoText(c) + ')' : c + ' W';
+}
 
 function ukazCelkem() {
   const faze = sestavFaze();
@@ -1236,7 +1459,7 @@ function kresliNahled(faze, celkem) {
     b.style.flex = f.s + ' 1 0';                       // poměrná šířka podle času
     b.style.height = Math.max(8, 100 * f.w / maxW) + '%';
     b.style.background = BARVY[f.nazev.split(' ')[0]] || '#888';
-    b.title = f.nazev + ' – ' + f.w + ' W';
+    b.title = f.nazev + ' – ' + cilText(f.w);
     box.appendChild(b);
   });
 }
@@ -1260,10 +1483,10 @@ function spustFazi() {
   cilW = f.w; ukazCil();
   ergZapnuto = true;
   nastavVykon(f.w);
-  napis('faze', f.nazev + ' – ' + f.w + ' W');
+  napis('faze', f.nazev + ' – ' + cilText(f.w));
   ohlasFazi(f);
   const dalsi = faze[index + 1];
-  napis('dalsi', dalsi ? 'Další: ' + dalsi.nazev + ' – ' + dalsi.w + ' W' : 'Poslední fáze');
+  napis('dalsi', dalsi ? 'Další: ' + dalsi.nazev + ' – ' + cilText(dalsi.w) : 'Poslední fáze');
   document.getElementById('faze').style.color = f.nazev.startsWith('Práce') ? '#ff7043' : '#81c784';
 }
 
@@ -1303,7 +1526,7 @@ function zastavIntervaly(text) {
 }
 
 document.getElementById('btnInterval').addEventListener('click', () => {
-  if (!ovladani) { napis('stavOvladani', 'Nejdřív připoj kolo'); return; }
+  if (!ovladani) { napis('stavOvladani', (jeBeh() ? 'Nejdřív připoj běžecký pás' : 'Nejdřív připoj kolo')); return; }
   if (intervalBezi) { zastavIntervaly('Zastaveno'); return; }
 
   faze = sestavFaze();
@@ -1857,13 +2080,14 @@ function zastavTrasu(text) {
 
 document.getElementById('btnStartTrasy').addEventListener('click', () => {
   if (trasaBezi) { zastavTrasu('Zastaveno'); return; }
-  if (!ovladani) { stavTrasy('Nejdřív připoj kolo.'); return; }
+  if (!ovladani) { stavTrasy((jeBeh() ? 'Nejdřív připoj běžecký pás.' : 'Nejdřív připoj kolo.')); return; }
   if (trasa.length < 2) { stavTrasy('Nejdřív načti trasu.'); return; }
   if (ergZapnuto) prepniErg(false);
   obnovPokusy();                // simulace kopců dostane novou šanci
-  napis('stavOvladani', 'Ovládání: kopce posílám jako sklon – řadíš na kole');
+  napis('stavOvladani', jeBeh() ? 'Ovládání: sklon pásu podle trasy – rychlost řídíš sám'
+                                 : 'Ovládání: kopce posílám jako sklon – řadíš na kole');
   setTimeout(() => {
-    if (trasaBezi && !umiSimulaci) napis('stavOvladani',
+    if (trasaBezi && !jeBeh() && !umiSimulaci) napis('stavOvladani',
       'Ovládání: kolo simulaci odmítlo – odpor řídí aplikace (převod na kole se přepisuje)');
   }, 15000);
 
@@ -1885,7 +2109,7 @@ document.getElementById('btnStartTrasy').addEventListener('click', () => {
   const b = document.getElementById('btnStartTrasy');
   b.textContent = 'Zastavit';
   b.style.background = '#c62828';
-  stavTrasy('Jedeš! 🚴');
+  stavTrasy(jeBeh() ? 'Běžíš! 🏃 Rychlost si řídíš sám, sklon nastavuje trasa.' : 'Jedeš! 🚴');
   tikTrasy();
   trasaTimer = setInterval(tikTrasy, 1000);
 });
@@ -1943,7 +2167,8 @@ setInterval(() => {
   const w3 = posledni3.reduce((a, b) => a + b, 0) / posledni3.length;
   const tepPlatny = tepAkt > 0 && Date.now() - tepCas < 5000;
 
-  if (posledniVykon > 0 || w3 > 0) {
+  if (jeBeh()) obarvi('vykon', 'min/km', null);     // na běhu tempo – bez výkonových zón
+  else if (posledniVykon > 0 || w3 > 0) {
     const z = zonaW(w3);
     obarvi('vykon', 'W', ZONY_W[z], ZONY_W[z].n + ' ' + Math.round(100 * w3 / ftp()) + ' %');
   } else obarvi('vykon', 'W', null);
@@ -1954,8 +2179,8 @@ setInterval(() => {
   } else obarvi('tep', 'tep/min', null);
 
   // Záznam jen když šlapeš – stejně jako běží čas (auto-pauza)
-  if (posledniVykon > 0) {
-    casVZonach[zonaW(posledniVykon)]++;
+  if (jedu()) {
+    if (!jeBeh()) casVZonach[zonaW(posledniVykon)]++;
     if (tepPlatny) casVZonachT[zonaT(tepAkt)]++;
     zaznam.push([Math.round(posledniVykon), tepPlatny ? tepAkt : 0,
                  Math.round(kadenceAkt), Math.round(rychlostKola * 10), Math.round(metry)]);
@@ -2031,7 +2256,11 @@ function delkaSlovy(s) {
   if (s % 60 && s < 600) return Math.floor(s / 60) + ' minut ' + (s % 60) + ' sekund';
   return m + (m === 1 ? ' minuta' : m < 5 ? ' minuty' : ' minut');
 }
-function wattySlovy(w) { return w + ' wattů'; }
+function wattySlovy(w) {
+  if (!jeBeh()) return w + ' wattů';
+  const t = String(Number(w).toFixed(1)).replace('.0', '').replace('.', ',');
+  return 'rychlost ' + t + (t.includes(',') ? ' kilometru' : ' kilometrů') + ' za hodinu';
+}
 
 // Zavolá se při začátku každé fáze intervalů
 function ohlasFazi(f) {
@@ -2074,12 +2303,16 @@ function sestavJizdu(navic) {
   }
   const info = jizdaInfo || {
     rezim: aktualniRezim,
-    nazev: aktualniRezim === 'volna' ? 'Volná jízda' : aktualniRezim === 'trasa' ? 'Jízda (bez trasy)' : 'ERG jízda',
+    nazev: jeBeh()
+      ? (aktualniRezim === 'volna' ? 'Volný běh' : aktualniRezim === 'trasa' ? 'Běh (bez trasy)' : 'Běh na pásu')
+      : (aktualniRezim === 'volna' ? 'Volná jízda' : aktualniRezim === 'trasa' ? 'Jízda (bez trasy)' : 'ERG jízda'),
   };
   return Object.assign({
     datum: new Date().toISOString(),
     rezim: info.rezim, nazev: info.nazev, trasaDelka: info.trasaDelka || 0,
     kolo: jmenoKolaHezky || '',
+    sport: sport,
+    nastoupano: jeBeh() ? Math.round(nastoupanoBeh) : 0,
     sekundy: zaznam.length,
     m: zaznam[zaznam.length - 1][4],
     prumW: prum(w), maxW: Math.max(...w), np,
@@ -2137,6 +2370,8 @@ function autoUlozJizdu() {
 }
 
 function vynulujProfi() {
+  nastoupanoBeh = 0;
+  if (jeBeh()) napis('prevod', 0);
   zaznam = [];
   jizdaInfo = null;
   casVZonach = [0, 0, 0, 0, 0, 0, 0];
@@ -2171,8 +2406,30 @@ function zonyHtml(casy, zony, nadpis) {
     '<span class="zc">' + mmss(s) + ' · ' + Math.round(100 * s / celkem) + ' %</span></div>').join('') + '</div>';
 }
 
+// Rychlosti po 5 s z ujetých metrů (vzorky ukládají metry na konci každého bloku)
+function rychlostiVzorku(v, sekundy) {
+  // poslední úsek bývá kratší než 5 s – jinak by graf na konci "spadl"
+  const delka = i => (i === v.length - 1 && sekundy) ? Math.max(1, sekundy - 5 * (v.length - 1)) : 5;
+  return v.map((r, i) => Math.max(0, (r[3] - (i ? v[i - 1][3] : 0)) / delka(i) * 3.6));
+}
+function souhrnBehu(j) {
+  const rychl = rychlostiVzorku(j.vzorky, j.sekundy);
+  const prum = j.sekundy ? j.m / j.sekundy * 3.6 : 0;
+  // nejrychlejší minuta (12 vzorků po 5 s)
+  let nej = 0;
+  for (let i = 0; i + 12 <= rychl.length; i++) nej = Math.max(nej, rychl.slice(i, i + 12).reduce((a, b) => a + b, 0) / 12);
+  return [
+    ['Čas', hmmss(j.sekundy)], ['Vzdálenost', (j.m / 1000).toFixed(2) + ' km'],
+    ['Prům. tempo', tempoText(prum) + ' /km'], ['Prům. rychlost', prum.toFixed(1) + ' km/h'],
+    ['Nejrychlejší minuta', tempoText(nej) + ' /km'], ['Nastoupáno', (j.nastoupano || 0) + ' m'],
+    ['Kalorie (odhad)', Math.round((Number(poleHmotnost.value) || 75) * j.m / 1000) + ' kcal'],
+    ['Prům. tep', j.prumTep || '--'], ['Max tep', j.maxTep || '--'], ['Pás', j.kolo || '--'],
+  ];
+}
+
 function ukazSouhrn(j, indexVHistorii) {
-  const dlazdice = [
+  const behJ = j.sport === 'beh';
+  const dlazdice = behJ ? souhrnBehu(j) : [
     ['Čas', hmmss(j.sekundy)], ['Vzdálenost', (j.m / 1000).toFixed(1) + ' km'],
     ['Prům. výkon', j.prumW + ' W'], ['NP', j.np + ' W'], ['Max výkon', j.maxW + ' W'],
     ['Práce', j.kJ + ' kJ'], ['TSS', j.tss], ['Prům. kadence', j.prumKad],
@@ -2180,12 +2437,13 @@ function ukazSouhrn(j, indexVHistorii) {
   ];
   oknoObsah.innerHTML =
     '<h2>' + (j.dokoncena ? '🏁 ' : '') + j.nazev + '</h2>' +
-    '<div class="datum">' + datumCz(j.datum) + ' · FTP ' + j.ftp + ' W · 🚲 ' +
-      (j.kolo || 'kolo neuvedeno') + '</div>' +
+    '<div class="datum">' + datumCz(j.datum) + (behJ ? ' · 🏃 ' + (j.kolo || 'běžecký pás')
+      : ' · FTP ' + j.ftp + ' W · 🚲 ' + (j.kolo || 'kolo neuvedeno')) + '</div>' +
     '<div class="souhrnMrizka">' + dlazdice.map(([n, h]) =>
       '<div><b>' + h + '</b><span>' + n + '</span></div>').join('') + '</div>' +
     '<canvas id="grafJizdy"></canvas>' +
-    '<div class="legenda"><span style="color:#ffca28">━ výkon</span> <span style="color:#ff5252">━ tep</span> <span style="color:#888">┅ FTP</span></div>' +
+    (behJ ? '<div class="legenda"><span style="color:#4dd0e1">━ rychlost</span> <span style="color:#ff5252">━ tep</span> <span style="color:#888">┅ prahové tempo</span></div>'
+          : '<div class="legenda"><span style="color:#ffca28">━ výkon</span> <span style="color:#ff5252">━ tep</span> <span style="color:#888">┅ FTP</span></div>') +
     zonyHtml(j.zony, ZONY_W, 'Čas ve výkonových zónách') +
     zonyHtml(j.zonyT || [], ZONY_T, 'Čas v tepových zónách') +
     '<div class="tlacitkaOkna">' +
@@ -2193,7 +2451,7 @@ function ukazSouhrn(j, indexVHistorii) {
       '<button class="maly" id="oHistorie">📊 Historie</button>' +
       '<button class="maly" id="oTcx" style="background:#1e88e5">⌚ Export pro Garmin (.tcx)</button>' +
       (indexVHistorii >= 0 ? '<button class="maly" id="oPrejmenovat">✏️ Přejmenovat</button>' : '') +
-      (indexVHistorii >= 0 ? '<div class="vyberKola">🚲 Kolo: ' + seznamKol().map(k =>
+      (indexVHistorii >= 0 && !behJ ? '<div class="vyberKola">🚲 Kolo: ' + seznamKol().map(k =>
         '<button class="maly volbaKola' + (k === j.kolo ? ' aktivni' : '') + '" data-kolo="' + k + '">' + k + '</button>'
       ).join('') + '</div>' : '') +
       (indexVHistorii >= 0 ? '<button class="maly" id="oSmazat" style="background:#7a2020">🗑 Smazat jízdu</button>' : '') +
@@ -2214,7 +2472,54 @@ function ukazSouhrn(j, indexVHistorii) {
     ulozHistorii(h);
     ukazHistorii();
   };
-  kresliGrafJizdy(document.getElementById('grafJizdy'), j);
+  if (behJ) kresliGrafBehu(document.getElementById('grafJizdy'), j);
+  else kresliGrafJizdy(document.getElementById('grafJizdy'), j);
+}
+
+// Graf běhu: rychlost (tyrkysově, levá osa km/h), tep (červeně), prahové tempo čárkovaně
+function kresliGrafBehu(c, j) {
+  const W = c.width = c.clientWidth * 2, H = c.height = c.clientHeight * 2;
+  const g2 = c.getContext('2d');
+  const v = j.vzorky;
+  if (v.length < 2) return;
+  const rychl = rychlostiVzorku(v, j.sekundy);
+  const prah = prahRychlost();
+  const maxR = Math.max(prah * 1.25, ...rychl) * 1.05;
+  const tepy = v.map(r => r[1]).filter(t => t > 0);
+  const tMin = tepy.length ? Math.min(...tepy) - 10 : 60, tMax = tepy.length ? Math.max(...tepy) + 5 : 200;
+  const L = 70, P = 70, T = 16, D = 40;
+  const x = i => L + i / (v.length - 1) * (W - L - P);
+  const yR = r => H - D - r / maxR * (H - T - D);
+  const yT = t => H - D - (t - tMin) / (tMax - tMin) * (H - T - D);
+  g2.font = '22px system-ui';
+  g2.strokeStyle = '#333'; g2.fillStyle = '#888'; g2.lineWidth = 1;
+  for (let r = 0; r <= maxR; r += 2) {
+    g2.beginPath(); g2.moveTo(L, yR(r)); g2.lineTo(W - P, yR(r)); g2.stroke();
+    g2.fillText(r, 8, yR(r) + 7);
+  }
+  const krokMin = j.sekundy > 3600 ? 15 : j.sekundy > 1200 ? 10 : 5;
+  for (let m = krokMin; m * 60 < j.sekundy; m += krokMin) g2.fillText(m + "'", x(m * 60 / 5) - 12, H - 10);
+  g2.setLineDash([10, 8]); g2.strokeStyle = '#888';
+  g2.beginPath(); g2.moveTo(L, yR(prah)); g2.lineTo(W - P, yR(prah)); g2.stroke();
+  g2.setLineDash([]);
+  g2.fillStyle = '#4dd0e155';
+  for (let i = 0; i < v.length - 1; i++) g2.fillRect(x(i), yR(rychl[i]), x(i + 1) - x(i) + 0.5, H - D - yR(rychl[i]));
+  g2.strokeStyle = '#4dd0e1'; g2.lineWidth = 3;
+  g2.beginPath();
+  rychl.forEach((r, i) => i ? g2.lineTo(x(i), yR(r)) : g2.moveTo(x(i), yR(r)));
+  g2.stroke();
+  if (tepy.length) {
+    g2.strokeStyle = '#ff5252'; g2.lineWidth = 3;
+    g2.beginPath();
+    let zacato = false;
+    v.forEach((r, i) => {
+      if (!r[1]) { zacato = false; return; }
+      if (zacato) g2.lineTo(x(i), yT(r[1])); else { g2.moveTo(x(i), yT(r[1])); zacato = true; }
+    });
+    g2.stroke();
+    g2.fillStyle = '#ff5252';
+    for (let t = Math.ceil(tMin / 20) * 20; t <= tMax; t += 20) g2.fillText(t, W - P + 10, yT(t) + 7);
+  }
 }
 
 // Graf jízdy: výkon (žlutě, levá osa), tep (červeně, pravá osa), FTP čárkovaně
@@ -2274,23 +2579,32 @@ function kresliGrafJizdy(c, j) {
   }
 }
 
+// 1 jízda, 2 jízdy, 5 jízd
+function pocetSlovy(n, tvary) { return n + ' ' + (n === 1 ? tvary[0] : n < 5 ? tvary[1] : tvary[2]); }
+
 function ukazHistorii() {
   const h = nactiHistorii();
+  const hSport = h.filter(j => (j.sport || 'kolo') === sport);   // graf pokroku jen pro aktuální sport
   const bezi = zaznam.length >= 60;
   // Pokrok: průměrný výkon (sloupce) a NP (tečky) posledních 20 jízd
   oknoObsah.innerHTML =
     '<h2>📊 Historie jízd</h2>' +
     (bezi ? '<button id="oUkoncit" style="background:#43a047">🏁 Ukončit a uložit aktuální jízdu (' + mmss(zaznam.length) + ')</button>' : '') +
-    (h.length ? '<h3>Pokrok – posledních ' + Math.min(20, h.length) + ' jízd</h3><canvas id="grafPokrok"></canvas>' +
-      '<div class="legenda"><span style="color:#ffca28">▮ prům. výkon</span> <span style="color:#fff">● NP</span> <span style="color:#ff5252">● prům. tep</span></div>' : '') +
+    (hSport.length ? '<h3>Pokrok – ' + (jeBeh() ? 'běh' : 'kolo') + ' (' + pocetSlovy(Math.min(20, hSport.length),
+        jeBeh() ? ['běh', 'běhy', 'běhů'] : ['jízda', 'jízdy', 'jízd']) + ')</h3><canvas id="grafPokrok"></canvas>' +
+      (jeBeh() ? '<div class="legenda"><span style="color:#4dd0e1">▮ prům. rychlost</span> <span style="color:#ff5252">● prům. tep</span></div>'
+               : '<div class="legenda"><span style="color:#ffca28">▮ prům. výkon</span> <span style="color:#fff">● NP</span> <span style="color:#ff5252">● prům. tep</span></div>') : '') +
     '<div class="seznamJizd">' + (h.length ? h.map((j, i) => [j, i]).reverse().map(([j, i]) =>
       '<div class="jizda" data-i="' + i + '">' +
         '<span class="jd">' + datumCz(j.datum) + '</span>' +
         '<span class="jn">' + (j.dokoncena ? '🏁 ' : '') + j.nazev +
-          '<br><small style="color:#888;font-weight:normal">🚲 ' + (j.kolo || '?') + '</small></span>' +
+          '<br><small style="color:#888;font-weight:normal">' + (j.sport === 'beh' ? '🏃 ' : '🚲 ') +
+          (j.kolo || '?') + '</small></span>' +
         '<span>' + hmmss(j.sekundy) + '</span>' +
         '<span>' + (j.m / 1000).toFixed(1) + ' km</span>' +
-        '<span style="color:#ffca28">' + j.prumW + ' W</span>' +
+        (j.sport === 'beh'
+          ? '<span style="color:#4dd0e1">' + tempoText(j.m / j.sekundy * 3.6) + ' /km</span>'
+          : '<span style="color:#ffca28">' + j.prumW + ' W</span>') +
         '<span style="color:#ff5252">' + (j.prumTep || '--') + ' ♥</span>' +
       '</div>').join('') : '<p>Zatím žádná uložená jízda. Jízdy delší než minuta se ukládají samy.</p>') +
     '</div>' +
@@ -2311,7 +2625,7 @@ function ukazHistorii() {
     el.onclick = () => { const i = Number(el.dataset.i); ukazSouhrn(nactiHistorii()[i], i); };
   });
   const gp = document.getElementById('grafPokrok');
-  if (gp) kresliPokrok(gp, h.slice(-20));
+  if (gp) kresliPokrok(gp, hSport.slice(-20));
   document.getElementById('oZaloha').onclick = stahniZalohu;
   document.getElementById('oObnovit').onchange = e => { if (e.target.files[0]) obnovZalohu(e.target.files[0]); };
   const sv = document.getElementById('oSmazatVse');
@@ -2321,18 +2635,22 @@ function ukazHistorii() {
 function kresliPokrok(c, jizdy) {
   const W = c.width = c.clientWidth * 2, H = c.height = c.clientHeight * 2;
   const g2 = c.getContext('2d');
-  const maxW = Math.max(...jizdy.map(j => Math.max(j.np, j.prumW)), 100) * 1.15;
+  const beh = jizdy.length && jizdy[0].sport === 'beh';
+  const hodnota = j => beh ? j.m / j.sekundy * 3.6 : j.prumW;     // běh: km/h, kolo: W
+  const maxW = Math.max(...jizdy.map(j => beh ? hodnota(j) : Math.max(j.np, j.prumW)), beh ? 5 : 100) * 1.15;
   const tepy = jizdy.map(j => j.prumTep).filter(t => t > 0);
   const tMin = tepy.length ? Math.min(...tepy) - 15 : 60, tMax = tepy.length ? Math.max(...tepy) + 10 : 200;
   const sirka = (W - 40) / jizdy.length;
   g2.font = '20px system-ui';
   jizdy.forEach((j, i) => {
     const x = 20 + i * sirka;
-    const h = j.prumW / maxW * (H - 50);
-    g2.fillStyle = '#ffca28aa';
+    const h = hodnota(j) / maxW * (H - 50);
+    g2.fillStyle = beh ? '#4dd0e1aa' : '#ffca28aa';
     g2.fillRect(x + sirka * 0.15, H - 30 - h, sirka * 0.7, h);
-    g2.fillStyle = '#fff';
-    g2.beginPath(); g2.arc(x + sirka / 2, H - 30 - j.np / maxW * (H - 50), 7, 0, 7); g2.fill();
+    if (!beh) {
+      g2.fillStyle = '#fff';
+      g2.beginPath(); g2.arc(x + sirka / 2, H - 30 - j.np / maxW * (H - 50), 7, 0, 7); g2.fill();
+    }
     if (j.prumTep) {
       g2.fillStyle = '#ff5252';
       g2.beginPath(); g2.arc(x + sirka / 2, H - 30 - (j.prumTep - tMin) / (tMax - tMin) * (H - 50), 6, 0, 7); g2.fill();
@@ -2347,13 +2665,16 @@ function kresliPokrok(c, jizdy) {
 // ----- Záloha, obnovení, smazání všeho -----
 // Do zálohy patří jen data trenažéru (ne ostatních aplikací na stejném webu).
 const KLICE_NASTAVENI = ['hmotnost', 'ftp', 'maxTepNast', 'zvukZap', 'hlasZap', 'trenink', 'zoomJizda',
-  ...POLE.map(id => 'int_' + id)];
+  'sport', 'prahTempo', 'maxRychlostPasu', 'treninkBeh',
+  ...POLE.map(id => 'int_' + id), ...POLE.map(id => 'intb_' + id)];
 
 
 // ----- EXPORT PRO GARMIN / STRAVU (.tcx) -----
 // TCX = textový formát od Garminu (XML). Garmin Connect i Strava ho umí naimportovat.
 // Body jdou po 5 s (tak je jízda uložená): čas, vzdálenost, tep, kadence, watty.
 function jizdaNaTcx(j) {
+  const behJ = j.sport === 'beh';
+  const kcal = behJ ? Math.round((Number(poleHmotnost.value) || 75) * j.m / 1000) : j.kJ;
   const konec = new Date(j.datum).getTime();
   const start = konec - j.sekundy * 1000;              // jízda se ukládá na konci
   const cas = ms => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -2363,28 +2684,28 @@ function jizdaNaTcx(j) {
     return '<Trackpoint><Time>' + cas(start + (i + 1) * 5000) + '</Time>' +
       '<DistanceMeters>' + m + '</DistanceMeters>' +
       (tep > 0 ? '<HeartRateBpm><Value>' + tep + '</Value></HeartRateBpm>' : '') +
-      '<Cadence>' + Math.min(254, kad) + '</Cadence>' +
-      '<Extensions><ns3:TPX><ns3:Watts>' + w + '</ns3:Watts></ns3:TPX></Extensions>' +
+      (behJ ? '' : '<Cadence>' + Math.min(254, kad) + '</Cadence>' +
+      '<Extensions><ns3:TPX><ns3:Watts>' + w + '</ns3:Watts></ns3:TPX></Extensions>') +
       '</Trackpoint>';
   }).join('\n');
   return '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" ' +
     'xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2">\n' +
-    '<Activities><Activity Sport="Biking"><Id>' + cas(start) + '</Id>\n' +
+    '<Activities><Activity Sport="' + (behJ ? 'Running' : 'Biking') + '"><Id>' + cas(start) + '</Id>\n' +
     '<Lap StartTime="' + cas(start) + '">' +
       '<TotalTimeSeconds>' + j.sekundy + '</TotalTimeSeconds>' +
       '<DistanceMeters>' + j.m + '</DistanceMeters>' +
-      '<Calories>' + j.kJ + '</Calories>' +                 // kJ ≈ kcal (účinnost těla ~24 %)
+      '<Calories>' + kcal + '</Calories>' +                 // kolo: kJ ≈ kcal, běh: ~1 kcal/kg/km
       (j.prumTep ? '<AverageHeartRateBpm><Value>' + j.prumTep + '</Value></AverageHeartRateBpm>' : '') +
       (j.maxTep ? '<MaximumHeartRateBpm><Value>' + j.maxTep + '</Value></MaximumHeartRateBpm>' : '') +
       '<Intensity>Active</Intensity>' +
-      '<Cadence>' + Math.min(254, j.prumKad) + '</Cadence>' +
+      (behJ ? '' : '<Cadence>' + Math.min(254, j.prumKad) + '</Cadence>') +
       '<TriggerMethod>Manual</TriggerMethod>\n' +
       '<Track>\n' + body + '\n</Track>' +
-      '<Extensions><ns3:LX><ns3:AvgWatts>' + j.prumW + '</ns3:AvgWatts>' +
-      '<ns3:MaxWatts>' + j.maxW + '</ns3:MaxWatts></ns3:LX></Extensions>' +
+      (behJ ? '' : '<Extensions><ns3:LX><ns3:AvgWatts>' + j.prumW + '</ns3:AvgWatts>' +
+      '<ns3:MaxWatts>' + j.maxW + '</ns3:MaxWatts></ns3:LX></Extensions>') +
     '</Lap>\n' +
-    '<Notes>' + xml(j.nazev + ' – trenažér') + '</Notes>' +
+    '<Notes>' + xml(j.nazev + (behJ ? ' – běžecký pás' : ' – trenažér')) + '</Notes>' +
     '</Activity></Activities></TrainingCenterDatabase>\n';
 }
 
@@ -2590,7 +2911,8 @@ function najdiDucha(nazev, delka) {
     if (j.rezim === 'trasa' && /^brouter/i.test(j.nazev || '') && stejnaDelka(j)) { j.nazev = nazev; opraveno = true; }
   });
   if (opraveno) ulozHistorii(h);
-  const naTrase = h.filter(j => j.rezim === 'trasa' && stejnyNazev(j.nazev, nazev) && stejnaDelka(j));
+  const naTrase = h.filter(j => j.rezim === 'trasa' && (j.sport || 'kolo') === sport &&
+                                stejnyNazev(j.nazev, nazev) && stejnaDelka(j));
   // Duch jen ze stejného kola – Trinfit a Zycle se poctivě porovnat nedají.
   // Jízdy bez údaje o kole (ze starších verzí) bereme jen, když ze stejného kola nic není.
   let kandidati = naTrase.filter(j => j.kolo && j.kolo === jmenoKolaHezky);
@@ -2821,6 +3143,102 @@ document.getElementById('btnMista').addEventListener('click', () => {
 });
 document.getElementById('btnNajitMista').addEventListener('click', trasaPodleMist);
 poleMista.addEventListener('keydown', e => { if (e.key === 'Enter') trasaPodleMist(); });
+
+
+// =====================================================================
+// ===== PŘEPÍNAČ SPORTU 🚴 / 🏃 =====
+// =====================================================================
+// Prahové tempo (min/km) = tempo, které udržíš zhruba hodinu (jako FTP u kola).
+// Od něj se počítají rychlosti v běžeckých trénincích.
+const polePrah = document.getElementById('prahTempo');
+const poleMaxPas = document.getElementById('maxRychlostPasu');
+[[polePrah, 'prahTempo'], [poleMaxPas, 'maxRychlostPasu']].forEach(([el, klic]) => {
+  try { const u = localStorage.getItem(klic); if (u) el.value = u; } catch (e) {}
+  el.addEventListener('change', () => {
+    try { localStorage.setItem(klic, el.value); } catch (e) {}
+    ukazCelkem();
+  });
+});
+
+function nastavSport(s, prvni) {
+  if (!prvni && s === sport) return;
+  if (!prvni && (intervalBezi || trasaBezi)) {
+    alert('Nejdřív zastav intervaly nebo trasu, pak přepni sport.');
+    return;
+  }
+  if (!prvni) {
+    autoUlozJizdu();                         // rozjetá jízda/běh se uloží
+    // Odpojíme kolo/pás – ať omylem neposíláme příkazy pro kolo běžeckému pásu
+    if (pripojeneZarizeni) { try { pripojeneZarizeni.gatt.disconnect(); } catch (e) {} }
+    pripojeneZarizeni = null; ovladani = null;
+    napis('stavKolo', jeBehS(s) ? 'Běžecký pás: nepřipojeno' : 'Kolo: nepřipojeno');
+    napis('stavOvladani', 'Ovládání: --');
+  }
+  sport = s;
+  try { localStorage.setItem('sport', s); } catch (e) {}
+  const beh = jeBehS(s);
+  document.body.classList.toggle('beh', beh);
+  napis('btnSport', beh ? '🏃 Běh' : '🚴 Kolo');
+  napis('btnKolo', beh ? 'Připojit pás' : 'Připojit kolo');
+  napis('btnVolna', beh ? 'Volný běh' : 'Volná jízda');
+
+  // Dlaždice: na běhu tempo, sklon pásu a nastoupané metry
+  const popis = (id, t) => { document.getElementById(id).parentElement.querySelector('.popis').textContent = t; };
+  popis('vykon', beh ? 'min/km' : 'W');
+  popis('kadence', beh ? 'sklon %' : 'ot/min');
+  popis('prevod', beh ? 'nastoupáno m' : 'převod');
+  ['vykon', 'kadence', 'prevod', 'rychlost'].forEach(id => napis(id, '--'));
+  rychlostPasu = 0; rychlostKola = 0; posledniVykon = 0; kadenceAkt = 0;
+
+  // Panel "ERG" = na běhu rychlost pásu
+  napis('ergNadpis', beh ? 'Rychlost pásu' : 'ERG – pevný výkon');
+  napis('minus10', beh ? '−0,5' : '−10');
+  napis('plus10', beh ? '+0,5' : '+10');
+  cilW = beh ? 10 : 150;
+  ukazCil();
+
+  // Intervaly: tabulka v km/h, vlastní uložené hodnoty pro každý sport
+  napis('hlavickaCil', beh ? 'km/h' : 'Watty');
+  ['rozW', 'praceW', 'odpW', 'vyjW'].forEach(id => document.getElementById(id).step = beh ? '0.1' : '1');
+  nactiIntervaly();
+  naplnKnihovnu();
+
+  // Trasy podle míst: na běh pěšky/trail, na kolo cyklotrasy
+  const pr = document.getElementById('profilTrasy');
+  if (beh && pr.value !== 'hiking-mountain') pr.value = 'hiking-mountain';
+  if (!beh && pr.value === 'hiking-mountain') pr.value = 'trekking';
+}
+function jeBehS(s) { return s === 'beh'; }
+
+document.getElementById('btnSport').addEventListener('click', () => nastavSport(jeBeh() ? 'kolo' : 'beh'));
+document.getElementById('btnStopPas').addEventListener('click', () => {
+  if (!ovladani) return;
+  zastavPas();
+  napis('stavOvladani', 'Pás: STOP odeslán');
+});
+// Rychlovolba rychlosti pásu (km/h) jedním klepnutím
+document.querySelectorAll('.rv').forEach(b => b.addEventListener('click', () => {
+  if (!ovladani) { napis('stavOvladani', 'Nejdřív připoj běžecký pás'); return; }
+  cilW = posliRychlostPasu(Number(b.dataset.v));
+  ukazCil();
+}));
+document.getElementById('sklonMinus').addEventListener('click', () => {
+  posliSklonPasu(Math.max(0, (posledniSklonPasu ?? 0) - 1));
+  napis('cilSklonPasu', posledniSklonPasu);
+});
+document.getElementById('sklonPlus').addEventListener('click', () => {
+  posliSklonPasu((posledniSklonPasu ?? 0) + 1);
+  napis('cilSklonPasu', posledniSklonPasu);
+});
+
+// Převýšení na běhu: rychlost × sklon pásu, každou sekundu
+setInterval(() => {
+  if (!jeBeh() || !jedu()) return;
+  nastoupanoBeh += (rychlostPasu / 3.6) * Math.max(0, sklonPasuAkt) / 100;
+  napis('prevod', Math.round(nastoupanoBeh));
+}, 1000);
+
+nastavSport(sport, true);       // při otevření: naposledy použitý sport
 
 // Ať tablet během tréninku nezhasne obrazovku
 async function nezhasinej() {
