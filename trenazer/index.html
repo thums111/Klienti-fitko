@@ -303,7 +303,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 8.3)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 8.4)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -1609,9 +1609,21 @@ function nastavRezim(rezim) {
 function celaObrazovka() {
   const el = document.documentElement;
   if (!document.fullscreenElement && el.requestFullscreen) {
-    el.requestFullscreen().catch(() => {});
+    el.requestFullscreen().then(odemkniOtaceni).catch(() => {});
   }
 }
+
+// Otáčení: starší instalace měla v manifestu zámek "na šířku".
+// Tímhle ho zrušíme přímo z aplikace – telefon se pak otáčí podle toho, jak ho držíš.
+function odemkniOtaceni() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('any').catch(() => {});
+    }
+  } catch (e) {}
+}
+odemkniOtaceni();
+document.addEventListener('click', odemkniOtaceni, { once: true });
 
 document.getElementById('btnVolna').addEventListener('click', () => {
   nastavRezim('volna'); celaObrazovka();
