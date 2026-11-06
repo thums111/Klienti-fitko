@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Trenažér</title>
 <!-- Aplikace na plochu: manifest (vizitka aplikace) a ikony -->
-<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="manifest" href="manifest.webmanifest?v=3">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#111111">
@@ -281,6 +281,21 @@
     .radek { margin: 3px 0; }
     #zbyva { font-size: 64px; }
   }
+
+  /* ===== TELEFON NA VÝŠKU =====
+     Úzká obrazovka: dlaždice po dvou, menší tlačítka v hlavičce. */
+  @media (orientation: portrait) {
+    .hlavicka h1 { font-size: 15px; width: 100%; margin: 2px 0; }
+    .hlavicka button { padding: 8px 12px; font-size: 16px; margin: 3px; }
+    body.volna .mrizka { grid-template-columns: 1fr 1fr; gap: 8px; }
+    body.volna .mrizka > .dlazdice,
+    body.volna .mrizka > .dlazdice:nth-child(n+5) { grid-column: auto; }
+    body.volna .mrizka > .dlazdice:last-child { grid-column: span 2; }
+    body.volna .dlazdice { padding: 1.5vh 4px; }
+    body.volna .hodnota { font-size: 16vw; }
+    body.volna .hodnota.casC { font-size: 14vw; }
+    body.volna .popis { font-size: 17px; }
+  }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -288,7 +303,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 8.1)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 8.2)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
