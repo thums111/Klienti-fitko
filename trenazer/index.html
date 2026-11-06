@@ -270,7 +270,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 6.8)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 6.9)</small></h1>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">Připojit pás</button>
   <span class="oddelovac"></span>
@@ -581,6 +581,7 @@ const OBVOD = 2.105;
 // Každé kolo (Zycle, Trinfit…) má svou vlastní kalibraci.
 var prevodKalib = { min: 1.0, max: 4.5 };
 var jmenoKola = '';
+var jmenoKolaHezky = '';     // pro historii: "Zycle Infinity", "Trinfit"…
 var pomerAkt = 0;           // aktuální převodový poměr (průměr posledních hodnot)
 let kadenceAkt = 0;
 let pomery = [];          // posledních pár hodnot, ať číslo necuká
@@ -669,6 +670,8 @@ document.getElementById('btnKolo').addEventListener('click', async () => {
     const jmeno = (sluzba.device.name || '').toLowerCase();
     delitelRychlosti = (jmeno.includes('zinfinity') || jmeno.includes('zycle')) ? 10 : 100;
     jmenoKola = jmeno;
+    jmenoKolaHezky = jmeno.includes('zinfinity') || jmeno.includes('zycle') ? 'Zycle Infinity'
+                   : jmeno.includes('trinfit') ? 'Trinfit' : (sluzba.device.name || 'Kolo');
     nactiKalibraci();
     pripravOvladani(sluzba);
   }
@@ -697,6 +700,7 @@ async function pripravOvladani(sluzba) {
   umiVykon = true; umiOdpor = false; umiSimulaci = true;
   odporNejde = false; odporAkt = null; odporPokusy = 0; odmitnutiSimulace = 0;
   ergSklonMin = -3; ergSklonMax = 15; ergSklon = 2; lehkost = 1;
+  simSklonMin = -20; simSklonMax = 25;
   zastavRegulator();
   try {
     ovladani = await sluzba.getCharacteristic(0x2AD9);
@@ -744,7 +748,9 @@ async function zjistiSchopnosti(sluzba) {
     const cile = f.getUint32(4, true);
     umiOdpor    = !!(cile & (1 << 2));
     umiVykon    = !!(cile & (1 << 3));
-    umiSimulaci = !!(cile & (1 << 13));
+    // Simulaci NEvypínáme podle inzerovaných schopností: Trinfit tvrdí, že ji neumí,
+    // ale ve skutečnosti ji poslouchá. Vypne ji až opakované odmítnutí příkazu.
+    umiSimulaci = true;
   } catch (e) { /* kolo to neprozradí – zkusíme a uvidíme podle odpovědí */ }
   // 0x2AD6 = rozsah odporu: min, max, krok (vše v desetinách)
   try {
@@ -829,6 +835,7 @@ let posledniKrok = null;
 let posledniZmenaSklonu = 0;     // {sklon, watty, cas} – pro učení wattNaProcento
 let posledniSklonPoslany = 0;
 let odmitnutiSimulace = 0;   // kolikrát po sobě kolo simulaci odmítlo
+let simSklonMin = -20, simSklonMax = 25;   // rozsah sklonu, který kolo přijme (učí se z odmítnutí)
 
 function spustRegulator() {
   if (odporNejde) return;
@@ -978,10 +985,14 @@ function odpovedKola(udalost) {
       posliSimulaci(posledniSklonPoslany);
     } else if (vysledek === 3) {
       // 3 = "neplatná hodnota": tenhle sklon kolo neumí → zúžíme rozsah
-      if (posledniSklonPoslany < 0) ergSklonMin = 0;
-      else ergSklonMax = Math.max(4, Math.floor(posledniSklonPoslany) - 1);
+      if (posledniSklonPoslany < 0) { ergSklonMin = 0; simSklonMin = 0; }
+      else {
+        ergSklonMax = Math.max(4, Math.floor(posledniSklonPoslany) - 1);
+        simSklonMax = Math.max(4, Math.floor(posledniSklonPoslany) - 1);
+      }
       ergSklon = Math.max(ergSklonMin, Math.min(ergSklonMax, ergSklon));
-      if (odmitnutiSimulace < 3) posliSimulaci(ergSklon);
+      if (odmitnutiSimulace < 3) posliSimulaci(trasaBezi
+        ? Math.max(simSklonMin, Math.min(simSklonMax, posledniSklonPoslany)) : ergSklon);
     }
     // Teprve když to kolo odmítne mnohokrát po sobě, vzdáme simulaci
     if (odmitnutiSimulace >= 6) umiSimulaci = false;
@@ -1024,7 +1035,8 @@ function volnaJizda(sklonProcent = 0) {
     }
     return;
   }
-  posliSimulaci(sklonProcent);
+  // Některá kola nechtějí záporný sklon (z kopce) – pak pošleme aspoň rovinu
+  posliSimulaci(Math.max(simSklonMin, Math.min(simSklonMax, sklonProcent)));
 }
 
 // ===== ERG ovládací panel =====
@@ -1827,6 +1839,12 @@ document.getElementById('btnStartTrasy').addEventListener('click', () => {
   if (!ovladani) { stavTrasy('Nejdřív připoj kolo.'); return; }
   if (trasa.length < 2) { stavTrasy('Nejdřív načti trasu.'); return; }
   if (ergZapnuto) prepniErg(false);
+  obnovPokusy();                // simulace kopců dostane novou šanci
+  napis('stavOvladani', 'Ovládání: kopce posílám jako sklon – řadíš na kole');
+  setTimeout(() => {
+    if (trasaBezi && !umiSimulaci) napis('stavOvladani',
+      'Ovládání: kolo simulaci odmítlo – odpor řídí aplikace (převod na kole se přepisuje)');
+  }, 15000);
 
   trasaMetry = 0; stoupani = 0; predchoziVyska = null; posledniSklon = null;
   vynulujStatistiku();          // start trasy = čas a km od nuly
@@ -2040,6 +2058,7 @@ function sestavJizdu(navic) {
   return Object.assign({
     datum: new Date().toISOString(),
     rezim: info.rezim, nazev: info.nazev, trasaDelka: info.trasaDelka || 0,
+    kolo: jmenoKolaHezky || '',
     sekundy: zaznam.length,
     m: zaznam[zaznam.length - 1][4],
     prumW: prum(w), maxW: Math.max(...w), np,
@@ -2140,7 +2159,8 @@ function ukazSouhrn(j, indexVHistorii) {
   ];
   oknoObsah.innerHTML =
     '<h2>' + (j.dokoncena ? '🏁 ' : '') + j.nazev + '</h2>' +
-    '<div class="datum">' + datumCz(j.datum) + ' · FTP ' + j.ftp + ' W</div>' +
+    '<div class="datum">' + datumCz(j.datum) + ' · FTP ' + j.ftp + ' W · 🚲 ' +
+      (j.kolo || 'kolo neuvedeno') + '</div>' +
     '<div class="souhrnMrizka">' + dlazdice.map(([n, h]) =>
       '<div><b>' + h + '</b><span>' + n + '</span></div>').join('') + '</div>' +
     '<canvas id="grafJizdy"></canvas>' +
@@ -2152,6 +2172,7 @@ function ukazSouhrn(j, indexVHistorii) {
       '<button class="maly" id="oHistorie">📊 Historie</button>' +
       '<button class="maly" id="oTcx" style="background:#1e88e5">⌚ Export pro Garmin (.tcx)</button>' +
       (indexVHistorii >= 0 ? '<button class="maly" id="oPrejmenovat">✏️ Přejmenovat</button>' : '') +
+      (indexVHistorii >= 0 ? '<button class="maly" id="oKolo">🚲 Změnit kolo</button>' : '') +
       (indexVHistorii >= 0 ? '<button class="maly" id="oSmazat" style="background:#7a2020">🗑 Smazat jízdu</button>' : '') +
     '</div>';
   okno.style.display = 'flex';
@@ -2160,6 +2181,8 @@ function ukazSouhrn(j, indexVHistorii) {
   document.getElementById('oTcx').onclick = () => stahniTcx(j);
   const pj = document.getElementById('oPrejmenovat');
   if (pj) pj.onclick = () => prejmenujJizdu(indexVHistorii);
+  const ok = document.getElementById('oKolo');
+  if (ok) ok.onclick = () => zmenKolo(indexVHistorii);
   const sm = document.getElementById('oSmazat');
   if (sm) sm.onclick = () => {
     if (!confirm('Opravdu smazat tuhle jízdu?')) return;
@@ -2240,7 +2263,8 @@ function ukazHistorii() {
     '<div class="seznamJizd">' + (h.length ? h.map((j, i) => [j, i]).reverse().map(([j, i]) =>
       '<div class="jizda" data-i="' + i + '">' +
         '<span class="jd">' + datumCz(j.datum) + '</span>' +
-        '<span class="jn">' + (j.dokoncena ? '🏁 ' : '') + j.nazev + '</span>' +
+        '<span class="jn">' + (j.dokoncena ? '🏁 ' : '') + j.nazev +
+          '<br><small style="color:#888;font-weight:normal">🚲 ' + (j.kolo || '?') + '</small></span>' +
         '<span>' + hmmss(j.sekundy) + '</span>' +
         '<span>' + (j.m / 1000).toFixed(1) + ' km</span>' +
         '<span style="color:#ffca28">' + j.prumW + ' W</span>' +
@@ -2372,6 +2396,18 @@ function prejmenujJizdu(i) {
       dalsi.length + '× „' + stary + '“. Přejmenovat je taky na „' + novy + '“?')) {
     dalsi.forEach(x => x.nazev = novy);
   }
+  ulozHistorii(h);
+  ukazSouhrn(j, i);
+}
+
+// U starších jízd (bez údaje o kole) si kolo doplníš: každé klepnutí = další kolo v řadě
+function zmenKolo(i) {
+  const h = nactiHistorii();
+  const j = h[i];
+  if (!j) return;
+  const kola = [...new Set(['Zycle Infinity', 'Trinfit', jmenoKolaHezky,
+                            ...h.map(x => x.kolo)].filter(Boolean))];
+  j.kolo = kola[(kola.indexOf(j.kolo) + 1) % kola.length];
   ulozHistorii(h);
   ukazSouhrn(j, i);
 }
@@ -2521,14 +2557,20 @@ function najdiDucha(nazev, delka) {
     if (j.rezim === 'trasa' && /^brouter/i.test(j.nazev || '') && stejnaDelka(j)) { j.nazev = nazev; opraveno = true; }
   });
   if (opraveno) ulozHistorii(h);
-  const kandidati = h.filter(j => j.rezim === 'trasa' && j.nazev === nazev && stejnaDelka(j));
+  const naTrase = h.filter(j => j.rezim === 'trasa' && j.nazev === nazev && stejnaDelka(j));
+  // Duch jen ze stejného kola – Trinfit a Zycle se poctivě porovnat nedají.
+  // Jízdy bez údaje o kole (ze starších verzí) bereme jen, když ze stejného kola nic není.
+  let kandidati = naTrase.filter(j => j.kolo && j.kolo === jmenoKolaHezky);
+  let neznameKolo = false;
+  if (!kandidati.length) { kandidati = naTrase.filter(j => !j.kolo); neznameKolo = kandidati.length > 0; }
   if (!kandidati.length) return null;
   const dokoncene = kandidati.filter(j => j.dokoncena);
   const j = dokoncene.length
     ? dokoncene.reduce((a, b) => (b.sekundy < a.sekundy ? b : a))
     : kandidati[kandidati.length - 1];
   return { vzorky: j.vzorky, popis: (dokoncene.length ? 'nejlepší ' + hmmss(j.sekundy) : 'minulý pokus') +
-           ' (' + new Date(j.datum).getDate() + '. ' + (new Date(j.datum).getMonth() + 1) + '.)' };
+           ' (' + new Date(j.datum).getDate() + '. ' + (new Date(j.datum).getMonth() + 1) + '.)' +
+           (neznameKolo ? ' · kolo neuvedeno' : '') };
 }
 
 function pripravDucha() {
