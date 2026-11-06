@@ -132,6 +132,11 @@
   /* ===== Režimy: co se kde ukazuje ===== */
   body.trasa #panelErg, body.trasa #panelInterval { display: none; }
   body:not(.trasa) #panelTrasa { display: none; }
+  /* Běh po trase: sklon řídí trasa, rychlost si volíš ty – ukážeme úzký řádek rychlovolby */
+  body.trasa.beh #panelErg { display: block; padding: 4px 10px; margin: 0 0 4px; flex: none; }
+  body.trasa.beh #panelErg > :not(.jenKolo) { display: inline-block; vertical-align: middle; margin: 0 4px; }
+  body.trasa.beh #panelErg h2, body.trasa.beh #ergInfo, body.trasa #sklonRadek { display: none !important; }
+  body.trasa.beh #pasOvladani .radek { display: inline-block; margin: 0; }
 
   /* ===== Trasa ===== */
   #mapa { height: 40vh; border-radius: 8px; margin-top: 6px; background: #222; }
@@ -306,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 8.7)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 8.8)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -398,7 +403,7 @@
       <button class="maly rv" data-v="14">14</button><button class="maly rv" data-v="16">16</button>
       <button class="maly rv" data-v="18">18</button> km/h
     </div>
-    <div class="radek">Sklon <button class="maly" id="sklonMinus">−1</button>
+    <div class="radek" id="sklonRadek">Sklon <button class="maly" id="sklonMinus">−1</button>
       <b id="cilSklonPasu">0</b> %
       <button class="maly" id="sklonPlus">+1</button></div>
   </div>
