@@ -311,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 9.5)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 9.6)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -533,6 +533,7 @@ try { sport = localStorage.getItem('sport') === 'beh' ? 'beh' : 'kolo'; } catch 
 function jeBeh() { return sport === 'beh'; }
 var rychlostPasu = 0;      // km/h z běžeckého pásu
 var sklonPasuAkt = 0;      // % sklon hlášený pásem
+var posunSklonuPasu = 0;   // o kolik pás v datech hlásí sklon výš, než ve skutečnosti je
 var nastoupanoBeh = 0;     // m – převýšení ze sklonu pásu
 var tepHrudniCas = 0;      // kdy naposledy přišel tep z hrudního pásu
 // Pohyb (auto-pauza): na kole výkon > 0, na pásu rychlost > 0,5 km/h
@@ -820,7 +821,7 @@ function dataPasu(ud) {
   if (f & 0x0002) i += 2;                                // průměrná rychlost
   if (f & 0x0004) i += 3;                                // celková vzdálenost (3 bajty)
   if (f & 0x0008) {                                      // sklon (0,1 %) + úhel rampy
-    sklonPasuAkt = d.getInt16(i, true) / 10; i += 4;
+    sklonPasuAkt = Math.max(0, d.getInt16(i, true) / 10 - posunSklonuPasu); i += 4;
     napis('kadence', sklonPasuAkt.toFixed(sklonPasuAkt % 1 ? 1 : 0));
   }
   if (f & 0x0010) i += 4;                                // převýšení +/−
@@ -851,10 +852,14 @@ async function pripojBezeckyPas() {
     const r = await (await sluzba.getCharacteristic(0x2AD4)).readValue();
     pasRozsah.rMin = r.getUint16(0, true) / 100; pasRozsah.rMax = r.getUint16(2, true) / 100;
   } catch (e) {}
+  posunSklonuPasu = 0;
   try {
     const s = await (await sluzba.getCharacteristic(0x2AD5)).readValue();
     pasRozsah.sMin = s.getInt16(0, true) / 10; pasRozsah.sMax = s.getInt16(2, true) / 10;
-    // Tunturi hlásí nejnižší sklon 1 %, i když rovinu (0 %) umí → spodní hranice vždy 0 %
+    // Tunturi hlásí nejnižší sklon 1 %, i když rovinu (0 %) umí → spodní hranice vždy 0 %.
+    // Stejný posun má i v datech: při skutečných 0 % posílá 1 %. Ten posun si zapamatujeme
+    // a od hlášeného sklonu ho odečteme, ať tablet ukazuje totéž co displej pásu.
+    posunSklonuPasu = pasRozsah.sMin > 0 ? pasRozsah.sMin : 0;
     if (pasRozsah.sMin > 0) pasRozsah.sMin = 0;
   } catch (e) {}
   try {
