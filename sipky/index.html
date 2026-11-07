@@ -43,6 +43,8 @@
   .sipka { flex:1; text-align:center; padding:8px 4px; background:#2a2a2a; border-radius:6px; font-size:18px; font-weight:bold; }
   .sipka.prazdna { color:#555; }
   #radaZavreni { padding:2px 12px; color:var(--warn); font-size:16px; min-height:22px; }
+  #autoStav { padding:0 12px 8px; font-size:14px; color:#9ad; min-height:20px; }
+  #bAuto.zap { background:#1f6feb; color:#fff; font-weight:bold; }
   #hlaska { padding:2px 12px 8px; font-size:17px; min-height:24px; }
 
   /* Na šířku: obraz vlevo, panel vpravo – vše bez posouvání */
@@ -58,7 +60,7 @@
 </head>
 <body>
 <header>
-  <h1>Šipky – kamera <span class="ver">v1.5</span></h1>
+  <h1>Šipky – kamera <span class="ver">v1.6</span></h1>
   <button id="bZpet" style="flex:0;min-width:0;padding:8px 12px;display:none">↩ Menu</button>
 </header>
 
@@ -129,6 +131,10 @@
       <div id="kolo"></div>
       <div id="radaZavreni"></div>
       <div id="hlaska"></div>
+      <div id="autoStav"></div>
+      <div class="btns">
+        <button id="bAuto">🤖 Automatika</button>
+      </div>
       <div class="btns">
         <button id="bMimo">Mimo (0)</button>
         <button id="bUndo">↶ Zpět</button>
@@ -520,6 +526,7 @@ function konecTahu() {
     lupa = null;
     const [mx, my] = aplikuj(Hinv, p.x, p.y);
     pridejSipku(skore(mx, my), p);
+    autoZnovuSnimek();
     return;
   }
   if (tahany < 0) return;
@@ -746,6 +753,7 @@ function novaHra() {
     vitez: -1
   };
   historie = [];
+  autoZnovuSnimek();
   zobrazPanel('hra');
 }
 
@@ -791,10 +799,11 @@ function dalsiHrac() {
   hra.koloHotovo = false;
   hra.prehoz = false;
   hra.zacatek = hra.hraci[hra.tah].zbyva;
+  autoZnovuSnimek();
   prekresliHru();
 }
 
-el('bMimo').onclick  = () => pridejSipku({ t:'0', b:0 }, null);
+el('bMimo').onclick  = () => { pridejSipku({ t:'0', b:0 }, null); autoZnovuSnimek(); };
 el('bDalsi').onclick = dalsiHrac;
 el('bUndo').onclick  = () => {
   if (!historie.length) return;
@@ -912,6 +921,180 @@ function kresliSipkyKola() {
     ctx.fillText(s.t, s.x + r, s.y - r);
   }
 }
+
+// ======================= AUTOMATIKA – samočinné rozpoznání šipky =======================
+// Princip: appka si pamatuje snímek terče bez nové šipky (referenci). Každých 150 ms
+// porovná zmenšený obraz s referencí. Když se v oblasti terče objeví malá změna a obraz
+// se uklidní, je to nová šipka. Ze změněných pixelů najde hrot a zapíše šipku.
+const KLIC_AUTO = 'sipky_automatika';
+const AW = 320;              // šířka zmenšeného obrazu pro porovnávání
+const PRAH = 32;             // o kolik se musí změnit jas pixelu, aby se počítal
+let autoZap = (() => { try { return localStorage.getItem(KLIC_AUTO) !== '0'; } catch(e) { return true; } })();
+let autoStav = 'ceka';       // 'ceka' = čeká na klidný obraz pro referenci, 'hlida' = hlídá novou šipku
+let autoRef = null;          // referenční snímek (jas)
+let autoPred = null;         // předchozí snímek (jas) – pro zjištění, jestli je obraz v klidu
+let autoKlid = 0;            // kolik snímků po sobě je obraz v klidu
+let autoMaska = null, autoMaskaPocet = 0, autoMaskaKlic = '';
+const autoCv = document.createElement('canvas');
+let autoCtx = null;
+
+function autoZnovuSnimek() { autoStav = 'ceka'; autoKlid = 0; }
+
+function ukazAuto() {
+  el('bAuto').textContent = '🤖 Automatika: ' + (autoZap ? 'ZAP' : 'VYP');
+  el('bAuto').classList.toggle('zap', autoZap);
+  if (!autoZap) el('autoStav').textContent = 'Šipky zadáváš kliknutím.';
+}
+el('bAuto').onclick = () => {
+  autoZap = !autoZap;
+  try { localStorage.setItem(KLIC_AUTO, autoZap ? '1' : '0'); } catch(e) {}
+  autoZnovuSnimek();
+  ukazAuto();
+};
+ukazAuto();
+
+function autoText(t) { if (autoZap) el('autoStav').textContent = t; }
+
+// Maska: které pixely zmenšeného obrazu leží v okolí terče (do 230 mm od středu,
+// protože letky trčí z terče a v obraze mohou být i kousek mimo něj)
+function autoPripravMasku(w, h) {
+  const klic = JSON.stringify(body) + w + 'x' + h;
+  if (klic === autoMaskaKlic) return;
+  autoMaskaKlic = klic;
+  autoMaska = new Uint8Array(w * h);
+  autoMaskaPocet = 0;
+  const k = cv.width / w;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const [mx, my] = aplikuj(Hinv, x * k, y * k);
+      if (Math.hypot(mx, my) <= 230) { autoMaska[y * w + x] = 1; autoMaskaPocet++; }
+    }
+  }
+}
+
+// Zmenšený snímek → pole jasů 0–255
+function autoSnimek(w, h) {
+  autoCtx.drawImage(video, 0, 0, w, h);
+  const d = autoCtx.getImageData(0, 0, w, h).data;
+  const g = new Uint8Array(w * h);
+  for (let i = 0, j = 0; i < g.length; i++, j += 4) g[i] = (d[j] * 3 + d[j + 1] * 6 + d[j + 2]) / 10;
+  return g;
+}
+
+function autoKrok() {
+  if (!autoZap || !hraBezi() || zmrazeno || cil || video.readyState < 2) return;
+  const w = AW, h = Math.round(AW * cv.height / cv.width);
+  if (autoCv.width !== w || autoCv.height !== h) {
+    autoCv.width = w; autoCv.height = h;
+    autoCtx = autoCv.getContext('2d', { willReadFrequently:true });
+  }
+  autoPripravMasku(w, h);
+  const g = autoSnimek(w, h);
+
+  // Je obraz v klidu? (porovnání s předchozím snímkem)
+  let pohyb = 0;
+  if (autoPred) for (let i = 0; i < g.length; i++) if (autoMaska[i] && Math.abs(g[i] - autoPred[i]) > PRAH) pohyb++;
+  autoPred = g;
+  autoKlid = (pohyb < 6) ? autoKlid + 1 : 0;
+
+  if (autoStav === 'ceka') {
+    autoText('🤖 Čekám na klidný obraz…');
+    if (autoKlid >= 4) { autoRef = g; autoStav = 'hlida'; autoText('🤖 Hlídám – házej.'); }
+    return;
+  }
+
+  if (autoKlid < 3) return;   // něco se hýbe (letící šipka, ruka) – počkej
+
+  // Kolik pixelů se změnilo proti referenci (bez osamělých bodů = šum)
+  const zmena = new Uint8Array(g.length);
+  let pocet = 0;
+  for (let i = 0; i < g.length; i++) {
+    if (autoMaska[i] && Math.abs(g[i] - autoRef[i]) > PRAH) { zmena[i] = 1; pocet++; }
+  }
+  if (pocet < 15) return;   // nic nového
+
+  if (pocet > autoMaskaPocet * 0.15) {
+    // Velká změna (pohnutý telefon, světlo, osoba v záběru) – vezmi nový snímek
+    autoText('🤖 Velká změna v obraze – beru nový snímek. Zkontroluj kalibraci, jestli se telefon nepohnul.');
+    autoRef = g;
+    return;
+  }
+
+  const blob = autoNejvetsiSkvrna(zmena, w, h);
+  autoRef = g;   // šipka je teď součástí reference, další se hledá zvlášť
+  if (!blob || blob.length < 12) return;
+
+  const hrot = autoNajdiHrot(blob);
+  const k = cv.width / w;
+  const p = { x: hrot.x * k, y: hrot.y * k };
+  const [mx, my] = aplikuj(Hinv, p.x, p.y);
+  const s = skore(mx, my);
+  pridejSipku(s, p);
+  autoText('🤖 Rozpoznáno: ' + s.t + '. Když nesedí: ↶ Zpět a klikni správně.');
+}
+
+// Největší souvislá skupina změněných pixelů
+function autoNejvetsiSkvrna(zmena, w, h) {
+  const navstiv = new Uint8Array(zmena.length);
+  let nejlepsi = null;
+  for (let i = 0; i < zmena.length; i++) {
+    if (!zmena[i] || navstiv[i]) continue;
+    const fronta = [i], skvrna = [];
+    navstiv[i] = 1;
+    while (fronta.length) {
+      const j = fronta.pop();
+      const x = j % w, y = (j - x) / w;
+      skvrna.push({ x, y });
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const n = ny * w + nx;
+        if (zmena[n] && !navstiv[n]) { navstiv[n] = 1; fronta.push(n); }
+      }
+    }
+    if (!nejlepsi || skvrna.length > nejlepsi.length) nejlepsi = skvrna;
+  }
+  return nejlepsi;
+}
+
+// Hrot = užší konec skvrny podél její hlavní osy (letka je široká, hrot tenký)
+function autoNajdiHrot(px) {
+  let cx = 0, cy = 0;
+  for (const p of px) { cx += p.x; cy += p.y; }
+  cx /= px.length; cy /= px.length;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (const p of px) { const dx = p.x - cx, dy = p.y - cy; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+  const uhel = 0.5 * Math.atan2(2 * sxy, sxx - syy);   // směr hlavní osy
+  const ux = Math.cos(uhel), uy = Math.sin(uhel);
+
+  let min = Infinity, max = -Infinity;
+  const proj = px.map(p => {
+    const t = (p.x - cx) * ux + (p.y - cy) * uy;
+    const n = -(p.x - cx) * uy + (p.y - cy) * ux;
+    if (t < min) min = t;
+    if (t > max) max = t;
+    return { p, t, n };
+  });
+  const delka = Math.max(max - min, 1);
+
+  // šířka skvrny na konci: rozptyl kolmo na osu v krajních 20 % délky
+  const sirka = (odKonce) => {
+    const vybrane = proj.filter(q => odKonce(q.t) <= delka * 0.2);
+    if (vybrane.length < 2) return 0;
+    const pr = vybrane.reduce((a, q) => a + q.n, 0) / vybrane.length;
+    return vybrane.reduce((a, q) => a + (q.n - pr) ** 2, 0) / vybrane.length;
+  };
+  const uMin = sirka(t => t - min), uMax = sirka(t => max - t);
+  const hrotNaMin = uMin <= uMax;
+
+  // bod hrotu = průměr pixelů v krajních 3 % na užším konci
+  const kraj = proj.filter(q => (hrotNaMin ? q.t - min : max - q.t) <= Math.max(delka * 0.03, 1));
+  const x = kraj.reduce((a, q) => a + q.p.x, 0) / kraj.length;
+  const y = kraj.reduce((a, q) => a + q.p.y, 0) / kraj.length;
+  return { x, y };
+}
+
+setInterval(autoKrok, 150);
 
 // ===== Uložení kalibrace =====
 function ulozKalibraci() {
