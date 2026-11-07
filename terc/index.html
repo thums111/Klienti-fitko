@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#101418">
+<title>Šipky – počítadlo</title>
+<style>
+  :root {
+    --bg:#101418; --panel:#1a2027; --panel2:#222a33; --text:#eef2f5; --muted:#8a96a3;
+    --acc:#e8b33c; --zelena:#1f8f4e; --cervena:#c8302c; --ok:#2ecc71; --err:#ff5b5b;
+    --fs: clamp(14px, 1.6vmin + 6px, 26px);   /* základní písmo roste s obrazovkou (TV) */
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:system-ui, "Segoe UI", sans-serif; font-size:var(--fs); }
+  button { font:inherit; color:inherit; border:0; border-radius:10px; background:var(--panel2); padding:.55em .8em; cursor:pointer; }
+  button:active { transform:scale(.97); }
+  button:disabled { opacity:.35; cursor:default; transform:none; }
+  button.hlavni { background:var(--acc); color:#1a1300; font-weight:bold; }
+
+  header { display:flex; align-items:center; gap:.6em; padding:.35em .7em; background:var(--panel); }
+  header h1 { font-size:1.1em; margin:0; flex:1; white-space:nowrap; }
+  .ver { font-size:.7em; color:var(--muted); font-weight:normal; }
+  header button { padding:.4em .7em; }
+
+  .obrazovka { display:none; }
+  .obrazovka.vidit { display:block; }
+
+  /* ===== Nastavení ===== */
+  #nastaveni { max-width:720px; margin:0 auto; padding:1em; }
+  .sekce { margin-bottom:1.2em; }
+  .sekce h2 { font-size:1em; color:var(--muted); font-weight:normal; margin:0 0 .5em; }
+  .volby { display:flex; flex-wrap:wrap; gap:.5em; }
+  .volby button { flex:1; min-width:5em; padding:.8em; font-size:1.05em; }
+  .volby button.vybrano { background:var(--acc); color:#1a1300; font-weight:bold; }
+  .hracRadek { display:flex; gap:.5em; margin-bottom:.5em; }
+  .hracRadek input { flex:1; font:inherit; padding:.6em .7em; border-radius:10px; border:1px solid #3a4652; background:#0c1014; color:var(--text); }
+  #bStart { width:100%; padding:1em; font-size:1.2em; }
+  #bPokracovat { width:100%; padding:.8em; margin-bottom:1em; background:#24507a; }
+
+  /* ===== Hra ===== */
+  #hra.vidit { display:grid; gap:.6em; padding:.6em; height:calc(100vh - 2.6em); grid-template-columns:minmax(0, 1fr) minmax(0, 1.25fr); }
+  #levy, #pravy { min-height:0; display:flex; flex-direction:column; gap:.6em; }
+  #pravy { align-items:center; }
+
+  /* tabule hráčů X01 */
+  #tabule { display:flex; flex-direction:column; gap:.5em; }
+  .hrac { background:var(--panel); border-radius:14px; padding:.5em .8em; border:3px solid transparent; display:flex; align-items:center; gap:.6em; }
+  .hrac.tah { border-color:var(--acc); background:#262214; }
+  .hrac .info { flex:1; min-width:0; }
+  .hrac .jm { font-size:1.15em; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hrac .stat { font-size:.75em; color:var(--muted); margin-top:.15em; }
+  .hrac .zb { font-size:2.6em; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
+  .hrac .legy { font-size:.8em; color:var(--acc); }
+
+  /* kriket tabulka */
+  #kriket { width:100%; border-collapse:separate; border-spacing:3px; }
+  #kriket th, #kriket td { background:var(--panel); text-align:center; padding:.25em .2em; border-radius:6px; font-variant-numeric:tabular-nums; }
+  #kriket th.tah { background:#3a3215; color:var(--acc); }
+  #kriket td.cislo { background:#2a333d; font-weight:bold; width:3.2em; }
+  #kriket td.mark { font-size:1.5em; line-height:1; color:#fff; }
+  #kriket tr.zavreno td { opacity:.35; }
+  #kriket tr.body td { font-size:1.4em; font-weight:800; }
+
+  /* aktuální kolo */
+  #kolo { display:flex; gap:.4em; }
+  .sipka { flex:1; text-align:center; background:var(--panel2); border-radius:10px; padding:.45em .2em; font-size:1.25em; font-weight:bold; }
+  .sipka.prazdna { color:#4a5562; }
+  #rada { color:var(--acc); min-height:1.3em; }
+  #hlaska { min-height:1.3em; }
+  .ovladani { display:flex; gap:.5em; flex-wrap:wrap; }
+  .ovladani button { flex:1; min-width:4.5em; }
+  #bDalsi { padding:.8em; font-size:1.1em; }
+  #bDalsi.pulz { animation:pulz 1.2s infinite; }
+  @keyframes pulz { 50% { box-shadow:0 0 0 .35em rgba(232,179,60,.35); } }
+
+  /* přepínač zadávání */
+  #prepinac { display:flex; gap:.4em; width:100%; }
+  #prepinac button { flex:1; }
+  #prepinac button.vybrano { background:#2d3a48; outline:2px solid var(--acc); }
+
+  /* terč */
+  #tercBox { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
+  #terc { width:100%; height:100%; max-height:100%; touch-action:manipulation; user-select:none; }
+  #terc .pole { cursor:pointer; }
+  #terc .pole:hover { filter:brightness(1.25); }
+
+  /* klávesnice */
+  #klavesnice { width:100%; max-width:560px; display:none; flex-direction:column; gap:.5em; }
+  #displej { background:#0b0f13; border-radius:12px; text-align:right; font-size:2.4em; font-weight:800; padding:.15em .4em; min-height:1.4em; font-variant-numeric:tabular-nums; }
+  .klavesy { display:grid; grid-template-columns:repeat(3, 1fr); gap:.45em; }
+  .klavesy button { padding:.7em 0; font-size:1.4em; font-weight:bold; }
+  .rychle { display:grid; grid-template-columns:repeat(5, 1fr); gap:.4em; }
+  .rychle button { padding:.5em 0; font-size:.95em; background:#1d2a36; }
+  #zavrenoVolba { display:none; gap:.5em; }
+  #zavrenoVolba button { flex:1; padding:.9em; }
+
+  /* tlačítka pro kriket */
+  #kriketTlac { width:100%; max-width:640px; display:none; flex-direction:column; gap:.4em; }
+  .ktRadek { display:grid; grid-template-columns:3.4em 1fr 1fr 1fr; gap:.4em; align-items:center; }
+  .ktRadek .c { font-weight:bold; text-align:center; font-size:1.2em; }
+  .ktRadek button { padding:.6em 0; }
+
+  /* výsledek */
+  #vysledek { position:fixed; inset:0; background:rgba(5,8,10,.85); display:none; align-items:center; justify-content:center; z-index:20; padding:1em; }
+  #vysledek.vidit { display:flex; }
+  .karta { background:var(--panel); border-radius:18px; padding:1.4em; max-width:560px; width:100%; text-align:center; }
+  .karta h2 { font-size:2em; margin:.2em 0 .4em; }
+  .karta table { width:100%; margin:.6em 0 1em; border-collapse:collapse; }
+  .karta td { padding:.3em; border-bottom:1px solid #2c3640; }
+  .karta .tl { display:flex; gap:.6em; flex-wrap:wrap; }
+  .karta .tl button { flex:1; padding:.9em; }
+
+  /* Na výšku (mobil): pod sebou */
+  @media (orientation: portrait) {
+    #hra.vidit { grid-template-columns:1fr; height:auto; }
+    #tercBox { height:min(92vw, 60vh); flex:none; }
+    .hrac .zb { font-size:2.1em; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.0</span></h1>
+  <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
+  <button id="bMenu" title="Nastavení hry">☰ Menu</button>
+</header>
+
+<!-- ===================== NASTAVENÍ ===================== -->
+<div id="nastaveni" class="obrazovka vidit">
+  <button id="bPokracovat" style="display:none">▶ Pokračovat v rozehrané hře</button>
+
+  <div class="sekce">
+    <h2>Hra</h2>
+    <div class="volby" id="volbaHry">
+      <button data-hra="301">301</button>
+      <button data-hra="501">501</button>
+      <button data-hra="701">701</button>
+      <button data-hra="kriket">Kriket</button>
+    </div>
+    <div style="color:var(--muted);font-size:.8em;margin-top:.5em" id="popisHry"></div>
+  </div>
+
+  <div class="sekce">
+    <h2>Hráči (1–4)</h2>
+    <div id="hraciSeznam"></div>
+    <div class="volby">
+      <button id="bMinus">− hráč</button>
+      <button id="bPlus">+ hráč</button>
+    </div>
+  </div>
+
+  <button id="bStart" class="hlavni">▶ Začít hru</button>
+</div>
+
+<!-- ===================== HRA ===================== -->
+<div id="hra" class="obrazovka">
+  <div id="levy">
+    <div id="tabule"></div>
+    <table id="kriket" style="display:none"></table>
+    <div id="kolo"></div>
+    <div id="rada"></div>
+    <div id="hlaska"></div>
+    <div class="ovladani">
+      <button id="bMimo">Mimo (0)</button>
+      <button id="bDalsi" class="hlavni">Další hráč ➜</button>
+    </div>
+  </div>
+
+  <div id="pravy">
+    <div id="prepinac">
+      <button id="bRezTerc" class="vybrano">🎯 Terč</button>
+      <button id="bRezCisla">🔢 Čísla</button>
+    </div>
+
+    <div id="tercBox"><svg id="terc" viewBox="-228 -228 456 456" aria-label="Terč"></svg></div>
+
+    <div id="klavesnice">
+      <div id="displej"></div>
+      <div id="zavrenoVolba">
+        <span style="align-self:center">Zavřeno kolikátou šipkou?</span>
+        <button data-s="1">1.</button><button data-s="2">2.</button><button data-s="3">3.</button>
+      </div>
+      <div class="rychle" id="rychle"></div>
+      <div class="klavesy" id="klavesy"></div>
+    </div>
+
+    <div id="kriketTlac"></div>
+  </div>
+</div>
+
+<!-- ===================== VÝSLEDEK ===================== -->
+<div id="vysledek">
+  <div class="karta">
+    <div style="font-size:3em">🏆</div>
+    <h2 id="vitezJm"></h2>
+    <table id="vysledekTab"></table>
+    <div class="tl">
+      <button id="bDalsiLeg" class="hlavni">Další leg</button>
+      <button id="bZpetVysl">↶ Zpět</button>
+      <button id="bNastaveniVysl">Nastavení</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+//  Šipky – počítadlo   (X01 double out, Kriket, 1–4 hráči)
+// =====================================================================
+const VERZE = '1.0';
+const KLIC_STAV = 'terc_stav';
+const KLIC_NAST = 'terc_nastaveni';
+
+const PORADI = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+const KRIKET_CISLA = [20,19,18,17,16,15,25];
+const NEZAVRITELNE = [169,168,166,165,163,162,159];   // X01: tyto zbytky nejde zavřít 3 šipkami
+const NEMOZNE_KOLO = [179,178,176,175,173,172,169,166,163];   // tyto součty kola nejdou hodit
+
+const el = id => document.getElementById(id);
+
+// ---------- ukládání ----------
+function nacti(klic, vychozi) {
+  try { const v = localStorage.getItem(klic); return v === null ? vychozi : JSON.parse(v); }
+  catch (e) { return vychozi; }
+}
+function uloz(klic, hodnota) { try { localStorage.setItem(klic, JSON.stringify(hodnota)); } catch (e) {} }
+
+let nast = nacti(KLIC_NAST, { hra:'501', jmena:['Hráč 1', 'Hráč 2'], rezim:'terc', zacina:0 });
+let stav = null;        // rozehraná hra
+let infoJednou = '';    // hláška, která se ukáže jen jednou (např. přehoz při zadání čísly)
+let historie = [];      // pro ↶ Zpět
+
+// =====================================================================
+//  NASTAVENÍ
+// =====================================================================
+const POPISY = {
+  '301':'Odpočítávání z 301, zavírá se na double nebo bull.',
+  '501':'Odpočítávání z 501, zavírá se na double nebo bull.',
+  '701':'Odpočítávání z 701, zavírá se na double nebo bull.',
+  'kriket':'Zavři 15–20 a bull (3 zásahy). Na zavřeném čísle sbíráš body, dokud ho soupeř nezavře.'
+};
+
+function kresliNastaveni() {
+  document.querySelectorAll('#volbaHry button').forEach(b => {
+    b.classList.toggle('vybrano', b.dataset.hra === nast.hra);
+    b.onclick = () => { nast.hra = b.dataset.hra; uloz(KLIC_NAST, nast); kresliNastaveni(); };
+  });
+  el('popisHry').textContent = POPISY[nast.hra];
+
+  const box = el('hraciSeznam');
+  box.innerHTML = '';
+  nast.jmena.forEach((j, i) => {
+    const r = document.createElement('div');
+    r.className = 'hracRadek';
+    const inp = document.createElement('input');
+    inp.value = j;
+    inp.maxLength = 16;
+    inp.oninput = () => { nast.jmena[i] = inp.value.trim() || ('Hráč ' + (i + 1)); uloz(KLIC_NAST, nast); };
+    r.appendChild(inp);
+    box.appendChild(r);
+  });
+  el('bPlus').disabled = nast.jmena.length >= 4;
+  el('bMinus').disabled = nast.jmena.length <= 1;
+  el('bPokracovat').style.display = (stav && !stav.konec) ? 'block' : 'none';
+}
+
+el('bPlus').onclick  = () => { if (nast.jmena.length < 4) { nast.jmena.push('Hráč ' + (nast.jmena.length + 1)); uloz(KLIC_NAST, nast); kresliNastaveni(); } };
+el('bMinus').onclick = () => { if (nast.jmena.length > 1) { nast.jmena.pop(); uloz(KLIC_NAST, nast); kresliNastaveni(); } };
+el('bStart').onclick = () => { novaHra(true); };
+el('bPokracovat').onclick = () => ukazObrazovku('hra');
+el('bMenu').onclick = () => { kresliNastaveni(); ukazObrazovku('nastaveni'); };
+
+function ukazObrazovku(id) {
+  el('nastaveni').classList.toggle('vidit', id === 'nastaveni');
+  el('hra').classList.toggle('vidit', id === 'hra');
+  el('bZpet').style.visibility = id === 'hra' ? 'visible' : 'hidden';
+  if (id === 'hra') prekresli();
+}
+
+// =====================================================================
+//  ZALOŽENÍ HRY
+// =====================================================================
+function novaHra(noveNastaveni) {
+  const kriket = nast.hra === 'kriket';
+  const start = kriket ? 0 : Number(nast.hra);
+  const predchozi = stav;
+  const zacina = noveNastaveni ? 0 : ((predchozi ? predchozi.zacinal : 0) + 1) % nast.jmena.length;
+
+  stav = {
+    typ: kriket ? 'kriket' : 'x01',
+    start,
+    hraci: nast.jmena.map((j, i) => ({
+      jmeno: j,
+      zbyva: start,          // X01
+      sipek: 0,
+      marky: Object.fromEntries(KRIKET_CISLA.map(c => [c, 0])),   // kriket
+      body: 0,               // kriket
+      zasahu: 0,             // kriket – všechny zásahy na 15–20 a bull (pro MPR)
+      posledni: null,        // součet posledního kola
+      legy: (!noveNastaveni && predchozi && predchozi.hraci[i] && predchozi.hraci[i].jmeno === j) ? predchozi.hraci[i].legy : 0
+    })),
+    tah: zacina,
+    zacinal: zacina,
+    kolo: [],
+    koloHotovo: false,
+    prehoz: false,
+    zacatek: start,
+    konec: false,
+    vitez: -1
+  };
+  historie = [];
+  zadavani = '';
+  ulozStav();
+  el('vysledek').classList.remove('vidit');
+  ukazObrazovku('hra');
+}
+
+function ulozStav() { uloz(KLIC_STAV, { stav, historie: historie.slice(-60) }); }
+function zapamatuj() { historie.push(JSON.stringify(stav)); if (historie.length > 300) historie.shift(); }
+
+el('bZpet').onclick = zpet;
+el('bZpetVysl').onclick = zpet;
+function zpet() {
+  if (!historie.length) return;
+  stav = JSON.parse(historie.pop());
+  zadavani = '';
+  el('vysledek').classList.remove('vidit');
+  ulozStav();
+  prekresli();
+}
+
+// =====================================================================
+//  PRAVIDLA – X01 (double out)
+// =====================================================================
+// sipka = { t:'T20', b:60, n:20, m:3 }   (n = číslo, m = násobek; bull: n=25, m=1 nebo 2)
+function hodX01(s) {
+  const h = stav.hraci[stav.tah];
+  const jeDouble = s.m === 2;
+  stav.kolo.push(s);
+  h.sipek++;
+  const nove = h.zbyva - s.b;
+  if (nove < 0 || nove === 1 || (nove === 0 && !jeDouble)) {
+    h.zbyva = stav.zacatek;          // přehoz: návrat na stav před kolem
+    h.posledni = 0;
+    stav.prehoz = true;
+    stav.koloHotovo = true;
+  } else if (nove === 0) {
+    h.zbyva = 0;
+    h.posledni = stav.zacatek;
+    vyhra();
+  } else {
+    h.zbyva = nove;
+    if (stav.kolo.length === 3) { stav.koloHotovo = true; h.posledni = stav.zacatek - h.zbyva; }
+  }
+}
+
+// Zadání celého kola číslem (klávesnice). Vrací text chyby, nebo '' když prošlo.
+// sipekNaZavreni: při zavření kolikátou šipkou (1–3), jinak 3
+function koloX01(soucet, sipekNaZavreni) {
+  const h = stav.hraci[stav.tah];
+  if (soucet > 180 || NEMOZNE_KOLO.includes(soucet)) return soucet + ' se jedním kolem hodit nedá.';
+  const nove = h.zbyva - soucet;
+  if (nove === 0) {
+    if (soucet > 170 || NEZAVRITELNE.includes(soucet)) return soucet + ' se nedá zavřít.';
+    if (!sipekNaZavreni) return 'ZAVRENI';     // zeptej se, kolikátou šipkou
+    zapamatuj();
+    h.sipek += sipekNaZavreni;
+    h.zbyva = 0;
+    h.posledni = soucet;
+    stav.kolo = [{ t:String(soucet), b:soucet, n:0, m:0, cele:true }];
+    vyhra();
+    return '';
+  }
+  zapamatuj();
+  h.sipek += 3;
+  stav.kolo = [{ t:String(soucet), b:soucet, n:0, m:0, cele:true }];
+  if (nove < 0 || nove === 1) {
+    h.posledni = 0;
+    stav.prehoz = true;
+    infoJednou = '💥 Přehoz! ' + h.jmeno + ' zůstává na ' + h.zbyva + '.';
+  } else {
+    h.zbyva = nove;
+    h.posledni = soucet;
+  }
+  stav.koloHotovo = true;
+  dalsiHrac(true);      // po zadání čísla rovnou na dalšího
+  return '';
+}
+
+function prumerX01(h) { return h.sipek ? ((stav.start - h.zbyva) / h.sipek * 3).toFixed(1) : '–'; }
+
+// ---------- návrh zavření ----------
+const HODY = (() => {
+  const a = [];
+  for (let n = 20; n >= 1; n--) a.push({ t:'T' + n, b:3 * n });
+  a.push({ t:'Bull', b:50 }, { t:'25', b:25 });
+  for (let n = 20; n >= 1; n--) a.push({ t:String(n), b:n });
+  for (let n = 20; n >= 1; n--) a.push({ t:'D' + n, b:2 * n });
+  return a;
+})();
+const ZAVIRACI = [20,16,18,12,10,8,19,17,15,14,13,11,9,7,6,5,4,3,2,1]
+  .map(n => ({ t:'D' + n, b:2 * n })).concat([{ t:'Bull', b:50 }]);
+
+function hledejZavreni(zb, pocet) {
+  if (pocet === 1) { const d = ZAVIRACI.find(z => z.b === zb); return d ? [d.t] : null; }
+  for (const h of HODY) {
+    if (h.b >= zb) continue;
+    const r = hledejZavreni(zb - h.b, pocet - 1);
+    if (r) return [h.t, ...r];
+  }
+  return null;
+}
+function navrhZavreni(zb, sipek) {
+  if (zb > 170 || zb < 2 || sipek < 1) return '';
+  for (let p = 1; p <= sipek; p++) { const r = hledejZavreni(zb, p); if (r) return r.join(' · '); }
+  return '';
+}
+
+// =====================================================================
+//  PRAVIDLA – KRIKET
+// =====================================================================
+function hodKriket(s) {
+  const h = stav.hraci[stav.tah];
+  stav.kolo.push(s);
+  h.sipek++;
+  if (KRIKET_CISLA.includes(s.n) && s.m > 0) {
+    h.zasahu += s.m;
+    const pred = h.marky[s.n];
+    const po = pred + s.m;
+    const navic = Math.max(0, po - 3);            // zásahy nad zavření = body
+    h.marky[s.n] = Math.min(3, po);
+    const souperOtevreny = stav.hraci.some((o, i) => i !== stav.tah && o.marky[s.n] < 3);
+    if (navic > 0 && souperOtevreny) h.body += navic * s.n;
+  }
+  if (kriketVyhral(h)) { vyhra(); return; }
+  if (stav.kolo.length === 3) stav.koloHotovo = true;
+}
+
+function kriketVyhral(h) {
+  const vseZavreno = KRIKET_CISLA.every(c => h.marky[c] >= 3);
+  const nejviceBodu = stav.hraci.every(o => o === h || h.body >= o.body);
+  return vseZavreno && nejviceBodu;
+}
+
+function mpr(h) { return h.sipek ? (h.zasahu / h.sipek * 3).toFixed(2) : '–'; }
+
+// =====================================================================
+//  SPOLEČNÉ
+// =====================================================================
+function hod(s) {
+  if (!stav || stav.konec || stav.koloHotovo) return;
+  if (stav.kolo.length && stav.kolo[0].cele) return;
+  zapamatuj();
+  if (stav.typ === 'x01') hodX01(s); else hodKriket(s);
+  ulozStav();
+  prekresli();
+}
+
+function dalsiHrac(uzZapamatovano) {
+  if (!stav || stav.konec) return;
+  if (!uzZapamatovano) zapamatuj();
+  const h = stav.hraci[stav.tah];
+  if (!stav.koloHotovo) {
+    // nedohozené šipky se počítají jako minuté
+    h.sipek += 3 - stav.kolo.length;
+    if (stav.typ === 'x01') h.posledni = stav.zacatek - h.zbyva;
+  }
+  if (stav.typ === 'kriket') h.posledni = stav.kolo.reduce((a, s) => a + (KRIKET_CISLA.includes(s.n) ? s.m : 0), 0);
+  stav.tah = (stav.tah + 1) % stav.hraci.length;
+  stav.kolo = [];
+  stav.koloHotovo = false;
+  stav.prehoz = false;
+  stav.zacatek = stav.hraci[stav.tah].zbyva;
+  zadavani = '';
+  ulozStav();
+  prekresli();
+}
+
+function vyhra() {
+  const h = stav.hraci[stav.tah];
+  stav.konec = true;
+  stav.vitez = stav.tah;
+  h.legy++;
+  stav.koloHotovo = true;
+}
+
+el('bMimo').onclick = () => hod({ t:'0', b:0, n:0, m:0 });
+el('bDalsi').onclick = () => dalsiHrac(false);
+el('bDalsiLeg').onclick = () => novaHra(false);
+el('bNastaveniVysl').onclick = () => { el('vysledek').classList.remove('vidit'); kresliNastaveni(); ukazObrazovku('nastaveni'); };
+
+// =====================================================================
+//  TERČ (SVG)
+// =====================================================================
+const NS = 'http://www.w3.org/2000/svg';
+const R = { bull:6.35, outerBull:15.9, trebleIn:99, trebleOut:107, doubleIn:162, doubleOut:170 };
+
+function bod(r, uhelSt) {          // úhel ve stupních od svislice, po směru hodinových ručiček
+  const a = uhelSt * Math.PI / 180;
+  return [r * Math.sin(a), -r * Math.cos(a)];
+}
+function vysec(r1, r2, a1, a2) {   // mezikruží mezi úhly a1–a2
+  const [x1, y1] = bod(r2, a1), [x2, y2] = bod(r2, a2);
+  const [x3, y3] = bod(r1, a2), [x4, y4] = bod(r1, a1);
+  return `M${x1} ${y1} A${r2} ${r2} 0 0 1 ${x2} ${y2} L${x3} ${y3} A${r1} ${r1} 0 0 0 ${x4} ${y4} Z`;
+}
+function svg(tag, attr, rodic) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attr) e.setAttribute(k, attr[k]);
+  if (rodic) rodic.appendChild(e);
+  return e;
+}
+
+function postavTerc() {
+  const t = el('terc');
+  t.innerHTML = `
+    <defs>
+      <filter id="sisal" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9 0.35" numOctaves="2" seed="7" result="sum"/>
+        <feColorMatrix in="sum" type="saturate" values="0" result="sedy"/>
+        <feComponentTransfer in="sedy" result="vlakna"><feFuncA type="linear" slope="0.22"/></feComponentTransfer>
+        <feComposite in="vlakna" in2="SourceGraphic" operator="in" result="maska"/>
+        <feBlend in="SourceGraphic" in2="maska" mode="multiply"/>
+      </filter>
+      <radialGradient id="stin" cx="50%" cy="45%" r="55%">
+        <stop offset="80%" stop-color="#000" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#000" stop-opacity=".45"/>
+      </radialGradient>
+    </defs>`;
+  // černé okruží s čísly
+  svg('circle', { cx:0, cy:0, r:226, fill:'#1b1b1b' }, t);
+  svg('circle', { cx:0, cy:0, r:226, fill:'none', stroke:'#3a3a3a', 'stroke-width':3 }, t);
+
+  const plocha = svg('g', { filter:'url(#sisal)' }, t);
+  PORADI.forEach((cislo, i) => {
+    const a1 = i * 18 - 9, a2 = i * 18 + 9;
+    const tmave = i % 2 === 0;
+    const single = tmave ? '#1c1c1c' : '#efe3c8';
+    const kruh = tmave ? '#c8302c' : '#1f8f4e';
+    const pole = [
+      [R.outerBull, R.trebleIn, single, 1],
+      [R.trebleIn, R.trebleOut, kruh, 3],
+      [R.trebleOut, R.doubleIn, single, 1],
+      [R.doubleIn, R.doubleOut, kruh, 2]
+    ];
+    for (const [r1, r2, barva, m] of pole) {
+      const p = svg('path', { d:vysec(r1, r2, a1, a2), fill:barva, class:'pole' }, plocha);
+      p.dataset.n = cislo; p.dataset.m = m;
+    }
+  });
+  const ob = svg('circle', { cx:0, cy:0, r:R.outerBull, fill:'#1f8f4e', class:'pole' }, plocha);
+  ob.dataset.n = 25; ob.dataset.m = 1;
+  const bl = svg('circle', { cx:0, cy:0, r:R.bull, fill:'#c8302c', class:'pole' }, plocha);
+  bl.dataset.n = 25; bl.dataset.m = 2;
+
+  // dráty
+  const drat = { fill:'none', stroke:'#c9ccd1', 'stroke-width':0.9, opacity:.85, 'pointer-events':'none' };
+  for (const r of [R.bull, R.outerBull, R.trebleIn, R.trebleOut, R.doubleIn, R.doubleOut]) svg('circle', { cx:0, cy:0, r, ...drat }, t);
+  for (let i = 0; i < 20; i++) {
+    const [x1, y1] = bod(R.outerBull, i * 18 + 9), [x2, y2] = bod(R.doubleOut, i * 18 + 9);
+    svg('line', { x1, y1, x2, y2, ...drat }, t);
+  }
+  svg('circle', { cx:0, cy:0, r:R.doubleOut, fill:'url(#stin)', 'pointer-events':'none' }, t);
+
+  // čísla
+  PORADI.forEach((cislo, i) => {
+    const [x, y] = bod(196, i * 18);
+    const tx = svg('text', { x, y, fill:'#f2f2f2', 'font-size':24, 'font-weight':700,
+      'text-anchor':'middle', 'dominant-baseline':'central', 'font-family':'system-ui, sans-serif',
+      'pointer-events':'none' }, t);
+    tx.textContent = cislo;
+  });
+
+  svg('g', { id:'znacky', 'pointer-events':'none' }, t);
+
+  // ťuknutí: místo se přepočítá na pole (přesněji než podle zasaženého tvaru)
+  t.addEventListener('pointerdown', e => {
+    const pt = t.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(t.getScreenCTM().inverse());
+    const s = pole(p.x, -p.y);
+    s.x = p.x; s.y = p.y;
+    hod(s);
+  });
+}
+
+// Bodové pole z místa v mm (y nahoru)
+function pole(x, y) {
+  const r = Math.hypot(x, y);
+  if (r <= R.bull)      return { t:'Bull', b:50, n:25, m:2 };
+  if (r <= R.outerBull) return { t:'25',   b:25, n:25, m:1 };
+  if (r > R.doubleOut)  return { t:'0',    b:0,  n:0,  m:0 };
+  let u = Math.atan2(x, y) * 180 / Math.PI;
+  if (u < 0) u += 360;
+  const c = PORADI[Math.floor(((u + 9) % 360) / 18)];
+  if (r >= R.trebleIn && r <= R.trebleOut) return { t:'T' + c, b:3 * c, n:c, m:3 };
+  if (r >= R.doubleIn) return { t:'D' + c, b:2 * c, n:c, m:2 };
+  return { t:String(c), b:c, n:c, m:1 };
+}
+
+function kresliZnacky() {
+  const g = el('znacky');
+  if (!g) return;
+  g.innerHTML = '';
+  (stav ? stav.kolo : []).forEach((s, i) => {
+    if (s.x === undefined) return;
+    svg('circle', { cx:s.x, cy:s.y, r:7, fill:'#00e5ff', stroke:'#000', 'stroke-width':2 }, g);
+    const tx = svg('text', { x:s.x, y:s.y + 0.5, 'font-size':9, 'font-weight':800, fill:'#000',
+      'text-anchor':'middle', 'dominant-baseline':'central', 'font-family':'system-ui, sans-serif' }, g);
+    tx.textContent = i + 1;
+  });
+}
+
+// =====================================================================
+//  KLÁVESNICE (X01 – zadání součtu kola)
+// =====================================================================
+let zadavani = '';
+
+function postavKlavesnici() {
+  const k = el('klavesy');
+  ['7','8','9','4','5','6','1','2','3','⌫','0','OK'].forEach(z => {
+    const b = document.createElement('button');
+    b.textContent = z;
+    if (z === 'OK') b.className = 'hlavni';
+    b.onclick = () => klavesa(z);
+    k.appendChild(b);
+  });
+  const r = el('rychle');
+  [26, 41, 45, 60, 81, 85, 100, 121, 140, 180].forEach(n => {
+    const b = document.createElement('button');
+    b.textContent = n;
+    b.onclick = () => { zadavani = String(n); potvrdCislo(); };
+    r.appendChild(b);
+  });
+  document.querySelectorAll('#zavrenoVolba button').forEach(b => {
+    b.onclick = () => { potvrdCislo(Number(b.dataset.s)); };
+  });
+}
+
+function klavesa(z) {
+  if (!stav || stav.konec) return;
+  if (z === '⌫') zadavani = zadavani.slice(0, -1);
+  else if (z === 'OK') { potvrdCislo(); return; }
+  else if (zadavani.length < 3) zadavani = (zadavani + z).replace(/^0+(?=\d)/, '');
+  ukazDisplej();
+}
+
+function potvrdCislo(sipekNaZavreni) {
+  if (!stav || stav.konec || stav.typ !== 'x01') return;
+  if (stav.kolo.length) { hlaska('Kolo už je rozehrané na terči – dokonči ho tam, nebo dej Další hráč.'); return; }
+  const soucet = Number(zadavani || '0');
+  const vysl = koloX01(soucet, sipekNaZavreni);
+  if (vysl === 'ZAVRENI') { el('zavrenoVolba').style.display = 'flex'; return; }
+  el('zavrenoVolba').style.display = 'none';
+  if (vysl) { hlaska('⚠️ ' + vysl); zadavani = ''; ukazDisplej(); return; }
+  zadavani = '';
+  ulozStav();
+  prekresli();
+}
+
+function ukazDisplej() { el('displej').textContent = zadavani || '0'; }
+
+// =====================================================================
+//  TLAČÍTKA PRO KRIKET
+// =====================================================================
+function postavKriketTlac() {
+  const box = el('kriketTlac');
+  box.innerHTML = '';
+  for (const c of KRIKET_CISLA) {
+    const r = document.createElement('div');
+    r.className = 'ktRadek';
+    const lab = document.createElement('div');
+    lab.className = 'c';
+    lab.textContent = c === 25 ? 'Bull' : c;
+    r.appendChild(lab);
+    const volby = c === 25 ? [['25', 1], ['50', 2]] : [['1×', 1], ['2×', 2], ['3×', 3]];
+    for (const [txt, m] of volby) {
+      const b = document.createElement('button');
+      b.textContent = txt;
+      b.onclick = () => {
+        const t = c === 25 ? (m === 2 ? 'Bull' : '25') : (m === 3 ? 'T' : m === 2 ? 'D' : '') + c;
+        hod({ t, b:c * m, n:c, m });
+      };
+      r.appendChild(b);
+    }
+    if (c === 25) r.appendChild(document.createElement('div'));
+    box.appendChild(r);
+  }
+}
+
+// =====================================================================
+//  ZOBRAZENÍ
+// =====================================================================
+function hlaska(t) { el('hlaska').textContent = t; }
+
+function prepniRezim(r) {
+  nast.rezim = r;
+  uloz(KLIC_NAST, nast);
+  prekresli();
+}
+el('bRezTerc').onclick = () => prepniRezim('terc');
+el('bRezCisla').onclick = () => prepniRezim('cisla');
+
+function prekresli() {
+  if (!stav) return;
+  const x01 = stav.typ === 'x01';
+  const tercem = nast.rezim !== 'cisla';
+
+  // přepínač a vstupy
+  el('bRezCisla').textContent = x01 ? '🔢 Čísla' : '🔢 Tlačítka';
+  el('bRezTerc').classList.toggle('vybrano', tercem);
+  el('bRezCisla').classList.toggle('vybrano', !tercem);
+  el('tercBox').style.display = tercem ? 'flex' : 'none';
+  el('klavesnice').style.display = (!tercem && x01) ? 'flex' : 'none';
+  el('kriketTlac').style.display = (!tercem && !x01) ? 'flex' : 'none';
+  el('zavrenoVolba').style.display = 'none';
+
+  if (x01) kresliTabuliX01(); else kresliKriket();
+
+  // šipky kola
+  const kolo = el('kolo');
+  kolo.innerHTML = '';
+  if (stav.kolo.length && stav.kolo[0].cele) {
+    const d = document.createElement('div');
+    d.className = 'sipka';
+    d.textContent = 'Kolo: ' + stav.kolo[0].b;
+    kolo.appendChild(d);
+  } else {
+    for (let i = 0; i < 3; i++) {
+      const s = stav.kolo[i];
+      const d = document.createElement('div');
+      d.className = 'sipka' + (s ? '' : ' prazdna');
+      d.textContent = s ? s.t : (i + 1) + '.';
+      kolo.appendChild(d);
+    }
+  }
+
+  // rada a hláška
+  const h = stav.hraci[stav.tah];
+  let rada = '';
+  if (x01 && !stav.konec && !stav.koloHotovo) {
+    const n = navrhZavreni(h.zbyva, 3 - stav.kolo.length);
+    if (n) rada = '🎯 Zavření: ' + n;
+  }
+  el('rada').textContent = rada;
+
+  if (stav.konec) hlaska('');
+  else if (infoJednou) { hlaska(infoJednou + ' Hází ' + h.jmeno + '.'); infoJednou = ''; }
+  else if (stav.prehoz) hlaska('💥 Přehoz! ' + h.jmeno + ' zůstává na ' + stav.zacatek + '.');
+  else if (stav.koloHotovo) hlaska('Kolo hotovo – vytáhni šipky a dej Další hráč.');
+  else hlaska('Hází ' + h.jmeno + (tercem ? ' – ťukni, kam šipka letěla.' : ''));
+
+  el('bDalsi').classList.toggle('pulz', stav.koloHotovo && !stav.konec);
+  el('bDalsi').disabled = stav.konec;
+  el('bMimo').disabled = stav.konec || stav.koloHotovo || (stav.kolo.length > 0 && stav.kolo[0].cele);
+  el('bZpet').disabled = !historie.length;
+
+  ukazDisplej();
+  kresliZnacky();
+  if (stav.konec) ukazVysledek(); else el('vysledek').classList.remove('vidit');
+}
+
+function kresliTabuliX01() {
+  el('kriket').style.display = 'none';
+  const tab = el('tabule');
+  tab.style.display = 'flex';
+  tab.innerHTML = '';
+  stav.hraci.forEach((h, i) => {
+    const d = document.createElement('div');
+    d.className = 'hrac' + (i === stav.tah && !stav.konec ? ' tah' : '');
+    d.innerHTML = '<div class="info"><div class="jm"></div><div class="stat"></div></div><div class="zb"></div>';
+    d.querySelector('.jm').textContent = h.jmeno + (h.legy ? '  ' : '');
+    if (h.legy) {
+      const l = document.createElement('span');
+      l.className = 'legy';
+      l.textContent = '● '.repeat(h.legy).trim();
+      d.querySelector('.jm').appendChild(l);
+    }
+    d.querySelector('.stat').textContent =
+      'Ø ' + prumerX01(h) + ' · posl. ' + (h.posledni === null ? '–' : h.posledni) + ' · šipek ' + h.sipek;
+    d.querySelector('.zb').textContent = h.zbyva;
+    tab.appendChild(d);
+  });
+}
+
+function kresliKriket() {
+  el('tabule').style.display = 'none';
+  const t = el('kriket');
+  t.style.display = 'table';
+  const zn = ['', '/', '✕', 'Ⓧ'];
+  let html = '<tr><th></th>';
+  stav.hraci.forEach((h, i) => {
+    html += '<th class="' + (i === stav.tah && !stav.konec ? 'tah' : '') + '">' + esc(h.jmeno) +
+            (h.legy ? ' <span style="color:var(--acc)">' + '●'.repeat(h.legy) + '</span>' : '') + '</th>';
+  });
+  html += '</tr>';
+  for (const c of KRIKET_CISLA) {
+    const vsichniZavreli = stav.hraci.every(h => h.marky[c] >= 3);
+    html += '<tr class="' + (vsichniZavreli ? 'zavreno' : '') + '"><td class="cislo">' + (c === 25 ? 'Bull' : c) + '</td>';
+    stav.hraci.forEach(h => { html += '<td class="mark">' + zn[h.marky[c]] + '</td>'; });
+    html += '</tr>';
+  }
+  html += '<tr class="body"><td class="cislo">Body</td>';
+  stav.hraci.forEach(h => { html += '<td>' + h.body + '</td>'; });
+  html += '</tr><tr><td class="cislo" style="font-size:.7em">MPR</td>';
+  stav.hraci.forEach(h => { html += '<td style="font-size:.8em;color:var(--muted)">' + mpr(h) + '</td>'; });
+  html += '</tr>';
+  t.innerHTML = html;
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+
+function ukazVysledek() {
+  const v = stav.hraci[stav.vitez];
+  el('vitezJm').textContent = v.jmeno + ' vyhrál/a leg!';
+  const x01 = stav.typ === 'x01';
+  let html = '<tr><td></td><td>' + (x01 ? 'Ø na 3 šipky' : 'MPR') + '</td><td>Šipek</td><td>Legy</td></tr>';
+  stav.hraci.forEach(h => {
+    html += '<tr><td style="text-align:left">' + esc(h.jmeno) + '</td><td>' + (x01 ? prumerX01(h) : mpr(h)) +
+            '</td><td>' + h.sipek + '</td><td>' + h.legy + '</td></tr>';
+  });
+  el('vysledekTab').innerHTML = html;
+  el('vysledek').classList.add('vidit');
+}
+
+// =====================================================================
+//  START
+// =====================================================================
+postavTerc();
+postavKlavesnici();
+postavKriketTlac();
+
+const ulozeno = nacti(KLIC_STAV, null);
+if (ulozeno && ulozeno.stav) { stav = ulozeno.stav; historie = ulozeno.historie || []; }
+kresliNastaveni();
+ukazObrazovku('nastaveni');
+</script>
+</body>
+</html>
