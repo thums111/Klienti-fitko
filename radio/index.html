@@ -21,6 +21,8 @@
   #hrajeLogo { width:64px; height:64px; border-radius:10px; background:#333; object-fit:contain; flex:none; }
   #hrajeText { flex:1; min-width:0; }
   #hrajeNazev { font-size:22px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #hrajeSkladba { font-size:17px; color:var(--acc); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #hrajeSkladba:empty { display:none; }
   #hrajeStav { font-size:14px; color:var(--muted); margin-top:4px; }
   #bPlay { width:64px; height:64px; border-radius:50%; border:0; background:var(--acc); color:#000;
            font-size:28px; cursor:pointer; flex:none; }
@@ -62,7 +64,7 @@
 </head>
 <body>
 <header>
-  <h1>📻 Rádio <span class="ver">v1.0</span></h1>
+  <h1>📻 Rádio <span class="ver">v1.1</span></h1>
 </header>
 
 <!-- Právě hraje -->
@@ -70,6 +72,7 @@
   <img id="hrajeLogo" alt="">
   <div id="hrajeText">
     <div id="hrajeNazev">Vyber stanici</div>
+    <div id="hrajeSkladba"></div>
     <div id="hrajeStav">Klikni na stanici v seznamu</div>
   </div>
   <div class="hlasitost">🔈 <input id="hlas" type="range" min="0" max="100" value="80"> 🔊</div>
@@ -91,7 +94,7 @@
 <audio id="audio" preload="none"></audio>
 
 <script>
-const VERZE = '1.0';
+const VERZE = '1.1';
 
 // Servery veřejné databáze rádií radio-browser.info (zkouší se postupně)
 const SERVERY = [
@@ -275,6 +278,7 @@ function hraj(s) {
   audio.play().catch(() => stav('❌ Stanici nejde spustit. Zkus jinou.'));
   ukazHraje();
   kresliSeznam();
+  spustSkladbu();
   // poděkování databázi (počítá oblíbenost stanic), chyby nevadí
   fetch(SERVERY[0] + '/json/url/' + s.uuid).catch(() => {});
 }
@@ -283,6 +287,7 @@ function zastav() {
   audio.pause();
   audio.removeAttribute('src');
   audio.load();
+  zastavSkladbu();
   stav('Zastaveno');
   el('bPlay').textContent = '▶';
 }
@@ -309,6 +314,107 @@ function ukazHraje() {
 }
 
 function stav(t) { el('hrajeStav').textContent = t; }
+
+// ===== Co právě hraje (název skladby) =====
+// Zkouší dva způsoby. Funguje jen u stanic, které název posílají a dovolí ho číst.
+let skladbaCasovac = null;
+let skladbaZnacka = 0;     // při změně stanice se starší zjišťování zahodí
+
+function spustSkladbu() {
+  zastavSkladbu();
+  const znacka = ++skladbaZnacka;
+  const s = aktualni;
+  const kolo = async () => {
+    const t = await zjistiSkladbu(s.url);
+    if (znacka !== skladbaZnacka) return;
+    ukazSkladbu(t);
+    skladbaCasovac = setTimeout(kolo, 20000);   // znovu za 20 s
+  };
+  kolo();
+}
+
+function zastavSkladbu() {
+  skladbaZnacka++;
+  clearTimeout(skladbaCasovac);
+  ukazSkladbu('');
+}
+
+function ukazSkladbu(t) {
+  el('hrajeSkladba').textContent = t ? '🎵 ' + t : '';
+  if ('mediaSession' in navigator && aktualni) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: t || aktualni.nazev, artist: t ? aktualni.nazev : 'Rádio',
+      artwork: aktualni.logo ? [{ src: aktualni.logo }] : []
+    });
+  }
+}
+
+async function zjistiSkladbu(url) {
+  return (await zIcecastStatusu(url)) || (await zeStreamu(url)) || '';
+}
+
+// Fetch s časovým limitem
+async function fetchLimit(url, volby = {}, ms = 6000) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  try { return await fetch(url, { ...volby, signal: ac.signal }); }
+  finally { clearTimeout(t); }
+}
+
+// Způsob 1: Icecast server má stránku status-json.xsl se seznamem vysílání
+async function zIcecastStatusu(url) {
+  try {
+    const u = new URL(url);
+    const odp = await fetchLimit(u.origin + '/status-json.xsl');
+    if (!odp.ok) return '';
+    const data = await odp.json();
+    let zdroje = data.icestats && data.icestats.source;
+    if (!zdroje) return '';
+    if (!Array.isArray(zdroje)) zdroje = [zdroje];
+    const z = zdroje.find(x => x.listenurl && new URL(x.listenurl).pathname === u.pathname)
+           || (zdroje.length === 1 ? zdroje[0] : null);
+    if (!z) return '';
+    if (z.artist && z.title) return z.artist + ' – ' + z.title;
+    return (z.title || '').trim();
+  } catch (e) { return ''; }
+}
+
+// Způsob 2: požádat stream o vložené informace (ICY) a přečíst první z nich
+async function zeStreamu(url) {
+  const ac = new AbortController();
+  const limit = setTimeout(() => ac.abort(), 8000);
+  try {
+    const odp = await fetch(url, { headers: { 'Icy-MetaData': '1' }, signal: ac.signal });
+    const metaint = parseInt(odp.headers.get('icy-metaint'), 10);
+    if (!odp.ok || !metaint || !odp.body) return '';
+    const cteni = odp.body.getReader();
+    let prijato = new Uint8Array(0);
+    // Nasbírej data: metaint bajtů zvuku + 1 bajt délky + samotná informace
+    while (true) {
+      if (prijato.length > metaint) {
+        const delka = prijato[metaint] * 16;
+        if (delka === 0) return '';
+        if (prijato.length >= metaint + 1 + delka) {
+          const blok = prijato.slice(metaint + 1, metaint + 1 + delka);
+          const text = new TextDecoder('utf-8').decode(blok);
+          const m = text.match(/StreamTitle='(.*?)';/);
+          return m ? m[1].trim() : '';
+        }
+      }
+      const { value, done } = await cteni.read();
+      if (done) return '';
+      const nove = new Uint8Array(prijato.length + value.length);
+      nove.set(prijato); nove.set(value, prijato.length);
+      prijato = nove;
+      if (prijato.length > metaint + 5000) return '';
+    }
+  } catch (e) {
+    return '';
+  } finally {
+    clearTimeout(limit);
+    ac.abort();   // dál stream nestahuj
+  }
+}
 
 audio.addEventListener('waiting', () => stav('⏳ Načítám…'));
 audio.addEventListener('playing', () => { stav('🔴 Hraje'); el('bPlay').textContent = '■'; });
