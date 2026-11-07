@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rádio</title>
+<style>
+  :root {
+    --bg:#121212; --panel:#1e1e1e; --panel2:#262626; --text:#eee; --muted:#999;
+    --acc:#ff7a1a; --ok:#2ecc71; --err:#ff5b5b;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--panel); }
+  h1 { font-size:20px; margin:0; }
+  .ver { font-size:13px; color:var(--muted); font-weight:normal; }
+
+  /* ===== Právě hraje ===== */
+  #hraje { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:16px;
+           padding:14px 16px; background:var(--panel2); border-bottom:1px solid #333; }
+  #hrajeLogo { width:64px; height:64px; border-radius:10px; background:#333; object-fit:contain; flex:none; }
+  #hrajeText { flex:1; min-width:0; }
+  #hrajeNazev { font-size:22px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #hrajeStav { font-size:14px; color:var(--muted); margin-top:4px; }
+  #bPlay { width:64px; height:64px; border-radius:50%; border:0; background:var(--acc); color:#000;
+           font-size:28px; cursor:pointer; flex:none; }
+  #bPlay:disabled { opacity:0.4; cursor:default; }
+  .hlasitost { display:flex; align-items:center; gap:8px; color:var(--muted); }
+  .hlasitost input { width:140px; accent-color:var(--acc); }
+
+  /* ===== Výběr ===== */
+  .lista { display:flex; flex-wrap:wrap; gap:8px; padding:14px 16px 6px; }
+  .chip { padding:9px 16px; border-radius:20px; border:0; background:#2c2c2c; color:var(--text);
+          font-size:15px; cursor:pointer; }
+  .chip.aktivni { background:var(--acc); color:#000; font-weight:bold; }
+  .hledani { display:flex; gap:8px; padding:6px 16px 10px; align-items:center; flex-wrap:wrap; }
+  .hledani input[type=text] { flex:1; min-width:200px; padding:10px 12px; font-size:16px; border-radius:8px;
+                               border:1px solid #444; background:#1a1a1a; color:var(--text); }
+  .hledani button { padding:10px 18px; font-size:16px; border:0; border-radius:8px; background:#333; color:var(--text); cursor:pointer; }
+  .hledani label { color:var(--muted); font-size:14px; display:flex; align-items:center; gap:6px; cursor:pointer; }
+  #zprava { padding:4px 16px; color:var(--muted); min-height:24px; }
+
+  /* ===== Seznam stanic ===== */
+  #seznam { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:10px; padding:6px 16px 24px; }
+  .stanice { display:flex; align-items:center; gap:12px; padding:10px; background:var(--panel);
+             border-radius:10px; cursor:pointer; border:2px solid transparent; }
+  .stanice:hover { background:#252525; }
+  .stanice.hraje { border-color:var(--acc); }
+  .stanice img { width:48px; height:48px; border-radius:8px; background:#333; object-fit:contain; flex:none; }
+  .stanice .txt { flex:1; min-width:0; }
+  .stanice .jm { font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .stanice .tg { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px; }
+  .hvezda { background:none; border:0; font-size:24px; cursor:pointer; color:#555; flex:none; padding:4px; }
+  .hvezda.ano { color:#ffd23f; }
+
+  @media (max-width:640px) {
+    #hraje { flex-wrap:wrap; }
+    .hlasitost { width:100%; }
+    .hlasitost input { flex:1; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>📻 Rádio <span class="ver">v1.0</span></h1>
+</header>
+
+<!-- Právě hraje -->
+<div id="hraje">
+  <img id="hrajeLogo" alt="">
+  <div id="hrajeText">
+    <div id="hrajeNazev">Vyber stanici</div>
+    <div id="hrajeStav">Klikni na stanici v seznamu</div>
+  </div>
+  <div class="hlasitost">🔈 <input id="hlas" type="range" min="0" max="100" value="80"> 🔊</div>
+  <button id="bPlay" disabled title="Hrát / zastavit (mezerník)">▶</button>
+</div>
+
+<!-- Výběr kategorie -->
+<div class="lista" id="kategorie"></div>
+
+<div class="hledani">
+  <input id="hledat" type="text" placeholder="Hledat stanici podle názvu… (např. Evropa, Kiss, Rock)">
+  <button id="bHledat">Hledat</button>
+  <label><input id="jenCZ" type="checkbox"> jen české</label>
+</div>
+
+<div id="zprava"></div>
+<div id="seznam"></div>
+
+<audio id="audio" preload="none"></audio>
+
+<script>
+const VERZE = '1.0';
+
+// Servery veřejné databáze rádií radio-browser.info (zkouší se postupně)
+const SERVERY = [
+  'https://de1.api.radio-browser.info',
+  'https://de2.api.radio-browser.info',
+  'https://fi1.api.radio-browser.info',
+  'https://nl1.api.radio-browser.info'
+];
+
+// Kategorie: co se hledá v databázi
+const KATEGORIE = [
+  { id:'oblibene', nazev:'⭐ Oblíbené' },
+  { id:'cz',       nazev:'🇨🇿 České',   dotaz:{ countrycode:'CZ' } },
+  { id:'pop',      nazev:'Pop',          dotaz:{ tag:'pop' } },
+  { id:'rock',     nazev:'Rock',         dotaz:{ tag:'rock' } },
+  { id:'dance',    nazev:'Dance',        dotaz:{ tag:'dance' } },
+  { id:'80s',      nazev:'80. léta',     dotaz:{ tag:'80s' } },
+  { id:'90s',      nazev:'90. léta',     dotaz:{ tag:'90s' } },
+  { id:'oldies',   nazev:'Oldies',       dotaz:{ tag:'oldies' } },
+  { id:'electro',  nazev:'Electronic',   dotaz:{ tag:'electronic' } },
+  { id:'hiphop',   nazev:'Hip-hop',      dotaz:{ tag:'hip hop' } },
+  { id:'chill',    nazev:'Chill',        dotaz:{ tag:'chillout' } },
+  { id:'fitness',  nazev:'💪 Fitness',   dotaz:{ tag:'workout' } }
+];
+
+const KLIC_OBL = 'radio_oblibene';
+const KLIC_POSL = 'radio_posledni';
+const KLIC_HLAS = 'radio_hlasitost';
+const KLIC_CZ = 'radio_jen_cz';
+
+const el = id => document.getElementById(id);
+const audio = el('audio');
+
+let oblibene = nacti(KLIC_OBL, []);
+let aktualni = nacti(KLIC_POSL, null);   // stanice, která hraje / hrála naposledy
+let zobrazene = [];
+let aktivniKat = null;
+
+// ===== Ukládání do prohlížeče =====
+function nacti(klic, vychozi) {
+  try { const v = localStorage.getItem(klic); return v === null ? vychozi : JSON.parse(v); }
+  catch (e) { return vychozi; }
+}
+function uloz(klic, hodnota) {
+  try { localStorage.setItem(klic, JSON.stringify(hodnota)); } catch (e) {}
+}
+
+// ===== Dotaz do databáze rádií =====
+async function dotazDB(parametry) {
+  const p = new URLSearchParams({
+    hidebroken:'true', order:'clickcount', reverse:'true', limit:'150', ...parametry
+  });
+  if (el('jenCZ').checked && !p.has('countrycode')) p.set('countrycode', 'CZ');
+
+  for (const server of SERVERY) {
+    try {
+      const odp = await fetch(server + '/json/stations/search?' + p.toString());
+      if (!odp.ok) continue;
+      const data = await odp.json();
+      return upravSeznam(data);
+    } catch (e) { /* zkus další server */ }
+  }
+  throw new Error('Databáze rádií neodpovídá');
+}
+
+// Nechá jen stanice, které jdou přehrát na https stránce, a odstraní duplicity
+function upravSeznam(data) {
+  const videne = new Set();
+  const vysledek = [];
+  for (const s of data) {
+    const url = s.url_resolved || s.url || '';
+    if (!url.startsWith('https://')) continue;          // http stream by prohlížeč zablokoval
+    const klic = s.name.trim().toLowerCase();
+    if (videne.has(klic)) continue;
+    videne.add(klic);
+    vysledek.push({
+      uuid: s.stationuuid,
+      nazev: s.name.trim(),
+      url,
+      logo: (s.favicon || '').replace(/^http:\/\//, 'https://'),
+      popis: [s.tags, s.country, s.bitrate ? s.bitrate + ' kbps' : ''].filter(Boolean).join(' · ')
+    });
+    if (vysledek.length >= 60) break;
+  }
+  return vysledek;
+}
+
+// ===== Zobrazení =====
+function kresliKategorie() {
+  el('kategorie').innerHTML = '';
+  for (const k of KATEGORIE) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (k.id === aktivniKat ? ' aktivni' : '');
+    b.textContent = k.nazev;
+    b.onclick = () => otevriKategorii(k.id);
+    el('kategorie').appendChild(b);
+  }
+}
+
+async function otevriKategorii(id) {
+  aktivniKat = id;
+  kresliKategorie();
+  const k = KATEGORIE.find(x => x.id === id);
+  if (id === 'oblibene') {
+    zobrazene = oblibene;
+    zprava(oblibene.length ? '' : 'Zatím žádné oblíbené. Přidáš je hvězdičkou ☆ u stanice.');
+    kresliSeznam();
+    return;
+  }
+  await nactiDoSeznamu(k.dotaz);
+}
+
+async function hledej() {
+  const text = el('hledat').value.trim();
+  if (!text) return;
+  aktivniKat = null;
+  kresliKategorie();
+  await nactiDoSeznamu({ name:text });
+}
+
+async function nactiDoSeznamu(dotaz) {
+  zprava('Načítám stanice…');
+  el('seznam').innerHTML = '';
+  try {
+    zobrazene = await dotazDB(dotaz);
+    zprava(zobrazene.length ? zobrazene.length + ' stanic' : 'Nic nenalezeno.');
+  } catch (e) {
+    zobrazene = [];
+    zprava('❌ ' + e.message + '. Je PC připojené k internetu?');
+  }
+  kresliSeznam();
+}
+
+function zprava(t) { el('zprava').textContent = t; }
+
+function jeOblibena(s) { return oblibene.some(o => o.uuid === s.uuid); }
+
+function kresliSeznam() {
+  const box = el('seznam');
+  box.innerHTML = '';
+  for (const s of zobrazene) {
+    const d = document.createElement('div');
+    d.className = 'stanice' + (aktualni && aktualni.uuid === s.uuid ? ' hraje' : '');
+
+    const img = document.createElement('img');
+    img.alt = '';
+    if (s.logo) img.src = s.logo;
+    img.onerror = () => { img.removeAttribute('src'); };
+
+    const txt = document.createElement('div');
+    txt.className = 'txt';
+    txt.innerHTML = '<div class="jm"></div><div class="tg"></div>';
+    txt.querySelector('.jm').textContent = s.nazev;
+    txt.querySelector('.tg').textContent = s.popis || '';
+
+    const hv = document.createElement('button');
+    hv.className = 'hvezda' + (jeOblibena(s) ? ' ano' : '');
+    hv.textContent = jeOblibena(s) ? '★' : '☆';
+    hv.title = 'Oblíbená';
+    hv.onclick = e => { e.stopPropagation(); prepniOblibenou(s); };
+
+    d.append(img, txt, hv);
+    d.onclick = () => hraj(s);
+    box.appendChild(d);
+  }
+}
+
+function prepniOblibenou(s) {
+  if (jeOblibena(s)) oblibene = oblibene.filter(o => o.uuid !== s.uuid);
+  else oblibene.push(s);
+  uloz(KLIC_OBL, oblibene);
+  if (aktivniKat === 'oblibene') zobrazene = oblibene;
+  kresliSeznam();
+}
+
+// ===== Přehrávání =====
+function hraj(s) {
+  aktualni = s;
+  uloz(KLIC_POSL, s);
+  audio.src = s.url;
+  audio.play().catch(() => stav('❌ Stanici nejde spustit. Zkus jinou.'));
+  ukazHraje();
+  kresliSeznam();
+  // poděkování databázi (počítá oblíbenost stanic), chyby nevadí
+  fetch(SERVERY[0] + '/json/url/' + s.uuid).catch(() => {});
+}
+
+function zastav() {
+  audio.pause();
+  audio.removeAttribute('src');
+  audio.load();
+  stav('Zastaveno');
+  el('bPlay').textContent = '▶';
+}
+
+function prepniPlay() {
+  if (!aktualni) return;
+  if (audio.paused || !audio.src) hraj(aktualni);
+  else zastav();
+}
+
+function ukazHraje() {
+  el('bPlay').disabled = !aktualni;
+  if (!aktualni) return;
+  el('hrajeNazev').textContent = aktualni.nazev;
+  const logo = el('hrajeLogo');
+  if (aktualni.logo) logo.src = aktualni.logo; else logo.removeAttribute('src');
+  document.title = aktualni.nazev + ' – Rádio';
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: aktualni.nazev, artist: 'Rádio',
+      artwork: aktualni.logo ? [{ src: aktualni.logo }] : []
+    });
+  }
+}
+
+function stav(t) { el('hrajeStav').textContent = t; }
+
+audio.addEventListener('waiting', () => stav('⏳ Načítám…'));
+audio.addEventListener('playing', () => { stav('🔴 Hraje'); el('bPlay').textContent = '■'; });
+audio.addEventListener('pause',   () => { el('bPlay').textContent = '▶'; });
+audio.addEventListener('error',   () => {
+  if (audio.getAttribute('src')) stav('❌ Stanice teď nevysílá nebo nejde přehrát. Zkus jinou.');
+  el('bPlay').textContent = '▶';
+});
+
+// ===== Ovládání =====
+el('bPlay').onclick = prepniPlay;
+el('bHledat').onclick = hledej;
+el('hledat').addEventListener('keydown', e => { if (e.key === 'Enter') hledej(); });
+
+el('hlas').value = nacti(KLIC_HLAS, 80);
+audio.volume = el('hlas').value / 100;
+el('hlas').oninput = () => { audio.volume = el('hlas').value / 100; uloz(KLIC_HLAS, Number(el('hlas').value)); };
+
+el('jenCZ').checked = nacti(KLIC_CZ, false);
+el('jenCZ').onchange = () => {
+  uloz(KLIC_CZ, el('jenCZ').checked);
+  if (aktivniKat && aktivniKat !== 'oblibene') otevriKategorii(aktivniKat);
+};
+
+// Mezerník = hrát / zastavit (když se zrovna nepíše do hledání)
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && document.activeElement !== el('hledat')) { e.preventDefault(); prepniPlay(); }
+});
+
+// Mediální klávesy na klávesnici
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.setActionHandler('play', () => aktualni && hraj(aktualni));
+  navigator.mediaSession.setActionHandler('pause', zastav);
+  navigator.mediaSession.setActionHandler('stop', zastav);
+}
+
+// ===== Start =====
+kresliKategorie();
+ukazHraje();
+if (aktualni) stav('Naposledy: stiskni ▶ nebo mezerník');
+otevriKategorii(oblibene.length ? 'oblibene' : 'cz');
+</script>
+</body>
+</html>
