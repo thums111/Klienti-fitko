@@ -95,10 +95,10 @@
   #displej { background:#0b0f13; border-radius:12px; text-align:right; font-size:2.4em; font-weight:800; padding:.15em .4em; min-height:1.4em; font-variant-numeric:tabular-nums; }
   .klavesy { display:grid; grid-template-columns:repeat(3, 1fr); gap:.45em; }
   .klavesy button { padding:.7em 0; font-size:1.4em; font-weight:bold; }
-  .rychle { display:grid; grid-template-columns:repeat(5, 1fr); gap:.4em; }
+  .rychle { display:grid; grid-template-columns:repeat(4, 1fr); gap:.4em; }
   .rychle button { padding:.5em 0; font-size:.95em; background:#1d2a36; }
-  #zavrenoVolba { display:none; gap:.5em; }
-  #zavrenoVolba button { flex:1; padding:.9em; }
+  .rychle button.zap { background:var(--acc); color:#1a1300; font-weight:bold; }
+  #psani { font-size:1.6em; font-weight:800; color:var(--acc); min-height:1.2em; text-align:center; }
 
   /* tlačítka pro kriket */
   #kriketTlac { width:100%; max-width:640px; display:none; flex-direction:column; gap:.4em; }
@@ -127,7 +127,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.1</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.2</span></h1>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
   <button id="bMenu" title="Nastavení hry">☰ Menu</button>
 </header>
@@ -173,10 +173,6 @@
 
     <div id="klavesnice">
       <div id="displej"></div>
-      <div id="zavrenoVolba">
-        <span style="align-self:center">Zavřeno kolikátou šipkou?</span>
-        <button data-s="1">1.</button><button data-s="2">2.</button><button data-s="3">3.</button>
-      </div>
       <div class="rychle" id="rychle"></div>
       <div class="klavesy" id="klavesy"></div>
     </div>
@@ -191,6 +187,7 @@
       <button id="bRezCisla">🔢 Čísla</button>
     </div>
     <div id="kolo"></div>
+    <div id="psani"></div>
     <div id="rada"></div>
     <div id="hlaska"></div>
     <div class="ovladani">
@@ -198,8 +195,10 @@
     </div>
     <button id="bDalsi" class="hlavni">Další hráč ➜</button>
     <div id="napoveda">
-      <b>Klávesnice:</b><br>
-      čísla + <kbd>Enter</kbd> = součet kola<br>
+      <b>Klávesnice – každá šipka zvlášť:</b><br>
+      <kbd>20</kbd> <kbd>Enter</kbd> single · <kbd>D</kbd><kbd>16</kbd> <kbd>Enter</kbd> double<br>
+      <kbd>T</kbd><kbd>20</kbd> <kbd>Enter</kbd> triple · <kbd>25</kbd> / <kbd>50</kbd> bull<br>
+      na numerické: <kbd>/</kbd> double · <kbd>*</kbd> triple<br>
       <kbd>Backspace</kbd> oprava · <kbd>Esc</kbd> smazat<br>
       <kbd>mezerník</kbd> další hráč<br>
       <kbd>Z</kbd> zpět · <kbd>M</kbd> mimo
@@ -225,14 +224,12 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, 1–4 hráči)
 // =====================================================================
-const VERZE = '1.1';
+const VERZE = '1.2';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
 const PORADI = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
 const KRIKET_CISLA = [20,19,18,17,16,15,25];
-const NEZAVRITELNE = [169,168,166,165,163,162,159];   // X01: tyto zbytky nejde zavřít 3 šipkami
-const NEMOZNE_KOLO = [179,178,176,175,173,172,169,166,163];   // tyto součty kola nejdou hodit
 
 const el = id => document.getElementById(id);
 
@@ -245,7 +242,6 @@ function uloz(klic, hodnota) { try { localStorage.setItem(klic, JSON.stringify(h
 
 let nast = nacti(KLIC_NAST, { hra:'501', jmena:['Hráč 1', 'Hráč 2'], rezim:'terc', zacina:0 });
 let stav = null;        // rozehraná hra
-let infoJednou = '';    // hláška, která se ukáže jen jednou (např. přehoz při zadání čísly)
 let historie = [];      // pro ↶ Zpět
 
 // =====================================================================
@@ -327,7 +323,7 @@ function novaHra(noveNastaveni) {
     vitez: -1
   };
   historie = [];
-  zadavani = '';
+  psaniSmaz();
   ulozStav();
   el('vysledek').classList.remove('vidit');
   ukazObrazovku('hra');
@@ -341,7 +337,7 @@ el('bZpetVysl').onclick = zpet;
 function zpet() {
   if (!historie.length) return;
   stav = JSON.parse(historie.pop());
-  zadavani = '';
+  psaniSmaz();
   el('vysledek').classList.remove('vidit');
   ulozStav();
   prekresli();
@@ -370,39 +366,6 @@ function hodX01(s) {
     h.zbyva = nove;
     if (stav.kolo.length === 3) { stav.koloHotovo = true; h.posledni = stav.zacatek - h.zbyva; }
   }
-}
-
-// Zadání celého kola číslem (klávesnice). Vrací text chyby, nebo '' když prošlo.
-// sipekNaZavreni: při zavření kolikátou šipkou (1–3), jinak 3
-function koloX01(soucet, sipekNaZavreni) {
-  const h = stav.hraci[stav.tah];
-  if (soucet > 180 || NEMOZNE_KOLO.includes(soucet)) return soucet + ' se jedním kolem hodit nedá.';
-  const nove = h.zbyva - soucet;
-  if (nove === 0) {
-    if (soucet > 170 || NEZAVRITELNE.includes(soucet)) return soucet + ' se nedá zavřít.';
-    if (!sipekNaZavreni) return 'ZAVRENI';     // zeptej se, kolikátou šipkou
-    zapamatuj();
-    h.sipek += sipekNaZavreni;
-    h.zbyva = 0;
-    h.posledni = soucet;
-    stav.kolo = [{ t:String(soucet), b:soucet, n:0, m:0, cele:true }];
-    vyhra();
-    return '';
-  }
-  zapamatuj();
-  h.sipek += 3;
-  stav.kolo = [{ t:String(soucet), b:soucet, n:0, m:0, cele:true }];
-  if (nove < 0 || nove === 1) {
-    h.posledni = 0;
-    stav.prehoz = true;
-    infoJednou = '💥 Přehoz! ' + h.jmeno + ' zůstává na ' + h.zbyva + '.';
-  } else {
-    h.zbyva = nove;
-    h.posledni = soucet;
-  }
-  stav.koloHotovo = true;
-  dalsiHrac(true);      // po zadání čísla rovnou na dalšího
-  return '';
 }
 
 function prumerX01(h) { return h.sipek ? ((stav.start - h.zbyva) / h.sipek * 3).toFixed(1) : '–'; }
@@ -467,7 +430,6 @@ function mpr(h) { return h.sipek ? (h.zasahu / h.sipek * 3).toFixed(2) : '–'; 
 // =====================================================================
 function hod(s) {
   if (!stav || stav.konec || stav.koloHotovo) return;
-  if (stav.kolo.length && stav.kolo[0].cele) return;
   zapamatuj();
   if (stav.typ === 'x01') hodX01(s); else hodKriket(s);
   ulozStav();
@@ -489,7 +451,7 @@ function dalsiHrac(uzZapamatovano) {
   stav.koloHotovo = false;
   stav.prehoz = false;
   stav.zacatek = stav.hraci[stav.tah].zbyva;
-  zadavani = '';
+  psaniSmaz();
   ulozStav();
   prekresli();
 }
@@ -630,11 +592,25 @@ function kresliZnacky() {
 }
 
 // =====================================================================
-//  KLÁVESNICE (X01 – zadání součtu kola)
+//  ZADÁVÁNÍ ČÍSLY – každá šipka zvlášť (obrazovková i PC klávesnice)
 // =====================================================================
-let zadavani = '';
+let psani = { m:1, cislice:'' };     // m = násobek (1 single, 2 double, 3 triple)
+
+function psaniText() { return (psani.m === 3 ? 'T' : psani.m === 2 ? 'D' : '') + psani.cislice; }
+function psaniSmaz() { psani = { m:1, cislice:'' }; }
 
 function postavKlavesnici() {
+  const r = el('rychle');
+  [['D', 'Double'], ['T', 'Triple'], ['25', '25'], ['50', 'Bull']].forEach(([z, txt]) => {
+    const b = document.createElement('button');
+    b.textContent = txt;
+    b.id = 'kl' + z;
+    b.onclick = () => {
+      if (z === 'D' || z === 'T') klavesa(z);
+      else { psani = { m:1, cislice:z }; potvrdSipku(); }
+    };
+    r.appendChild(b);
+  });
   const k = el('klavesy');
   ['7','8','9','4','5','6','1','2','3','⌫','0','OK'].forEach(z => {
     const b = document.createElement('button');
@@ -643,40 +619,48 @@ function postavKlavesnici() {
     b.onclick = () => klavesa(z);
     k.appendChild(b);
   });
-  const r = el('rychle');
-  [26, 41, 45, 60, 81, 85, 100, 121, 140, 180].forEach(n => {
-    const b = document.createElement('button');
-    b.textContent = n;
-    b.onclick = () => { zadavani = String(n); potvrdCislo(); };
-    r.appendChild(b);
-  });
-  document.querySelectorAll('#zavrenoVolba button').forEach(b => {
-    b.onclick = () => { potvrdCislo(Number(b.dataset.s)); };
-  });
 }
 
 function klavesa(z) {
   if (!stav || stav.konec) return;
-  if (z === '⌫') zadavani = zadavani.slice(0, -1);
-  else if (z === 'OK') { potvrdCislo(); return; }
-  else if (zadavani.length < 3) zadavani = (zadavani + z).replace(/^0+(?=\d)/, '');
+  if (z === '⌫') { if (psani.cislice) psani.cislice = psani.cislice.slice(0, -1); else psani.m = 1; }
+  else if (z === 'D') psani.m = psani.m === 2 ? 1 : 2;
+  else if (z === 'T') psani.m = psani.m === 3 ? 1 : 3;
+  else if (z === 'OK') { potvrdSipku(); return; }
+  else if (/^[0-9]$/.test(z) && psani.cislice.length < 2) psani.cislice = (psani.cislice + z).replace(/^0+(?=[0-9])/, '');
   ukazDisplej();
 }
 
-function potvrdCislo(sipekNaZavreni) {
-  if (!stav || stav.konec || stav.typ !== 'x01') return;
-  if (stav.kolo.length) { hlaska('Kolo už je rozehrané na terči – dokonči ho tam, nebo dej Další hráč.'); return; }
-  const soucet = Number(zadavani || '0');
-  const vysl = koloX01(soucet, sipekNaZavreni);
-  if (vysl === 'ZAVRENI') { el('zavrenoVolba').style.display = 'flex'; return; }
-  el('zavrenoVolba').style.display = 'none';
-  if (vysl) { hlaska('⚠️ ' + vysl); zadavani = ''; ukazDisplej(); return; }
-  zadavani = '';
-  ulozStav();
-  prekresli();
+// Z napsaného (např. "T20", "D16", "5", "25", "50") udělá šipku a zapíše ji
+function potvrdSipku() {
+  if (!stav || stav.konec) return;
+  if (stav.koloHotovo) { hlaska('Kolo je hotové – mezerník (nebo Další hráč) pro dalšího hráče.'); psaniSmaz(); ukazDisplej(); return; }
+  if (psani.cislice === '') return;
+  const n = Number(psani.cislice), m = psani.m, text = psaniText();
+  let s = null;
+  if (n === 0)                  s = { t:'0', b:0, n:0, m:0 };
+  else if (n === 50 && m === 1) s = { t:'Bull', b:50, n:25, m:2 };
+  else if (n === 25 && m === 1) s = { t:'25', b:25, n:25, m:1 };
+  else if (n === 25 && m === 2) s = { t:'Bull', b:50, n:25, m:2 };
+  else if (n >= 1 && n <= 20)   s = { t:(m === 3 ? 'T' : m === 2 ? 'D' : '') + n, b:n * m, n, m };
+  psaniSmaz();
+  if (!s) {
+    const rada = (n > 20 && n <= 60) ? ' Pro triple napiš T a číslo pole (např. T 20), pro double D (např. D 16).' : '';
+    ukazDisplej();
+    hlaska('⚠️ ' + text + ' není pole na terči.' + rada);
+    return;
+  }
+  hod(s);
 }
 
-function ukazDisplej() { el('displej').textContent = zadavani || '0'; }
+function ukazDisplej() {
+  const t = psaniText();
+  el('displej').textContent = t || '–';
+  el('psani').textContent = t ? '⌨ ' + t : '';
+  const d = el('klD'), tt = el('klT');
+  if (d) d.classList.toggle('zap', psani.m === 2);
+  if (tt) tt.classList.toggle('zap', psani.m === 3);
+}
 
 // =====================================================================
 //  TLAČÍTKA PRO KRIKET
@@ -731,26 +715,18 @@ function prekresli() {
   el('tercBox').style.display = tercem ? 'flex' : 'none';
   el('klavesnice').style.display = (!tercem && x01) ? 'flex' : 'none';
   el('kriketTlac').style.display = (!tercem && !x01) ? 'flex' : 'none';
-  el('zavrenoVolba').style.display = 'none';
 
   if (x01) kresliTabuliX01(); else kresliKriket();
 
   // šipky kola
   const kolo = el('kolo');
   kolo.innerHTML = '';
-  if (stav.kolo.length && stav.kolo[0].cele) {
+  for (let i = 0; i < 3; i++) {
+    const s = stav.kolo[i];
     const d = document.createElement('div');
-    d.className = 'sipka';
-    d.textContent = 'Kolo: ' + stav.kolo[0].b;
+    d.className = 'sipka' + (s ? '' : ' prazdna');
+    d.textContent = s ? s.t : (i + 1) + '.';
     kolo.appendChild(d);
-  } else {
-    for (let i = 0; i < 3; i++) {
-      const s = stav.kolo[i];
-      const d = document.createElement('div');
-      d.className = 'sipka' + (s ? '' : ' prazdna');
-      d.textContent = s ? s.t : (i + 1) + '.';
-      kolo.appendChild(d);
-    }
   }
 
   // rada a hláška
@@ -763,14 +739,13 @@ function prekresli() {
   el('rada').textContent = rada;
 
   if (stav.konec) hlaska('');
-  else if (infoJednou) { hlaska(infoJednou + ' Hází ' + h.jmeno + '.'); infoJednou = ''; }
   else if (stav.prehoz) hlaska('💥 Přehoz! ' + h.jmeno + ' zůstává na ' + stav.zacatek + '.');
   else if (stav.koloHotovo) hlaska('Kolo hotovo – vytáhni šipky a dej Další hráč.');
   else hlaska('Hází ' + h.jmeno + (tercem ? ' – ťukni, kam šipka letěla.' : ''));
 
   el('bDalsi').classList.toggle('pulz', stav.koloHotovo && !stav.konec);
   el('bDalsi').disabled = stav.konec;
-  el('bMimo').disabled = stav.konec || stav.koloHotovo || (stav.kolo.length > 0 && stav.kolo[0].cele);
+  el('bMimo').disabled = stav.konec || stav.koloHotovo;
   el('bZpet').disabled = !historie.length;
 
   ukazDisplej();
@@ -851,27 +826,29 @@ document.addEventListener('keydown', e => {
     if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); zpet(); }
     return;
   }
-  const k = e.key;
+  let k = e.key;
+  // numerická klávesnice funguje i s vypnutým NumLockem
+  if (/^Numpad[0-9]$/.test(e.code)) k = e.code.slice(6);
+  if (e.code === 'NumpadMultiply') k = '*';
+  if (e.code === 'NumpadDivide') k = '/';
+  if (e.code === 'NumpadEnter') k = 'Enter';
+  if (e.code === 'NumpadDecimal' || e.code === 'NumpadSubtract') return;
 
-  // otázka "zavřeno kolikátou šipkou?"
-  if (el('zavrenoVolba').style.display === 'flex' && ['1', '2', '3'].includes(k)) {
-    e.preventDefault(); potvrdCislo(Number(k)); return;
-  }
-
-  if (/^[0-9]$/.test(k) && stav && stav.typ === 'x01') {
-    e.preventDefault();
-    if (nast.rezim !== 'cisla') prepniRezim('cisla');     // psaní čísla přepne na klávesnici
-    klavesa(k);
+  if (/^[0-9]$/.test(k)) {
+    e.preventDefault(); klavesa(k);
+  } else if (k === 'd' || k === 'D' || k === '/') {
+    e.preventDefault(); klavesa('D');
+  } else if (k === 't' || k === 'T' || k === '*') {
+    e.preventDefault(); klavesa('T');
   } else if (k === 'Enter') {
     e.preventDefault();
-    if (stav && stav.konec) novaHra(false);
-    else if (stav && stav.typ === 'x01' && zadavani !== '') potvrdCislo();
+    if (stav && stav.konec) novaHra(false); else potvrdSipku();
   } else if (k === 'Backspace') {
     e.preventDefault(); klavesa('⌫');
   } else if (k === 'Escape') {
-    zadavani = ''; el('zavrenoVolba').style.display = 'none'; ukazDisplej();
+    psaniSmaz(); ukazDisplej();
   } else if (k === ' ') {
-    e.preventDefault(); if (stav && !stav.konec) dalsiHrac(false);
+    e.preventDefault(); if (stav && !stav.konec) { psaniSmaz(); dalsiHrac(false); }
   } else if (k === 'z' || k === 'Z') {
     zpet();
   } else if (k === 'm' || k === 'M') {
