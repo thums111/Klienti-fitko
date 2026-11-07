@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.webmanifest?v=1">
+<link rel="icon" type="image/png" href="favicon.png?v=1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1">
 <title>Rádio</title>
 <style>
   :root {
@@ -64,7 +67,7 @@
 </head>
 <body>
 <header>
-  <h1>📻 Rádio <span class="ver">v1.2</span></h1>
+  <h1>📻 Rádio <span class="ver">v1.3</span></h1>
 </header>
 
 <!-- Právě hraje -->
@@ -94,7 +97,7 @@
 <audio id="audio" preload="none"></audio>
 
 <script>
-const VERZE = '1.2';
+const VERZE = '1.3';
 
 // Servery veřejné databáze rádií radio-browser.info (zkouší se postupně)
 const SERVERY = [
