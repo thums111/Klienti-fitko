@@ -138,7 +138,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.4</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.5</span></h1>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
   <button id="bMenu" title="Nastavení hry">☰ Menu</button>
 </header>
@@ -236,7 +236,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.4';
+const VERZE = '1.5';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -418,7 +418,6 @@ function novaHra(noveNastaveni) {
 // Odebrání hráče z rozehrané hry (křížek v jeho okénku). Jde vrátit tlačítkem Zpět.
 function odeberHrace(i) {
   const h = stav.hraci[i];
-  if (!confirm('Odebrat ' + h.jmeno + ' ze hry?')) return;
   zapamatuj();
   stav.hraci.splice(i, 1);
   nast.jmena = stav.hraci.map(x => x.jmeno);       // ať to sedí i v nastavení
@@ -435,6 +434,7 @@ function odeberHrace(i) {
   psaniSmaz();
   ulozStav();
   prekresli();
+  hlaska('✕ ' + h.jmeno + ' odebrán/a ze hry. Omyl? ↶ Zpět ho vrátí.');
 }
 
 function ulozStav() { uloz(KLIC_STAV, { stav, historie: historie.slice(-60) }); }
