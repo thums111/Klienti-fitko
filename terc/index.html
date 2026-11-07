@@ -45,7 +45,9 @@
   #levy, #stred, #pravy { min-height:0; display:flex; flex-direction:column; gap:.5em; }
   #levy { overflow:auto; }
   #stred { align-items:center; justify-content:center; }
-  #napoveda { margin-top:auto; font-size:.7em; color:var(--muted); line-height:1.6; }
+  #napovedaBox { margin-top:auto; display:flex; flex-direction:column; align-items:flex-end; gap:.4em; }
+  #napoveda { font-size:.7em; color:var(--muted); line-height:1.6; background:var(--panel); border-radius:10px; padding:.6em .8em; align-self:stretch; }
+  #bNapoveda { font-size:.8em; padding:.35em .8em; }
   kbd { background:#2a333d; border-radius:4px; padding:0 .35em; font-family:inherit; color:var(--text); }
 
   /* tabule hráčů X01 */
@@ -80,9 +82,6 @@
   @keyframes pulz { 50% { box-shadow:0 0 0 .35em rgba(232,179,60,.35); } }
 
   /* přepínač zadávání */
-  #prepinac { display:flex; gap:.4em; width:100%; }
-  #prepinac button { flex:1; }
-  #prepinac button.vybrano { background:#2d3a48; outline:2px solid var(--acc); }
 
   /* terč */
   #tercBox { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
@@ -91,17 +90,16 @@
   #terc .pole:hover { filter:brightness(1.25); }
 
   /* klávesnice */
-  #klavesnice { width:100%; max-width:560px; display:none; flex-direction:column; gap:.5em; }
-  #displej { background:#0b0f13; border-radius:12px; text-align:right; font-size:2.4em; font-weight:800; padding:.15em .4em; min-height:1.4em; font-variant-numeric:tabular-nums; }
-  .klavesy { display:grid; grid-template-columns:repeat(3, 1fr); gap:.45em; }
-  .klavesy button { padding:.7em 0; font-size:1.4em; font-weight:bold; }
+  #klavesnice { width:100%; display:flex; flex-direction:column; gap:.4em; }
+  .klavesy { display:grid; grid-template-columns:repeat(3, 1fr); gap:.35em; }
+  .klavesy button { padding:.45em 0; font-size:1.2em; font-weight:bold; }
   .rychle { display:grid; grid-template-columns:repeat(4, 1fr); gap:.4em; }
   .rychle button { padding:.5em 0; font-size:.95em; background:#1d2a36; }
   .rychle button.zap { background:var(--acc); color:#1a1300; font-weight:bold; }
   #psani { font-size:1.6em; font-weight:800; color:var(--acc); min-height:1.2em; text-align:center; }
 
   /* tlačítka pro kriket */
-  #kriketTlac { width:100%; max-width:640px; display:none; flex-direction:column; gap:.4em; }
+
   .ktRadek { display:grid; grid-template-columns:3.4em 1fr 1fr 1fr; gap:.4em; align-items:center; }
   .ktRadek .c { font-weight:bold; text-align:center; font-size:1.2em; }
   .ktRadek button { padding:.6em 0; }
@@ -119,7 +117,7 @@
   /* Na výšku (mobil): pod sebou */
   @media (orientation: portrait) {
     #hra.vidit { grid-template-columns:1fr; height:auto; }
-    #napoveda { display:none; }
+    #napovedaBox { display:none; }
     #tercBox { height:min(92vw, 60vh); flex:none; }
     .hrac .zb { font-size:2.1em; }
   }
@@ -127,7 +125,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.2</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.3</span></h1>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
   <button id="bMenu" title="Nastavení hry">☰ Menu</button>
 </header>
@@ -167,25 +165,13 @@
     <table id="kriket" style="display:none"></table>
   </div>
 
-  <!-- uprostřed: terč, nebo klávesnice / tlačítka -->
+  <!-- uprostřed: terč (pořád vidět) -->
   <div id="stred">
     <div id="tercBox"><svg id="terc" viewBox="-228 -228 456 456" aria-label="Terč"></svg></div>
-
-    <div id="klavesnice">
-      <div id="displej"></div>
-      <div class="rychle" id="rychle"></div>
-      <div class="klavesy" id="klavesy"></div>
-    </div>
-
-    <div id="kriketTlac"></div>
   </div>
 
-  <!-- vpravo: kolo a ovládání -->
+  <!-- vpravo: kolo, ovládání a klávesnice -->
   <div id="pravy">
-    <div id="prepinac">
-      <button id="bRezTerc" class="vybrano">🎯 Terč</button>
-      <button id="bRezCisla">🔢 Čísla</button>
-    </div>
     <div id="kolo"></div>
     <div id="psani"></div>
     <div id="rada"></div>
@@ -194,14 +180,22 @@
       <button id="bMimo">Mimo (0)</button>
     </div>
     <button id="bDalsi" class="hlavni">Další hráč ➜</button>
-    <div id="napoveda">
-      <b>Klávesnice – každá šipka zvlášť:</b><br>
-      <kbd>20</kbd> <kbd>Enter</kbd> single · <kbd>D</kbd><kbd>16</kbd> <kbd>Enter</kbd> double<br>
-      <kbd>T</kbd><kbd>20</kbd> <kbd>Enter</kbd> triple · <kbd>25</kbd> / <kbd>50</kbd> bull<br>
-      na numerické: <kbd>/</kbd> double · <kbd>*</kbd> triple<br>
-      <kbd>Backspace</kbd> oprava · <kbd>Esc</kbd> smazat<br>
-      <kbd>mezerník</kbd> další hráč<br>
-      <kbd>Z</kbd> zpět · <kbd>M</kbd> mimo
+
+    <div id="klavesnice">
+      <div class="rychle" id="rychle"></div>
+      <div class="klavesy" id="klavesy"></div>
+    </div>
+
+    <div id="napovedaBox">
+      <div id="napoveda" style="display:none">
+        <b>Klávesnice PC – každá šipka zvlášť:</b><br>
+        <kbd>20</kbd> <kbd>Enter</kbd> single · <kbd>D</kbd><kbd>16</kbd> <kbd>Enter</kbd> double<br>
+        <kbd>T</kbd><kbd>20</kbd> <kbd>Enter</kbd> triple · <kbd>25</kbd> / <kbd>50</kbd> bull<br>
+        na numerické: <kbd>/</kbd> double · <kbd>*</kbd> triple<br>
+        <kbd>Backspace</kbd> oprava · <kbd>Esc</kbd> smazat<br>
+        <kbd>mezerník</kbd> další hráč · <kbd>Z</kbd> zpět · <kbd>M</kbd> mimo
+      </div>
+      <button id="bNapoveda">⌨ Nápověda</button>
     </div>
   </div>
 </div>
@@ -224,7 +218,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, 1–4 hráči)
 // =====================================================================
-const VERZE = '1.2';
+const VERZE = '1.3';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -650,12 +644,29 @@ function potvrdSipku() {
     hlaska('⚠️ ' + text + ' není pole na terči.' + rada);
     return;
   }
+  const misto = mistoPole(s, stav.kolo.length);
+  if (misto) { s.x = misto.x; s.y = misto.y; }
   hod(s);
+}
+
+// Místo v terči (SVG souřadnice) pro šipku zadanou čísly – střed pole,
+// u více šipek do stejného pole kousek vedle sebe, ať se značky nepřekryjí
+function mistoPole(s, i) {
+  if (!s.n) return null;                      // mimo = bez značky
+  const posun = [-4, 4, 0][i % 3];
+  if (s.n === 25) {
+    if (s.m === 2) return { x: posun * 0.7, y: 0 };
+    const [x, y] = bod(11, 60 + i * 120);
+    return { x, y };
+  }
+  const uhel = PORADI.indexOf(s.n) * 18;
+  if (s.m === 1) { const [x, y] = bod(135 + posun * 4, uhel + posun * 0.6); return { x, y }; }
+  const [x, y] = bod(s.m === 3 ? 103 : 166, uhel + posun);
+  return { x, y };
 }
 
 function ukazDisplej() {
   const t = psaniText();
-  el('displej').textContent = t || '–';
   el('psani').textContent = t ? '⌨ ' + t : '';
   const d = el('klD'), tt = el('klT');
   if (d) d.classList.toggle('zap', psani.m === 2);
@@ -665,57 +676,21 @@ function ukazDisplej() {
 // =====================================================================
 //  TLAČÍTKA PRO KRIKET
 // =====================================================================
-function postavKriketTlac() {
-  const box = el('kriketTlac');
-  box.innerHTML = '';
-  for (const c of KRIKET_CISLA) {
-    const r = document.createElement('div');
-    r.className = 'ktRadek';
-    const lab = document.createElement('div');
-    lab.className = 'c';
-    lab.textContent = c === 25 ? 'Bull' : c;
-    r.appendChild(lab);
-    const volby = c === 25 ? [['25', 1], ['50', 2]] : [['1×', 1], ['2×', 2], ['3×', 3]];
-    for (const [txt, m] of volby) {
-      const b = document.createElement('button');
-      b.textContent = txt;
-      b.onclick = () => {
-        const t = c === 25 ? (m === 2 ? 'Bull' : '25') : (m === 3 ? 'T' : m === 2 ? 'D' : '') + c;
-        hod({ t, b:c * m, n:c, m });
-      };
-      r.appendChild(b);
-    }
-    if (c === 25) r.appendChild(document.createElement('div'));
-    box.appendChild(r);
-  }
-}
-
 // =====================================================================
 //  ZOBRAZENÍ
 // =====================================================================
 function hlaska(t) { el('hlaska').textContent = t; }
 
-function prepniRezim(r) {
-  nast.rezim = r;
-  uloz(KLIC_NAST, nast);
-  prekresli();
-}
-el('bRezTerc').onclick = () => prepniRezim('terc');
-el('bRezCisla').onclick = () => prepniRezim('cisla');
+el('bNapoveda').onclick = () => {
+  const n = el('napoveda');
+  n.style.display = n.style.display === 'none' ? 'block' : 'none';
+};
 
 function prekresli() {
   if (!stav) return;
   const x01 = stav.typ === 'x01';
-  const tercem = nast.rezim !== 'cisla';
 
   // přepínač a vstupy
-  el('bRezCisla').textContent = x01 ? '🔢 Čísla' : '🔢 Tlačítka';
-  el('bRezTerc').classList.toggle('vybrano', tercem);
-  el('bRezCisla').classList.toggle('vybrano', !tercem);
-  el('tercBox').style.display = tercem ? 'flex' : 'none';
-  el('klavesnice').style.display = (!tercem && x01) ? 'flex' : 'none';
-  el('kriketTlac').style.display = (!tercem && !x01) ? 'flex' : 'none';
-
   if (x01) kresliTabuliX01(); else kresliKriket();
 
   // šipky kola
@@ -741,7 +716,7 @@ function prekresli() {
   if (stav.konec) hlaska('');
   else if (stav.prehoz) hlaska('💥 Přehoz! ' + h.jmeno + ' zůstává na ' + stav.zacatek + '.');
   else if (stav.koloHotovo) hlaska('Kolo hotovo – vytáhni šipky a dej Další hráč.');
-  else hlaska('Hází ' + h.jmeno + (tercem ? ' – ťukni, kam šipka letěla.' : ''));
+  else hlaska('Hází ' + h.jmeno + ' – ťukni do terče, nebo napiš šipku.');
 
   el('bDalsi').classList.toggle('pulz', stav.koloHotovo && !stav.konec);
   el('bDalsi').disabled = stav.konec;
@@ -861,7 +836,6 @@ document.addEventListener('keydown', e => {
 // =====================================================================
 postavTerc();
 postavKlavesnici();
-postavKriketTlac();
 
 const ulozeno = nacti(KLIC_STAV, null);
 if (ulozeno && ulozeno.stav) { stav = ulozeno.stav; historie = ulozeno.historie || []; }
