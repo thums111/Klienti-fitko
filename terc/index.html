@@ -35,7 +35,20 @@
   .volby button { flex:1; min-width:5em; padding:.8em; font-size:1.05em; }
   .volby button.vybrano { background:var(--acc); color:#1a1300; font-weight:bold; }
   .hracRadek { display:flex; gap:.5em; margin-bottom:.5em; }
-  .hracRadek input { flex:1; font:inherit; padding:.6em .7em; border-radius:10px; border:1px solid #3a4652; background:#0c1014; color:var(--text); }
+  .hracRadek { align-items:center; }
+  .hracJm { flex:1; background:var(--panel); border-radius:10px; padding:.55em .8em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hracRadek button { padding:.5em .8em; }
+  .hracRadek button.krizek, .hrac .krizek { background:#3a2226; color:#ff9a9a; }
+  .prazdne { color:var(--muted); padding:.4em 0 .8em; }
+  #vyberHrace, #novyHrac { font:inherit; padding:.6em .7em; border-radius:10px; border:1px solid #3a4652; background:#0c1014; color:var(--text); }
+  #vyberHrace { width:100%; margin:.3em 0 .5em; }
+  .novyRadek { display:flex; gap:.5em; margin-bottom:.6em; }
+  .novyRadek input { flex:1; min-width:0; }
+  #spravaBox summary { cursor:pointer; color:var(--muted); padding:.4em 0; }
+  #spravaSeznamu { padding-top:.4em; }
+  .hrac .krizek { padding:.15em .45em; font-size:.75em; border-radius:6px; align-self:flex-start; opacity:.6; }
+  .hrac .krizek:hover { opacity:1; }
+  #kriket th .krizek { margin-left:.3em; padding:0 .35em; font-size:.7em; border-radius:5px; background:#3a2226; color:#ff9a9a; opacity:.6; }
   #bStart { width:100%; padding:1em; font-size:1.2em; }
   #bPokracovat { width:100%; padding:.8em; margin-bottom:1em; background:#24507a; }
 
@@ -125,7 +138,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.3</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.4</span></h1>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
   <button id="bMenu" title="Nastavení hry">☰ Menu</button>
 </header>
@@ -146,12 +159,17 @@
   </div>
 
   <div class="sekce">
-    <h2>Hráči (1–4)</h2>
+    <h2>Hrají (v tomto pořadí)</h2>
     <div id="hraciSeznam"></div>
-    <div class="volby">
-      <button id="bMinus">− hráč</button>
-      <button id="bPlus">+ hráč</button>
+    <select id="vyberHrace"></select>
+    <div class="novyRadek">
+      <input id="novyHrac" placeholder="Nový hráč – napiš jméno…" maxlength="20">
+      <button id="bNovy">+ Přidat</button>
     </div>
+    <details id="spravaBox">
+      <summary>Seznam hráčů (<span id="pocetSeznam">0</span>) – mazání</summary>
+      <div id="spravaSeznamu"></div>
+    </details>
   </div>
 
   <button id="bStart" class="hlavni">▶ Začít hru</button>
@@ -216,9 +234,9 @@
 
 <script>
 // =====================================================================
-//  Šipky – počítadlo   (X01 double out, Kriket, 1–4 hráči)
+//  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.3';
+const VERZE = '1.4';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -234,7 +252,12 @@ function nacti(klic, vychozi) {
 }
 function uloz(klic, hodnota) { try { localStorage.setItem(klic, JSON.stringify(hodnota)); } catch (e) {} }
 
-let nast = nacti(KLIC_NAST, { hra:'501', jmena:['Hráč 1', 'Hráč 2'], rezim:'terc', zacina:0 });
+let nast = nacti(KLIC_NAST, { hra:'501', jmena:['Hráč 1', 'Hráč 2'] });
+// seznam hráčů (klientů) – ze starší verze převezmi jména, která nejsou "Hráč N"
+if (!Array.isArray(nast.seznam)) {
+  nast.seznam = nast.jmena.filter(j => !/^Hráč \d+$/.test(j));
+  if (!nast.seznam.length) nast.seznam = nast.jmena.slice();
+}
 let stav = null;        // rozehraná hra
 let historie = [];      // pro ↶ Zpět
 
@@ -255,25 +278,91 @@ function kresliNastaveni() {
   });
   el('popisHry').textContent = POPISY[nast.hra];
 
+  // --- hráči v příští hře (pořadí = pořadí házení) ---
   const box = el('hraciSeznam');
   box.innerHTML = '';
   nast.jmena.forEach((j, i) => {
     const r = document.createElement('div');
     r.className = 'hracRadek';
-    const inp = document.createElement('input');
-    inp.value = j;
-    inp.maxLength = 16;
-    inp.oninput = () => { nast.jmena[i] = inp.value.trim() || ('Hráč ' + (i + 1)); uloz(KLIC_NAST, nast); };
-    r.appendChild(inp);
+    const jm = document.createElement('div');
+    jm.className = 'hracJm';
+    jm.textContent = (i + 1) + '. ' + j;
+    const nahoru = document.createElement('button');
+    nahoru.textContent = '▲';
+    nahoru.title = 'Posunout výš';
+    nahoru.disabled = i === 0;
+    nahoru.onclick = () => { [nast.jmena[i - 1], nast.jmena[i]] = [nast.jmena[i], nast.jmena[i - 1]]; ulozNast(); };
+    const pryc = document.createElement('button');
+    pryc.textContent = '✕';
+    pryc.title = 'Nehraje';
+    pryc.className = 'krizek';
+    pryc.onclick = () => { nast.jmena.splice(i, 1); ulozNast(); };
+    r.append(jm, nahoru, pryc);
     box.appendChild(r);
   });
-  el('bPlus').disabled = nast.jmena.length >= 4;
-  el('bMinus').disabled = nast.jmena.length <= 1;
+  if (!nast.jmena.length) box.innerHTML = '<div class="prazdne">Zatím nikdo – vyber hráče ze seznamu níže.</div>';
+
+  // --- rozbalovací seznam: kdo ze seznamu ještě nehraje ---
+  const vyber = el('vyberHrace');
+  vyber.innerHTML = '';
+  const volni = nast.seznam.filter(j => !nast.jmena.includes(j));
+  const prvni = document.createElement('option');
+  prvni.value = '';
+  prvni.textContent = volni.length ? '— vyber hráče ze seznamu —' : '— všichni ze seznamu už hrají —';
+  vyber.appendChild(prvni);
+  for (const j of volni) {
+    const o = document.createElement('option');
+    o.value = j; o.textContent = j;
+    vyber.appendChild(o);
+  }
+
+  // --- správa seznamu hráčů ---
+  const sp = el('spravaSeznamu');
+  sp.innerHTML = '';
+  nast.seznam.forEach(j => {
+    const r = document.createElement('div');
+    r.className = 'hracRadek';
+    const jm = document.createElement('div');
+    jm.className = 'hracJm';
+    jm.textContent = j;
+    const smaz = document.createElement('button');
+    smaz.textContent = '🗑';
+    smaz.title = 'Smazat ze seznamu';
+    smaz.onclick = () => {
+      if (!confirm('Smazat „' + j + '“ ze seznamu hráčů?')) return;
+      nast.seznam = nast.seznam.filter(x => x !== j);
+      nast.jmena = nast.jmena.filter(x => x !== j);
+      ulozNast();
+    };
+    r.append(jm, smaz);
+    sp.appendChild(r);
+  });
+  el('pocetSeznam').textContent = nast.seznam.length;
+
+  el('bStart').disabled = nast.jmena.length === 0;
   el('bPokracovat').style.display = (stav && !stav.konec) ? 'block' : 'none';
 }
 
-el('bPlus').onclick  = () => { if (nast.jmena.length < 4) { nast.jmena.push('Hráč ' + (nast.jmena.length + 1)); uloz(KLIC_NAST, nast); kresliNastaveni(); } };
-el('bMinus').onclick = () => { if (nast.jmena.length > 1) { nast.jmena.pop(); uloz(KLIC_NAST, nast); kresliNastaveni(); } };
+function ulozNast() { uloz(KLIC_NAST, nast); kresliNastaveni(); }
+
+// vybrání ze seznamu = rovnou přidat do hry
+el('vyberHrace').onchange = () => {
+  const j = el('vyberHrace').value;
+  if (j && !nast.jmena.includes(j)) { nast.jmena.push(j); ulozNast(); }
+};
+
+// nový hráč: uloží se do seznamu a rovnou přidá do hry
+function pridejNoveho() {
+  const j = el('novyHrac').value.trim().slice(0, 20);
+  if (!j) return;
+  if (!nast.seznam.includes(j)) { nast.seznam.push(j); nast.seznam.sort((a, b) => a.localeCompare(b, 'cs')); }
+  if (!nast.jmena.includes(j)) nast.jmena.push(j);
+  el('novyHrac').value = '';
+  ulozNast();
+}
+el('bNovy').onclick = pridejNoveho;
+el('novyHrac').addEventListener('keydown', e => { if (e.key === 'Enter') pridejNoveho(); });
+
 el('bStart').onclick = () => { novaHra(true); };
 el('bPokracovat').onclick = () => ukazObrazovku('hra');
 el('bMenu').onclick = () => { kresliNastaveni(); ukazObrazovku('nastaveni'); };
@@ -292,12 +381,15 @@ function novaHra(noveNastaveni) {
   const kriket = nast.hra === 'kriket';
   const start = kriket ? 0 : Number(nast.hra);
   const predchozi = stav;
-  const zacina = noveNastaveni ? 0 : ((predchozi ? predchozi.zacinal : 0) + 1) % nast.jmena.length;
+  // další leg hrají ti, kdo zůstali ve hře; nová hra ti, kdo jsou v nastavení
+  const jmena = (!noveNastaveni && predchozi) ? predchozi.hraci.map(h => h.jmeno) : nast.jmena.slice();
+  if (!jmena.length) return;
+  const zacina = noveNastaveni ? 0 : ((predchozi ? predchozi.zacinal : 0) + 1) % jmena.length;
 
   stav = {
     typ: kriket ? 'kriket' : 'x01',
     start,
-    hraci: nast.jmena.map((j, i) => ({
+    hraci: jmena.map(j => ({
       jmeno: j,
       zbyva: start,          // X01
       sipek: 0,
@@ -305,7 +397,7 @@ function novaHra(noveNastaveni) {
       body: 0,               // kriket
       zasahu: 0,             // kriket – všechny zásahy na 15–20 a bull (pro MPR)
       posledni: null,        // součet posledního kola
-      legy: (!noveNastaveni && predchozi && predchozi.hraci[i] && predchozi.hraci[i].jmeno === j) ? predchozi.hraci[i].legy : 0
+      legy: (!noveNastaveni && predchozi) ? ((predchozi.hraci.find(h => h.jmeno === j) || {}).legy || 0) : 0
     })),
     tah: zacina,
     zacinal: zacina,
@@ -323,6 +415,28 @@ function novaHra(noveNastaveni) {
   ukazObrazovku('hra');
 }
 
+// Odebrání hráče z rozehrané hry (křížek v jeho okénku). Jde vrátit tlačítkem Zpět.
+function odeberHrace(i) {
+  const h = stav.hraci[i];
+  if (!confirm('Odebrat ' + h.jmeno + ' ze hry?')) return;
+  zapamatuj();
+  stav.hraci.splice(i, 1);
+  nast.jmena = stav.hraci.map(x => x.jmeno);       // ať to sedí i v nastavení
+  uloz(KLIC_NAST, nast);
+  if (!stav.hraci.length) { stav = null; historie = []; uloz(KLIC_STAV, null); kresliNastaveni(); ukazObrazovku('nastaveni'); return; }
+  if (i < stav.tah) stav.tah--;
+  else if (i === stav.tah) {                         // odešel ten, kdo hází – kolo se zahodí
+    if (stav.tah >= stav.hraci.length) stav.tah = 0;
+    stav.kolo = []; stav.koloHotovo = false; stav.prehoz = false;
+    stav.zacatek = stav.hraci[stav.tah].zbyva;
+  }
+  if (stav.zacinal > i) stav.zacinal--;
+  if (stav.zacinal >= stav.hraci.length) stav.zacinal = 0;
+  psaniSmaz();
+  ulozStav();
+  prekresli();
+}
+
 function ulozStav() { uloz(KLIC_STAV, { stav, historie: historie.slice(-60) }); }
 function zapamatuj() { historie.push(JSON.stringify(stav)); if (historie.length > 300) historie.shift(); }
 
@@ -331,6 +445,7 @@ el('bZpetVysl').onclick = zpet;
 function zpet() {
   if (!historie.length) return;
   stav = JSON.parse(historie.pop());
+  if (stav) { nast.jmena = stav.hraci.map(h => h.jmeno); uloz(KLIC_NAST, nast); }
   psaniSmaz();
   el('vysledek').classList.remove('vidit');
   ulozStav();
@@ -747,6 +862,12 @@ function kresliTabuliX01() {
     d.querySelector('.stat').textContent =
       'Ø ' + prumerX01(h) + ' · posl. ' + (h.posledni === null ? '–' : h.posledni) + ' · šipek ' + h.sipek;
     d.querySelector('.zb').textContent = h.zbyva;
+    const x = document.createElement('button');
+    x.className = 'krizek';
+    x.textContent = '✕';
+    x.title = 'Odebrat ze hry';
+    x.onclick = () => odeberHrace(i);
+    d.appendChild(x);
     tab.appendChild(d);
   });
 }
@@ -759,7 +880,8 @@ function kresliKriket() {
   let html = '<tr><th></th>';
   stav.hraci.forEach((h, i) => {
     html += '<th class="' + (i === stav.tah && !stav.konec ? 'tah' : '') + '">' + esc(h.jmeno) +
-            (h.legy ? ' <span style="color:var(--acc)">' + '●'.repeat(h.legy) + '</span>' : '') + '</th>';
+            (h.legy ? ' <span style="color:var(--acc)">' + '●'.repeat(h.legy) + '</span>' : '') +
+            '<button class="krizek" data-odeber="' + i + '" title="Odebrat ze hry">✕</button></th>';
   });
   html += '</tr>';
   for (const c of KRIKET_CISLA) {
@@ -774,6 +896,7 @@ function kresliKriket() {
   stav.hraci.forEach(h => { html += '<td style="font-size:.8em;color:var(--muted)">' + mpr(h) + '</td>'; });
   html += '</tr>';
   t.innerHTML = html;
+  t.querySelectorAll('[data-odeber]').forEach(b => { b.onclick = () => odeberHrace(Number(b.dataset.odeber)); });
 }
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
