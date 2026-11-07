@@ -64,7 +64,7 @@
 </head>
 <body>
 <header>
-  <h1>📻 Rádio <span class="ver">v1.1</span></h1>
+  <h1>📻 Rádio <span class="ver">v1.2</span></h1>
 </header>
 
 <!-- Právě hraje -->
@@ -94,7 +94,7 @@
 <audio id="audio" preload="none"></audio>
 
 <script>
-const VERZE = '1.1';
+const VERZE = '1.2';
 
 // Servery veřejné databáze rádií radio-browser.info (zkouší se postupně)
 const SERVERY = [
@@ -328,7 +328,8 @@ function spustSkladbu() {
     const t = await zjistiSkladbu(s.url);
     if (znacka !== skladbaZnacka) return;
     ukazSkladbu(t);
-    skladbaCasovac = setTimeout(kolo, 20000);   // znovu za 20 s
+    // Když stanice název nevydá, dál to nezkoušej (šetří síť, konzole zůstane čistá)
+    if (t) skladbaCasovac = setTimeout(kolo, 20000);   // znovu za 20 s
   };
   kolo();
 }
