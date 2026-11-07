@@ -28,19 +28,45 @@
   input { font-size:32px; width:100%; padding:10px; text-align:center; letter-spacing:10px; border-radius:8px; border:0; margin-bottom:12px; }
   #hra { display:none; }
   #hra.vidit { display:block; }
+  #bocni { padding-top:4px; }
+  .nadpis { font-size:18px; font-weight:bold; padding:8px 12px; }
+  input.jmeno { font-size:18px; letter-spacing:0; text-align:left; margin:0 12px 8px; width:calc(100% - 24px); padding:8px 10px; }
+
+  /* Tabule hráčů */
+  #tabule { display:flex; flex-direction:column; gap:6px; padding:0 12px 8px; }
+  .hrac { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#222; border-radius:8px; border:2px solid transparent; }
+  .hrac.tah { border-color:var(--acc); background:#1d2b22; }
+  .hrac .jm { flex:1; font-size:17px; }
+  .hrac .prum { font-size:12px; color:#aaa; }
+  .hrac .zb { font-size:34px; font-weight:bold; min-width:80px; text-align:right; }
+  #kolo { display:flex; gap:6px; padding:0 12px 6px; }
+  .sipka { flex:1; text-align:center; padding:8px 4px; background:#2a2a2a; border-radius:6px; font-size:18px; font-weight:bold; }
+  .sipka.prazdna { color:#555; }
+  #radaZavreni { padding:2px 12px; color:var(--warn); font-size:16px; min-height:22px; }
+  #hlaska { padding:2px 12px 8px; font-size:17px; min-height:24px; }
+
+  /* Na šířku: obraz vlevo, panel vpravo – vše bez posouvání */
+  @media (orientation: landscape) {
+    header { padding:4px 12px; }
+    #hra.vidit { display:flex; align-items:flex-start; }
+    #obrazBox { flex:1; min-width:0; display:flex; justify-content:center; }
+    #obrazBox canvas { width:auto; max-width:100%; max-height:calc(100vh - 42px); }
+    #bocni { width:320px; flex:none; max-height:calc(100vh - 42px); overflow:auto; }
+    .hrac .zb { font-size:28px; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>Šipky – kamera <span class="ver">v1.4</span></h1>
+  <h1>Šipky – kamera <span class="ver">v1.5</span></h1>
   <button id="bZpet" style="flex:0;min-width:0;padding:8px 12px;display:none">↩ Menu</button>
 </header>
 
 <!-- ===== Výběr režimu ===== -->
 <div id="volba" class="panel vidit">
-  <button class="velke main" id="bKamera">📷 Kamera<small>Na telefonu, který stojí u terče</small></button>
-  <button class="velke" id="bOvladani">🖥 Ovládání<small>Na tabletu nebo PC – tady kalibruješ a počítáš</small></button>
-  <button class="velke" id="bLokal">📱 Vše na jednom zařízení<small>Kamera i ovládání na stejném přístroji</small></button>
+  <button class="velke main" id="bLokal">📱 Vše na jednom zařízení<small>Telefon u terče – ovládáš ho přímo, nebo zrcadlením z PC</small></button>
+  <button class="velke" id="bKamera">📷 Kamera <small>Pokusné: telefon posílá obraz do tabletu / PC</small></button>
+  <button class="velke" id="bOvladani">🖥 Ovládání <small>Pokusné: příjem obrazu z telefonu</small></button>
 </div>
 
 <!-- ===== Režim Kamera (telefon u terče) ===== -->
@@ -65,12 +91,56 @@
 
 <!-- ===== Obraz, kalibrace, bodování ===== -->
 <div id="hra">
-  <canvas id="cv" width="1600" height="900"></canvas>
-  <div id="skore"></div>
-  <div id="info"></div>
-  <div class="btns">
-    <button id="bFreeze">Zmrazit obraz</button>
-    <button id="bReset">Nová kalibrace</button>
+  <div id="obrazBox">
+    <canvas id="cv" width="1600" height="900"></canvas>
+  </div>
+
+  <div id="bocni">
+    <!-- Kalibrace -->
+    <div id="kalibPanel">
+      <div id="skore"></div>
+      <div id="info"></div>
+      <div class="btns">
+        <button id="bFreeze">Zmrazit obraz</button>
+        <button id="bReset">Nová kalibrace</button>
+      </div>
+      <div class="btns">
+        <button id="bNastaveniHry" class="main">🎯 Hrát 501</button>
+      </div>
+    </div>
+
+    <!-- Nastavení hráčů -->
+    <div id="nastaveniPanel" style="display:none">
+      <div class="nadpis">Hráči (501, double out)</div>
+      <div id="hraciVstupy"></div>
+      <div class="btns">
+        <button id="bMinusHrac">− hráč</button>
+        <button id="bPlusHrac">+ hráč</button>
+      </div>
+      <div class="btns">
+        <button id="bStartHry" class="main">▶ Začít hru</button>
+        <button id="bZpetKalib">Zpět</button>
+      </div>
+    </div>
+
+    <!-- Probíhající hra -->
+    <div id="hraPanel" style="display:none">
+      <div id="tabule"></div>
+      <div id="kolo"></div>
+      <div id="radaZavreni"></div>
+      <div id="hlaska"></div>
+      <div class="btns">
+        <button id="bMimo">Mimo (0)</button>
+        <button id="bUndo">↶ Zpět</button>
+      </div>
+      <div class="btns">
+        <button id="bDalsi" class="main">Další hráč ➜</button>
+      </div>
+      <div class="btns">
+        <button id="bNovaHra">Nová hra</button>
+        <button id="bKalib">Kalibrace</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -385,9 +455,20 @@ function poziceVObraze(e) {
   };
 }
 
+let cil = null;   // místo, kam právě míříš při zadávání šipky ve hře
+
 cv.addEventListener('pointerdown', e => {
   if (!bezi) return;
   const p = poziceVObraze(e);
+
+  // Během hry: klik = šipka. Při držení se ukáže lupa a místo jde doladit.
+  if (hraBezi()) {
+    cil = p;
+    lupa = { ...p };
+    cv.setPointerCapture(e.pointerId);
+    return;
+  }
+
   const dosah = cv.width * 0.05;
 
   for (let i = 0; i < body.length; i++) {
@@ -420,6 +501,11 @@ cv.addEventListener('pointerdown', e => {
 });
 
 cv.addEventListener('pointermove', e => {
+  if (cil) {
+    cil = poziceVObraze(e);
+    lupa = { ...cil };
+    return;
+  }
   if (tahany < 0) return;
   const p = poziceVObraze(e);
   body[tahany] = { x: p.x + posun.x, y: p.y + posun.y };
@@ -428,6 +514,14 @@ cv.addEventListener('pointermove', e => {
 });
 
 function konecTahu() {
+  if (cil) {
+    const p = cil;
+    cil = null;
+    lupa = null;
+    const [mx, my] = aplikuj(Hinv, p.x, p.y);
+    pridejSipku(skore(mx, my), p);
+    return;
+  }
   if (tahany < 0) return;
   tahany = -1;
   lupa = null;
@@ -500,7 +594,9 @@ function kresli() {
   else if (video.readyState >= 2) ctx.drawImage(video, 0, 0, cv.width, cv.height);
   if (H) kresliMrizku();
   kresliBody();
-  if (posledni) kresliKriz(posledni.x, posledni.y, '#ff3b3b');
+  if (posledni && panelNyni === 'kalib') kresliKriz(posledni.x, posledni.y, '#ff3b3b');
+  if (hra && panelNyni === 'hra') kresliSipkyKola();
+  if (cil) kresliKriz(cil.x, cil.y, '#00e5ff');
   if (lupa) kresliLupu();
   requestAnimationFrame(kresli);
 }
@@ -581,6 +677,242 @@ function kresliLupu() {
   ctx.stroke();
 }
 
+// ======================= HRA 501, DOUBLE OUT =======================
+const KLIC_HRACI = 'sipky_hraci';
+let jmena = nactiJmena();     // jména hráčů z minula
+let hra = null;               // stav rozehrané hry
+let historie = [];            // uložené stavy pro tlačítko Zpět
+let panelNyni = 'kalib';      // 'kalib' | 'nastaveni' | 'hra'
+let pristiZacina = 0;         // kdo začne další hru (střídá se)
+
+function nactiJmena() {
+  try {
+    const j = JSON.parse(localStorage.getItem(KLIC_HRACI));
+    if (Array.isArray(j) && j.length) return j;
+  } catch(e) {}
+  return ['Hráč 1', 'Hráč 2'];
+}
+function ulozJmena() { try { localStorage.setItem(KLIC_HRACI, JSON.stringify(jmena)); } catch(e) {} }
+
+function zobrazPanel(p) {
+  panelNyni = p;
+  el('kalibPanel').style.display     = p === 'kalib'     ? 'block' : 'none';
+  el('nastaveniPanel').style.display = p === 'nastaveni' ? 'block' : 'none';
+  el('hraPanel').style.display       = p === 'hra'       ? 'block' : 'none';
+  if (p === 'nastaveni') kresliNastaveni();
+  if (p === 'hra') prekresliHru();
+}
+
+// Hra přijímá kliknutí jen když běží a hráč ještě nedohodil kolo
+function hraBezi() {
+  return panelNyni === 'hra' && hra && Hinv && !hra.konec && !hra.koloHotovo;
+}
+
+// ----- Nastavení hráčů -----
+function kresliNastaveni() {
+  const box = el('hraciVstupy');
+  box.innerHTML = '';
+  jmena.forEach((j, i) => {
+    const inp = document.createElement('input');
+    inp.className = 'jmeno';
+    inp.value = j;
+    inp.oninput = () => { jmena[i] = inp.value || ('Hráč ' + (i + 1)); ulozJmena(); };
+    box.appendChild(inp);
+  });
+}
+el('bPlusHrac').onclick  = () => { if (jmena.length < 4) { jmena.push('Hráč ' + (jmena.length + 1)); ulozJmena(); kresliNastaveni(); } };
+el('bMinusHrac').onclick = () => { if (jmena.length > 1) { jmena.pop(); ulozJmena(); kresliNastaveni(); } };
+
+el('bNastaveniHry').onclick = () => {
+  if (!Hinv) { info('Nejdřív dokonči kalibraci (4 žluté body).'); return; }
+  zobrazPanel(hra && !hra.konec ? 'hra' : 'nastaveni');
+};
+el('bZpetKalib').onclick = () => zobrazPanel('kalib');
+el('bKalib').onclick     = () => zobrazPanel('kalib');
+el('bNovaHra').onclick   = () => zobrazPanel('nastaveni');
+el('bStartHry').onclick  = novaHra;
+
+function novaHra() {
+  const zacina = pristiZacina % jmena.length;
+  pristiZacina = zacina + 1;
+  hra = {
+    hraci: jmena.map(j => ({ jmeno:j, zbyva:501, sipek:0 })),
+    tah: zacina,
+    kolo: [],            // šipky aktuálního kola
+    koloHotovo: false,
+    prehoz: false,
+    zacatek: 501,        // kolik měl hráč na začátku kola (pro přehoz)
+    konec: false,
+    vitez: -1
+  };
+  historie = [];
+  zobrazPanel('hra');
+}
+
+// ----- Pravidla -----
+function ulozHistorii() {
+  historie.push(JSON.stringify(hra));
+  if (historie.length > 300) historie.shift();
+}
+
+function pridejSipku(s, p) {
+  if (!hraBezi()) return;
+  ulozHistorii();
+  const h = hra.hraci[hra.tah];
+  const jeDouble = s.t.startsWith('D') || s.t === 'Bull';
+  hra.kolo.push({ t:s.t, b:s.b, x:p ? p.x : null, y:p ? p.y : null });
+  h.sipek++;
+
+  const nove = h.zbyva - s.b;
+  if (nove < 0 || nove === 1 || (nove === 0 && !jeDouble)) {
+    // Přehoz: body se vrací na stav před kolem, kolo končí
+    h.zbyva = hra.zacatek;
+    hra.prehoz = true;
+    hra.koloHotovo = true;
+  } else if (nove === 0) {
+    h.zbyva = 0;
+    hra.konec = true;
+    hra.vitez = hra.tah;
+  } else {
+    h.zbyva = nove;
+    if (hra.kolo.length === 3) hra.koloHotovo = true;
+  }
+  prekresliHru();
+}
+
+function dalsiHrac() {
+  if (!hra || hra.konec) return;
+  ulozHistorii();
+  const h = hra.hraci[hra.tah];
+  // Nehozené šipky kola (např. vypadly z terče) se počítají jako 0
+  if (!hra.koloHotovo) h.sipek += 3 - hra.kolo.length;
+  hra.tah = (hra.tah + 1) % hra.hraci.length;
+  hra.kolo = [];
+  hra.koloHotovo = false;
+  hra.prehoz = false;
+  hra.zacatek = hra.hraci[hra.tah].zbyva;
+  prekresliHru();
+}
+
+el('bMimo').onclick  = () => pridejSipku({ t:'0', b:0 }, null);
+el('bDalsi').onclick = dalsiHrac;
+el('bUndo').onclick  = () => {
+  if (!historie.length) return;
+  hra = JSON.parse(historie.pop());
+  prekresliHru();
+};
+
+// Průměr na 3 šipky (přehozené šipky se počítají jako 0)
+function prumer(h) {
+  return h.sipek ? ((501 - h.zbyva) / h.sipek * 3).toFixed(1) : '–';
+}
+
+// ----- Návrh zavření (např. T20 – T19 – D12) -----
+const HODY = (() => {
+  const a = [];
+  for (let n = 20; n >= 1; n--) a.push({ t:'T' + n, b:3 * n });
+  a.push({ t:'Bull', b:50 }, { t:'25', b:25 });
+  for (let n = 20; n >= 1; n--) a.push({ t:String(n), b:n });
+  for (let n = 20; n >= 1; n--) a.push({ t:'D' + n, b:2 * n });
+  return a;
+})();
+const ZAVIRACI = [20,16,18,12,10,8,19,17,15,14,13,11,9,7,6,5,4,3,2,1]
+  .map(n => ({ t:'D' + n, b:2 * n }))
+  .concat([{ t:'Bull', b:50 }]);
+
+function hledejZavreni(zb, pocet) {
+  if (pocet === 1) {
+    const d = ZAVIRACI.find(z => z.b === zb);
+    return d ? [d.t] : null;
+  }
+  for (const h of HODY) {
+    if (h.b >= zb) continue;
+    const r = hledejZavreni(zb - h.b, pocet - 1);
+    if (r) return [h.t, ...r];
+  }
+  return null;
+}
+
+function navrhZavreni(zb, sipek) {
+  if (zb > 170 || zb < 2 || sipek < 1) return '';
+  for (let pocet = 1; pocet <= sipek; pocet++) {
+    const r = hledejZavreni(zb, pocet);
+    if (r) return r.join(' – ');
+  }
+  return '';
+}
+
+// ----- Zobrazení hry -----
+function prekresliHru() {
+  if (!hra) return;
+  // tabule hráčů
+  const tab = el('tabule');
+  tab.innerHTML = '';
+  hra.hraci.forEach((h, i) => {
+    const d = document.createElement('div');
+    d.className = 'hrac' + (i === hra.tah && !hra.konec ? ' tah' : '');
+    d.innerHTML = '<div class="jm"></div><div class="zb"></div>';
+    d.querySelector('.jm').innerHTML = '';
+    d.querySelector('.jm').append(document.createTextNode((i === hra.vitez ? '🏆 ' : '') + h.jmeno));
+    const pr = document.createElement('div');
+    pr.className = 'prum';
+    pr.textContent = 'průměr ' + prumer(h) + ' · šipek ' + h.sipek;
+    d.querySelector('.jm').appendChild(pr);
+    d.querySelector('.zb').textContent = h.zbyva;
+    tab.appendChild(d);
+  });
+
+  // šipky aktuálního kola
+  const kolo = el('kolo');
+  kolo.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const s = hra.kolo[i];
+    const d = document.createElement('div');
+    d.className = 'sipka' + (s ? '' : ' prazdna');
+    d.textContent = s ? s.t : (i + 1) + '.';
+    kolo.appendChild(d);
+  }
+
+  // návrh zavření a hláška
+  const h = hra.hraci[hra.tah];
+  const zbyvaSipek = hra.koloHotovo ? 0 : 3 - hra.kolo.length;
+  const navrh = hra.konec ? '' : navrhZavreni(h.zbyva, zbyvaSipek);
+  el('radaZavreni').textContent = navrh ? '🎯 Zavření: ' + navrh : '';
+
+  const soucet = hra.kolo.reduce((a, s) => a + s.b, 0);
+  let t;
+  if (hra.konec) {
+    t = '🏆 ' + h.jmeno + ' vyhrál/a! Průměr ' + prumer(h) + '. Dej Nová hra.';
+  } else if (hra.prehoz) {
+    t = '💥 Přehoz! Zůstává ' + hra.zacatek + '. Vytáhni šipky a dej Další hráč.';
+  } else if (hra.koloHotovo) {
+    t = 'Kolo: ' + soucet + ' bodů. Vytáhni šipky a dej Další hráč.';
+  } else {
+    t = h.jmeno + ': klikni na místo, kde trčí ' + (hra.kolo.length + 1) + '. šipka.';
+  }
+  el('hlaska').textContent = t;
+
+  el('bDalsi').disabled = hra.konec;
+  el('bMimo').disabled = !hraBezi();
+}
+
+// Značky šipek aktuálního kola v obraze
+function kresliSipkyKola() {
+  const r = cv.width / 90;
+  ctx.font = 'bold ' + Math.round(cv.width / 45) + 'px system-ui';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.lineWidth = Math.max(2, cv.width / 500);
+  for (const s of hra.kolo) {
+    if (s.x === null) continue;
+    ctx.strokeStyle = '#000';
+    ctx.fillStyle = '#00e5ff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.strokeText(s.t, s.x + r, s.y - r);
+    ctx.fillText(s.t, s.x + r, s.y - r);
+  }
+}
+
 // ===== Uložení kalibrace =====
 function ulozKalibraci() {
   if (body.length < 4) return;
@@ -607,7 +939,7 @@ function aktualizujInfo() {
          '<br>Bod pak můžeš doladit tažením – lupa v rohu ukáže detail.');
   } else {
     info('Kalibrace hotová. Zelená mřížka má ležet na drátech. Když nesedí, dotáhni žluté body.' +
-         '<br>Test: ťukni kamkoli do terče a ukáže se, kolik by to bylo bodů.');
+         '<br>Test: ťukni kamkoli do terče a ukáže se, kolik by to bylo bodů. Pak dej <b>🎯 Hrát 501</b>.');
   }
 }
 </script>
