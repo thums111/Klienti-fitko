@@ -40,18 +40,22 @@
   #bPokracovat { width:100%; padding:.8em; margin-bottom:1em; background:#24507a; }
 
   /* ===== Hra ===== */
-  #hra.vidit { display:grid; gap:.6em; padding:.6em; height:calc(100vh - 2.6em); grid-template-columns:minmax(0, 1fr) minmax(0, 1.25fr); }
-  #levy, #pravy { min-height:0; display:flex; flex-direction:column; gap:.6em; }
-  #pravy { align-items:center; }
+  #hra.vidit { display:grid; gap:.7em; padding:.6em; height:calc(100vh - 2.6em);
+               grid-template-columns:minmax(0, .75fr) minmax(0, 1.9fr) minmax(0, .8fr); }
+  #levy, #stred, #pravy { min-height:0; display:flex; flex-direction:column; gap:.5em; }
+  #levy { overflow:auto; }
+  #stred { align-items:center; justify-content:center; }
+  #napoveda { margin-top:auto; font-size:.7em; color:var(--muted); line-height:1.6; }
+  kbd { background:#2a333d; border-radius:4px; padding:0 .35em; font-family:inherit; color:var(--text); }
 
   /* tabule hráčů X01 */
   #tabule { display:flex; flex-direction:column; gap:.5em; }
-  .hrac { background:var(--panel); border-radius:14px; padding:.5em .8em; border:3px solid transparent; display:flex; align-items:center; gap:.6em; }
+  .hrac { background:var(--panel); border-radius:10px; padding:.3em .6em; border:3px solid transparent; display:flex; align-items:center; gap:.5em; }
   .hrac.tah { border-color:var(--acc); background:#262214; }
   .hrac .info { flex:1; min-width:0; }
-  .hrac .jm { font-size:1.15em; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .hrac .stat { font-size:.75em; color:var(--muted); margin-top:.15em; }
-  .hrac .zb { font-size:2.6em; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
+  .hrac .jm { font-size:.95em; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hrac .stat { font-size:.62em; color:var(--muted); margin-top:.15em; }
+  .hrac .zb { font-size:1.9em; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
   .hrac .legy { font-size:.8em; color:var(--acc); }
 
   /* kriket tabulka */
@@ -59,19 +63,19 @@
   #kriket th, #kriket td { background:var(--panel); text-align:center; padding:.25em .2em; border-radius:6px; font-variant-numeric:tabular-nums; }
   #kriket th.tah { background:#3a3215; color:var(--acc); }
   #kriket td.cislo { background:#2a333d; font-weight:bold; width:3.2em; }
-  #kriket td.mark { font-size:1.5em; line-height:1; color:#fff; }
+  #kriket td.mark { font-size:1.25em; line-height:1; color:#fff; }
   #kriket tr.zavreno td { opacity:.35; }
-  #kriket tr.body td { font-size:1.4em; font-weight:800; }
+  #kriket tr.body td { font-size:1.15em; font-weight:800; }
 
   /* aktuální kolo */
   #kolo { display:flex; gap:.4em; }
-  .sipka { flex:1; text-align:center; background:var(--panel2); border-radius:10px; padding:.45em .2em; font-size:1.25em; font-weight:bold; }
+  .sipka { flex:1; text-align:center; background:var(--panel2); border-radius:10px; padding:.4em .1em; font-size:1.1em; font-weight:bold; }
   .sipka.prazdna { color:#4a5562; }
   #rada { color:var(--acc); min-height:1.3em; }
   #hlaska { min-height:1.3em; }
   .ovladani { display:flex; gap:.5em; flex-wrap:wrap; }
   .ovladani button { flex:1; min-width:4.5em; }
-  #bDalsi { padding:.8em; font-size:1.1em; }
+  #bDalsi { padding:.8em; font-size:1.1em; width:100%; }
   #bDalsi.pulz { animation:pulz 1.2s infinite; }
   @keyframes pulz { 50% { box-shadow:0 0 0 .35em rgba(232,179,60,.35); } }
 
@@ -115,6 +119,7 @@
   /* Na výšku (mobil): pod sebou */
   @media (orientation: portrait) {
     #hra.vidit { grid-template-columns:1fr; height:auto; }
+    #napoveda { display:none; }
     #tercBox { height:min(92vw, 60vh); flex:none; }
     .hrac .zb { font-size:2.1em; }
   }
@@ -122,7 +127,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.0</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.1</span></h1>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
   <button id="bMenu" title="Nastavení hry">☰ Menu</button>
 </header>
@@ -156,24 +161,14 @@
 
 <!-- ===================== HRA ===================== -->
 <div id="hra" class="obrazovka">
+  <!-- vlevo: hráči -->
   <div id="levy">
     <div id="tabule"></div>
     <table id="kriket" style="display:none"></table>
-    <div id="kolo"></div>
-    <div id="rada"></div>
-    <div id="hlaska"></div>
-    <div class="ovladani">
-      <button id="bMimo">Mimo (0)</button>
-      <button id="bDalsi" class="hlavni">Další hráč ➜</button>
-    </div>
   </div>
 
-  <div id="pravy">
-    <div id="prepinac">
-      <button id="bRezTerc" class="vybrano">🎯 Terč</button>
-      <button id="bRezCisla">🔢 Čísla</button>
-    </div>
-
+  <!-- uprostřed: terč, nebo klávesnice / tlačítka -->
+  <div id="stred">
     <div id="tercBox"><svg id="terc" viewBox="-228 -228 456 456" aria-label="Terč"></svg></div>
 
     <div id="klavesnice">
@@ -187,6 +182,28 @@
     </div>
 
     <div id="kriketTlac"></div>
+  </div>
+
+  <!-- vpravo: kolo a ovládání -->
+  <div id="pravy">
+    <div id="prepinac">
+      <button id="bRezTerc" class="vybrano">🎯 Terč</button>
+      <button id="bRezCisla">🔢 Čísla</button>
+    </div>
+    <div id="kolo"></div>
+    <div id="rada"></div>
+    <div id="hlaska"></div>
+    <div class="ovladani">
+      <button id="bMimo">Mimo (0)</button>
+    </div>
+    <button id="bDalsi" class="hlavni">Další hráč ➜</button>
+    <div id="napoveda">
+      <b>Klávesnice:</b><br>
+      čísla + <kbd>Enter</kbd> = součet kola<br>
+      <kbd>Backspace</kbd> oprava · <kbd>Esc</kbd> smazat<br>
+      <kbd>mezerník</kbd> další hráč<br>
+      <kbd>Z</kbd> zpět · <kbd>M</kbd> mimo
+    </div>
   </div>
 </div>
 
@@ -208,7 +225,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, 1–4 hráči)
 // =====================================================================
-const VERZE = '1.0';
+const VERZE = '1.1';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -823,6 +840,44 @@ function ukazVysledek() {
   el('vysledekTab').innerHTML = html;
   el('vysledek').classList.add('vidit');
 }
+
+// =====================================================================
+//  OVLÁDÁNÍ KLÁVESNICÍ (PC)
+// =====================================================================
+document.addEventListener('keydown', e => {
+  if (!el('hra').classList.contains('vidit')) return;     // jen během hry
+  if (e.target.tagName === 'INPUT') return;
+  if (e.ctrlKey || e.altKey || e.metaKey) {
+    if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); zpet(); }
+    return;
+  }
+  const k = e.key;
+
+  // otázka "zavřeno kolikátou šipkou?"
+  if (el('zavrenoVolba').style.display === 'flex' && ['1', '2', '3'].includes(k)) {
+    e.preventDefault(); potvrdCislo(Number(k)); return;
+  }
+
+  if (/^[0-9]$/.test(k) && stav && stav.typ === 'x01') {
+    e.preventDefault();
+    if (nast.rezim !== 'cisla') prepniRezim('cisla');     // psaní čísla přepne na klávesnici
+    klavesa(k);
+  } else if (k === 'Enter') {
+    e.preventDefault();
+    if (stav && stav.konec) novaHra(false);
+    else if (stav && stav.typ === 'x01' && zadavani !== '') potvrdCislo();
+  } else if (k === 'Backspace') {
+    e.preventDefault(); klavesa('⌫');
+  } else if (k === 'Escape') {
+    zadavani = ''; el('zavrenoVolba').style.display = 'none'; ukazDisplej();
+  } else if (k === ' ') {
+    e.preventDefault(); if (stav && !stav.konec) dalsiHrac(false);
+  } else if (k === 'z' || k === 'Z') {
+    zpet();
+  } else if (k === 'm' || k === 'M') {
+    el('bMimo').click();
+  }
+});
 
 // =====================================================================
 //  START
