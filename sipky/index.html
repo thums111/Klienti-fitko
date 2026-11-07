@@ -32,7 +32,7 @@
 </head>
 <body>
 <header>
-  <h1>Šipky – kamera <span class="ver">v1.3</span></h1>
+  <h1>Šipky – kamera <span class="ver">v1.4</span></h1>
   <button id="bZpet" style="flex:0;min-width:0;padding:8px 12px;display:none">↩ Menu</button>
 </header>
 
@@ -59,6 +59,9 @@
   <button class="main" id="bPripojit" style="width:100%">Připojit</button>
   <div class="stav" id="stavO"></div>
 </div>
+
+<!-- ===== Diagnostika spojení ===== -->
+<pre id="log" style="display:none;margin:0 12px 12px;padding:8px;background:#000;color:#9f9;font-size:12px;white-space:pre-wrap;border-radius:6px;max-height:40vh;overflow:auto"></pre>
 
 <!-- ===== Obraz, kalibrace, bodování ===== -->
 <div id="hra">
@@ -164,11 +167,13 @@ function vytvorKameraPeer() {
   const peer = new Peer(PREFIX + kod);
 
   peer.on('open', () => {
+    log('kamera: server OK, kód ' + kod);
     el('kod').textContent = kod;
     el('stavK').textContent = '⏳ Čekám na tablet / PC. Zadej tam kód ' + kod + '.';
   });
 
   peer.on('error', err => {
+    log('kamera chyba: ' + err.type);
     if (err.type === 'unavailable-id') { peer.destroy(); vytvorKameraPeer(); return; }
     el('stavK').textContent = '❌ Chyba spojení: ' + err.type;
   });
@@ -180,9 +185,14 @@ function vytvorKameraPeer() {
 
   // Ovládání se připojí → telefon mu zavolá a pošle obraz
   peer.on('connection', conn => {
+    log('kamera: tablet/PC se hlásí');
     el('stavK').textContent = '🔄 Tablet / PC se hlásí, navazuji přímé spojení…';
     sledujSpojeni(conn, 'stavK');
+    setTimeout(() => {
+      if (!conn.open) { log('kamera: po 15 s stále bez spojení'); vypisStatistiku(conn.peerConnection); }
+    }, 15000);
     conn.on('open', () => {
+      log('kamera: přímé spojení OTEVŘENO, posílám obraz');
       const hovor = peer.call(conn.peer, streamK);
       el('stavK').textContent = '✅ Připojeno – obraz se posílá na tablet / PC.';
       hovor.on('close', () => {
@@ -192,20 +202,67 @@ function vytvorKameraPeer() {
   });
 }
 
-// Hlídá stav přímého spojení (ICE) a při selhání to napíše
+// ===== Diagnostický výpis (zelený text pod stavem) =====
+const start = Date.now();
+function log(msg) {
+  const L = el('log');
+  L.style.display = 'block';
+  L.textContent += ((Date.now() - start) / 1000).toFixed(1) + ' s  ' + msg + '\n';
+  L.scrollTop = L.scrollHeight;
+}
+
+// Zkrátí adresu, ať je vidět typ, ale ne celá IP (např. 192.168.x.x)
+function maska(a) {
+  if (!a) return '?';
+  if (a.endsWith('.local')) return 'skrytá(.local)';
+  const p = a.split('.');
+  return p.length === 4 ? p[0] + '.' + p[1] + '.x.x' : a.slice(0, 6) + '…';
+}
+
+// Hlídá stav přímého spojení (ICE), vše vypisuje do diagnostiky
 function sledujSpojeni(conn, stavId) {
   const zkus = () => {
     const pc = conn.peerConnection;
-    if (!pc) { setTimeout(zkus, 200); return; }
+    if (!pc) { setTimeout(zkus, 50); return; }
+    log('spojení vytvořeno, signál: ' + pc.signalingState);
+    pc.addEventListener('signalingstatechange', () => log('signál: ' + pc.signalingState));
+    pc.addEventListener('icecandidate', e => {
+      if (e.candidate && e.candidate.candidate) {
+        const c = e.candidate;
+        log('moje adresa: ' + (c.type || '?') + ' ' + (c.protocol || '') + ' ' + maska(c.address));
+      } else {
+        log('moje adresy: hotovo');
+      }
+    });
     pc.addEventListener('iceconnectionstatechange', () => {
+      log('ICE stav: ' + pc.iceConnectionState);
       if (pc.iceConnectionState === 'failed') {
-        el(stavId).textContent = '❌ Přímé spojení selhalo. Jsou obě zařízení na stejné Wi-Fi? ' +
-          'Některé Wi-Fi (hlavně pro hosty) zařízení mezi sebou blokují.';
+        el(stavId).textContent = '❌ Přímé spojení selhalo.';
+        vypisStatistiku(pc);
       }
     });
   };
   zkus();
-  conn.on('error', e => { el(stavId).textContent = '❌ Chyba spojení: ' + (e.type || e.message); });
+  conn.on('error', e => {
+    log('chyba spojení: ' + (e.type || e.message));
+    el(stavId).textContent = '❌ Chyba spojení: ' + (e.type || e.message);
+  });
+  return conn;
+}
+
+// Po neúspěchu vypíše, jaké adresy zařízení od sebe dostala
+async function vypisStatistiku(pc) {
+  if (!pc) { log('statistika: spojení neexistuje'); return; }
+  try {
+    const st = await pc.getStats();
+    let mist = 0, vzdal = 0, pary = 0;
+    st.forEach(r => {
+      if (r.type === 'local-candidate')  { mist++;  log('  místní: '  + r.candidateType + ' ' + r.protocol + ' ' + maska(r.address)); }
+      if (r.type === 'remote-candidate') { vzdal++; log('  protější: ' + r.candidateType + ' ' + r.protocol + ' ' + maska(r.address)); }
+      if (r.type === 'candidate-pair')   { pary++; }
+    });
+    log('statistika: místních ' + mist + ', protějších ' + vzdal + ', párů ' + pary);
+  } catch (e) { log('statistika nejde: ' + e.message); }
 }
 
 // ===== Režim OVLÁDÁNÍ (tablet / PC) =====
@@ -225,13 +282,17 @@ async function pripoj() {
   el('stavO').textContent = '1/3 Připojuji se k serveru…';
   peerO = new Peer();
   const hotovo = { server:false, spojeni:false };
+  let connO = null;
+  log('ovládání: připojuji se, kód ' + kod);
 
   peerO.on('open', () => {
     hotovo.server = true;
+    log('ovládání: server OK');
     el('stavO').textContent = '2/3 Server OK. Navazuji přímé spojení s telefonem…';
-    const conn = peerO.connect(PREFIX + kod, { reliable:true });
-    sledujSpojeni(conn, 'stavO');
-    conn.on('open', () => {
+    connO = peerO.connect(PREFIX + kod, { reliable:true });
+    sledujSpojeni(connO, 'stavO');
+    connO.on('open', () => {
+      log('ovládání: přímé spojení OTEVŘENO');
       hotovo.spojeni = true;
       el('stavO').textContent = '3/3 Spojeno, čekám na obraz…';
     });
@@ -243,6 +304,8 @@ async function pripoj() {
       el('stavO').textContent = '❌ Krok 1/3: nedaří se spojit se zprostředkovacím serverem. ' +
         'Má tablet internet? Zkus Připojit znovu.';
     } else if (!hotovo.spojeni) {
+      log('ovládání: po 15 s stále bez spojení');
+      vypisStatistiku(connO && connO.peerConnection);
       el('stavO').textContent = '❌ Krok 2/3: server funguje, ale přímé spojení s telefonem se nepodařilo. ' +
         'Jsou oba na stejné Wi-Fi? Některé Wi-Fi (hlavně pro hosty) zařízení mezi sebou blokují.';
     }
@@ -262,6 +325,7 @@ async function pripoj() {
   });
 
   peerO.on('error', err => {
+    log('ovládání chyba: ' + err.type);
     el('stavO').textContent = err.type === 'peer-unavailable'
       ? '❌ Kód ' + kod + ' nenalezen. Je telefon v režimu Kamera a ukazuje tenhle kód?'
       : '❌ Chyba spojení: ' + err.type;
