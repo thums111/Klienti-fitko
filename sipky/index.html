@@ -32,7 +32,7 @@
 </head>
 <body>
 <header>
-  <h1>Šipky – kamera <span class="ver">v1.2</span></h1>
+  <h1>Šipky – kamera <span class="ver">v1.3</span></h1>
   <button id="bZpet" style="flex:0;min-width:0;padding:8px 12px;display:none">↩ Menu</button>
 </header>
 
@@ -209,8 +209,14 @@ function sledujSpojeni(conn, stavId) {
 }
 
 // ===== Režim OVLÁDÁNÍ (tablet / PC) =====
-function pripoj() {
+async function pripoj() {
   const kod = el('kodInput').value.trim();
+  // Chrome bez povolené kamery skrývá místní adresu zařízení v síti a přímé
+  // spojení pak na některých routerech selže. Krátké povolení kamery to odemkne.
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+    s.getTracks().forEach(t => t.stop());
+  } catch(e) {}
   if (!/^\d{4}$/.test(kod)) { el('stavO').textContent = 'Zadej 4místný kód z telefonu.'; return; }
   if (typeof Peer === 'undefined') { el('stavO').textContent = '❌ Chybí připojení k internetu.'; return; }
   try { localStorage.setItem(KLIC_KOD, kod); } catch(e) {}
