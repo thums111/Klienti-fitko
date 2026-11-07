@@ -4,35 +4,71 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Šipky kamera</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-  :root { --bg:#111; --panel:#1d1d1d; --text:#eee; --acc:#2ecc71; --warn:#f1c40f; }
+  :root { --bg:#111; --panel:#1d1d1d; --text:#eee; --acc:#2ecc71; --warn:#f1c40f; --err:#ff5b5b; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui, sans-serif; }
   header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--panel); }
   h1 { font-size:18px; margin:0; }
   .ver { font-size:13px; color:#999; font-weight:normal; }
+  .panel { padding:12px; display:none; }
+  .panel.vidit { display:block; }
+  .velke { display:block; width:100%; padding:20px; margin:0 0 12px; font-size:20px; text-align:left; }
+  .velke small { display:block; font-size:14px; color:#aaa; margin-top:4px; font-weight:normal; }
   canvas { width:100%; display:block; touch-action:none; background:#000; }
+  #nahled { width:100%; max-height:45vh; object-fit:contain; background:#000; display:block; border-radius:8px; }
+  #kod { font-size:64px; font-weight:bold; letter-spacing:12px; color:var(--warn); text-align:center; margin:12px 0; }
+  .stav { font-size:17px; padding:8px 0; line-height:1.4; }
   #info { padding:10px 12px; font-size:16px; min-height:48px; line-height:1.4; }
   #skore { font-size:28px; font-weight:bold; color:var(--acc); padding:0 12px; min-height:34px; }
   .btns { display:flex; gap:8px; padding:0 12px 12px; flex-wrap:wrap; }
   button { flex:1; min-width:120px; padding:12px; font-size:16px; border:0; border-radius:8px; background:#333; color:#eee; }
   button.main { background:var(--acc); color:#000; font-weight:bold; }
-  button:disabled { opacity:0.4; }
+  input { font-size:32px; width:100%; padding:10px; text-align:center; letter-spacing:10px; border-radius:8px; border:0; margin-bottom:12px; }
+  #hra { display:none; }
+  #hra.vidit { display:block; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Šipky – kamera <span class="ver">v1.0</span></h1>
+  <h1>Šipky – kamera <span class="ver">v1.1</span></h1>
+  <button id="bZpet" style="flex:0;min-width:0;padding:8px 12px;display:none">↩ Menu</button>
 </header>
 
-<canvas id="cv" width="1280" height="720"></canvas>
-<div id="skore"></div>
-<div id="info">Postav telefon šikmo k terči (na šířku) a stiskni <b>Spustit kameru</b>.</div>
+<!-- ===== Výběr režimu ===== -->
+<div id="volba" class="panel vidit">
+  <button class="velke main" id="bKamera">📷 Kamera<small>Na telefonu, který stojí u terče</small></button>
+  <button class="velke" id="bOvladani">🖥 Ovládání<small>Na tabletu nebo PC – tady kalibruješ a počítáš</small></button>
+  <button class="velke" id="bLokal">📱 Vše na jednom zařízení<small>Kamera i ovládání na stejném přístroji</small></button>
+</div>
 
-<div class="btns">
-  <button id="bStart" class="main">Spustit kameru</button>
-  <button id="bFreeze" disabled>Zmrazit obraz</button>
-  <button id="bReset" disabled>Nová kalibrace</button>
+<!-- ===== Režim Kamera (telefon u terče) ===== -->
+<div id="kameraPanel" class="panel">
+  <video id="nahled" playsinline muted></video>
+  <div>Kód pro tablet / PC:</div>
+  <div id="kod">····</div>
+  <div class="stav" id="stavK">Spouštím kameru…</div>
+  <div style="color:#aaa;font-size:14px">Telefon nech zapnutý a na nabíječce. Když zhasne displej nebo přepneš do jiné aplikace, obraz se přeruší.</div>
+</div>
+
+<!-- ===== Režim Ovládání (tablet / PC) ===== -->
+<div id="ovladaniPanel" class="panel">
+  <div>Zadej kód, který ukazuje telefon:</div>
+  <input id="kodInput" type="tel" inputmode="numeric" maxlength="4" placeholder="0000">
+  <button class="main" id="bPripojit" style="width:100%">Připojit</button>
+  <div class="stav" id="stavO"></div>
+</div>
+
+<!-- ===== Obraz, kalibrace, bodování ===== -->
+<div id="hra">
+  <canvas id="cv" width="1600" height="900"></canvas>
+  <div id="skore"></div>
+  <div id="info"></div>
+  <div class="btns">
+    <button id="bFreeze">Zmrazit obraz</button>
+    <button id="bReset">Nová kalibrace</button>
+  </div>
 </div>
 
 <script>
@@ -46,68 +82,195 @@ const BODY_TERCE = [
   { n:11, x:-170, y:0    }
 ];
 const KRUHY = [6.35, 15.9, 99, 107, 162, 170];
-const KLIC = 'sipky_kalibrace_v1';
+const KLIC = 'sipky_kalibrace_v11';
+const KLIC_KOD = 'sipky_posledni_kod';
+const PREFIX = 'thums111-sipky-';     // začátek jména zařízení na zprostředkovacím serveru
+const SIRKA = 1600;                    // pevná šířka plátna (kalibrace nezávisí na kvalitě přenosu)
 
-// ===== Stav =====
-const cv = document.getElementById('cv');
+const el = id => document.getElementById(id);
+const cv = el('cv');
 const ctx = cv.getContext('2d');
 const video = document.createElement('video');
 video.playsInline = true;
 video.muted = true;
 
-const snimek = document.createElement('canvas'); // zmrazený obraz
+const snimek = document.createElement('canvas');
 let zmrazeno = false;
 let bezi = false;
 
-let body = [];        // kalibrační body v obraze [{x,y}]
-let H = null;         // terč (mm) -> obraz (px)
-let Hinv = null;      // obraz (px) -> terč (mm)
-let tahany = -1;      // index taženého bodu
-let posun = {x:0, y:0};
-let lupa = null;      // bod, kolem kterého ukázat lupu
-let posledni = null;  // poslední testovací ťuknutí
+let body = [];
+let H = null, Hinv = null;
+let tahany = -1;
+let posun = { x:0, y:0 };
+let lupa = null;
+let posledni = null;
 
-// ===== Kamera =====
-document.getElementById('bStart').onclick = async () => {
+let peerO = null;   // spojení na straně Ovládání
+
+// ===== Přepínání obrazovek =====
+function ukaz(id) {
+  for (const p of ['volba', 'kameraPanel', 'ovladaniPanel']) el(p).classList.toggle('vidit', p === id);
+  el('bZpet').style.display = id === 'volba' ? 'none' : 'block';
+}
+el('bZpet').onclick = () => location.reload();
+
+el('bKamera').onclick = rezimKamera;
+el('bOvladani').onclick = () => {
+  ukaz('ovladaniPanel');
+  try { el('kodInput').value = localStorage.getItem(KLIC_KOD) || ''; } catch(e) {}
+};
+el('bLokal').onclick = rezimLokal;
+el('bPripojit').onclick = pripoj;
+
+async function zamekObrazovky() {
+  try { await navigator.wakeLock.request('screen'); } catch(e) {}
+}
+
+async function otevriKameru() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } },
+    audio: false
+  });
+  // Říká přenosu: drž ostrost, klidně na úkor plynulosti
+  const stopa = stream.getVideoTracks()[0];
+  if (stopa) stopa.contentHint = 'detail';
+  return stream;
+}
+
+// ===== Režim KAMERA (telefon u terče) =====
+let streamK = null;
+
+async function rezimKamera() {
+  ukaz('kameraPanel');
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } },
-      audio: false
+    streamK = await otevriKameru();
+    el('nahled').srcObject = streamK;
+    await el('nahled').play();
+  } catch (e) {
+    el('stavK').innerHTML = '❌ Kameru se nepodařilo spustit: ' + e.message + '<br>Povol přístup ke kameře.';
+    return;
+  }
+  zamekObrazovky();
+  if (typeof Peer === 'undefined') {
+    el('stavK').textContent = '❌ Chybí připojení k internetu – spárování nejde.';
+    return;
+  }
+  vytvorKameraPeer();
+}
+
+function vytvorKameraPeer() {
+  const kod = String(Math.floor(1000 + Math.random() * 9000));
+  el('stavK').textContent = 'Připojuji se k serveru…';
+  const peer = new Peer(PREFIX + kod);
+
+  peer.on('open', () => {
+    el('kod').textContent = kod;
+    el('stavK').textContent = '⏳ Čekám na tablet / PC. Zadej tam kód ' + kod + '.';
+  });
+
+  peer.on('error', err => {
+    if (err.type === 'unavailable-id') { peer.destroy(); vytvorKameraPeer(); return; }
+    el('stavK').textContent = '❌ Chyba spojení: ' + err.type;
+  });
+
+  peer.on('disconnected', () => {
+    el('stavK').textContent = 'Spojení se serverem přerušeno, obnovuji…';
+    peer.reconnect();
+  });
+
+  // Ovládání se připojí → telefon mu zavolá a pošle obraz
+  peer.on('connection', conn => {
+    conn.on('open', () => {
+      const hovor = peer.call(conn.peer, streamK);
+      el('stavK').textContent = '✅ Připojeno – obraz se posílá na tablet / PC.';
+      hovor.on('close', () => {
+        el('stavK').textContent = '⚠️ Tablet / PC se odpojil. Kód ' + kod + ' platí dál.';
+      });
     });
-    video.srcObject = stream;
-    await video.play();
-    cv.width = video.videoWidth;
-    cv.height = video.videoHeight;
-    snimek.width = cv.width;
-    snimek.height = cv.height;
+  });
+}
+
+// ===== Režim OVLÁDÁNÍ (tablet / PC) =====
+function pripoj() {
+  const kod = el('kodInput').value.trim();
+  if (!/^\d{4}$/.test(kod)) { el('stavO').textContent = 'Zadej 4místný kód z telefonu.'; return; }
+  if (typeof Peer === 'undefined') { el('stavO').textContent = '❌ Chybí připojení k internetu.'; return; }
+  try { localStorage.setItem(KLIC_KOD, kod); } catch(e) {}
+
+  if (peerO) peerO.destroy();
+  el('stavO').textContent = 'Připojuji…';
+  peerO = new Peer();
+
+  peerO.on('open', () => {
+    const conn = peerO.connect(PREFIX + kod, { reliable:true });
+    conn.on('open', () => { el('stavO').textContent = 'Spojeno, čekám na obraz…'; });
+  });
+
+  peerO.on('call', hovor => {
+    hovor.answer();   // odpovídáme bez vlastního obrazu – jen přijímáme
+    hovor.on('stream', s => {
+      el('stavO').textContent = '✅ Obraz z telefonu přijat.';
+      el('ovladaniPanel').classList.remove('vidit');
+      spustObraz(s);
+    });
+    hovor.on('close', () => {
+      el('ovladaniPanel').classList.add('vidit');
+      el('stavO').textContent = '⚠️ Telefon se odpojil. Zkontroluj ho a stiskni Připojit znovu.';
+    });
+  });
+
+  peerO.on('error', err => {
+    el('stavO').textContent = err.type === 'peer-unavailable'
+      ? '❌ Kód ' + kod + ' nenalezen. Je telefon v režimu Kamera a ukazuje tenhle kód?'
+      : '❌ Chyba spojení: ' + err.type;
+  });
+}
+
+// ===== Režim VŠE NA JEDNOM ZAŘÍZENÍ =====
+async function rezimLokal() {
+  ukaz('none');
+  try {
+    spustObraz(await otevriKameru());
+    zamekObrazovky();
+  } catch (e) {
+    el('hra').classList.add('vidit');
+    info('❌ Kameru se nepodařilo spustit: ' + e.message);
+  }
+}
+
+// ===== Společné: zobrazení obrazu, kalibrace =====
+async function spustObraz(stream) {
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  // počkej, až video zná svůj rozměr
+  while (!video.videoWidth) await new Promise(r => setTimeout(r, 100));
+  cv.width = SIRKA;
+  cv.height = Math.round(SIRKA * video.videoHeight / video.videoWidth);
+  snimek.width = cv.width;
+  snimek.height = cv.height;
+  el('hra').classList.add('vidit');
+  if (!bezi) {
     bezi = true;
-    document.getElementById('bStart').disabled = true;
-    document.getElementById('bFreeze').disabled = false;
-    document.getElementById('bReset').disabled = false;
-    try { await navigator.wakeLock.request('screen'); } catch(e) {}
     nactiKalibraci();
     aktualizujInfo();
     requestAnimationFrame(kresli);
-  } catch (e) {
-    info('Kameru se nepodařilo spustit: ' + e.message +
-         '<br>Kamera funguje jen přes https (např. GitHub Pages) a musíš povolit přístup.');
   }
-};
+}
 
-document.getElementById('bFreeze').onclick = () => {
+el('bFreeze').onclick = () => {
   zmrazeno = !zmrazeno;
   if (zmrazeno) snimek.getContext('2d').drawImage(video, 0, 0, snimek.width, snimek.height);
-  document.getElementById('bFreeze').textContent = zmrazeno ? 'Živý obraz' : 'Zmrazit obraz';
+  el('bFreeze').textContent = zmrazeno ? 'Živý obraz' : 'Zmrazit obraz';
 };
 
-document.getElementById('bReset').onclick = () => {
+el('bReset').onclick = () => {
   body = []; H = null; Hinv = null; posledni = null;
-  document.getElementById('skore').textContent = '';
+  el('skore').textContent = '';
   try { localStorage.removeItem(KLIC); } catch(e) {}
   aktualizujInfo();
 };
 
-// ===== Ovládání dotykem =====
+// ===== Ovládání dotykem / myší =====
 function poziceVObraze(e) {
   const r = cv.getBoundingClientRect();
   return {
@@ -121,7 +284,6 @@ cv.addEventListener('pointerdown', e => {
   const p = poziceVObraze(e);
   const dosah = cv.width * 0.05;
 
-  // 1) chycení existujícího bodu
   for (let i = 0; i < body.length; i++) {
     if (Math.hypot(body[i].x - p.x, body[i].y - p.y) < dosah) {
       tahany = i;
@@ -132,7 +294,6 @@ cv.addEventListener('pointerdown', e => {
     }
   }
 
-  // 2) přidání nového kalibračního bodu
   if (body.length < 4) {
     body.push(p);
     tahany = body.length - 1;
@@ -144,12 +305,11 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
 
-  // 3) testovací ťuknutí – kolik by to bylo bodů
   if (Hinv) {
     const [mx, my] = aplikuj(Hinv, p.x, p.y);
     const s = skore(mx, my);
-    posledni = { x:p.x, y:p.y, t:s.t };
-    document.getElementById('skore').textContent = s.t + ' = ' + s.b + ' b.';
+    posledni = { x:p.x, y:p.y };
+    el('skore').textContent = s.t + ' = ' + s.b + ' b.';
   }
 });
 
@@ -172,7 +332,6 @@ cv.addEventListener('pointerup', konecTahu);
 cv.addEventListener('pointercancel', konecTahu);
 
 // ===== Matematika =====
-// Řešení soustavy lineárních rovnic Gaussovou eliminací
 function gauss(A, b) {
   const n = b.length;
   const M = A.map((radek, i) => [...radek, b[i]]);
@@ -190,7 +349,6 @@ function gauss(A, b) {
   return M.map((radek, i) => radek[n] / radek[i]);
 }
 
-// Homografie ze 4 dvojic bodů: src -> dst
 function homografie(src, dst) {
   const A = [], b = [];
   for (let i = 0; i < 4; i++) {
@@ -217,7 +375,6 @@ function spocitejHomografii() {
   Hinv = homografie(obraz, terc);
 }
 
-// Bodové hodnocení místa (x, y v mm od středu)
 function skore(x, y) {
   const r = Math.hypot(x, y);
   if (r <= 6.35) return { t:'Bull', b:50 };
@@ -233,7 +390,8 @@ function skore(x, y) {
 
 // ===== Kreslení =====
 function kresli() {
-  ctx.drawImage(zmrazeno ? snimek : video, 0, 0, cv.width, cv.height);
+  if (zmrazeno) ctx.drawImage(snimek, 0, 0, cv.width, cv.height);
+  else if (video.readyState >= 2) ctx.drawImage(video, 0, 0, cv.width, cv.height);
   if (H) kresliMrizku();
   kresliBody();
   if (posledni) kresliKriz(posledni.x, posledni.y, '#ff3b3b');
@@ -245,8 +403,6 @@ function kresliMrizku() {
   const tl = Math.max(2, cv.width / 700);
   ctx.lineWidth = tl;
   ctx.strokeStyle = 'rgba(0,255,120,0.85)';
-
-  // kruhy
   for (const r of KRUHY) {
     ctx.beginPath();
     for (let i = 0; i <= 120; i++) {
@@ -256,16 +412,12 @@ function kresliMrizku() {
     }
     ctx.stroke();
   }
-
-  // dráty mezi segmenty
   for (let k = 0; k < 20; k++) {
     const a = (9 + 18 * k) * Math.PI / 180;
     const [x1, y1] = aplikuj(H, 15.9 * Math.sin(a), 15.9 * Math.cos(a));
     const [x2, y2] = aplikuj(H, 170 * Math.sin(a), 170 * Math.cos(a));
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
   }
-
-  // čísla
   ctx.font = 'bold ' + Math.round(cv.width / 45) + 'px system-ui';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -306,7 +458,6 @@ function kresliKriz(x, y, barva) {
   ctx.stroke();
 }
 
-// Lupa: 3× zvětšený výřez kolem taženého bodu (v rohu, kde nepřekáží prst)
 function kresliLupu() {
   const L = Math.round(cv.width * 0.25);
   const zdroj = L / 3;
@@ -327,9 +478,7 @@ function kresliLupu() {
 // ===== Uložení kalibrace =====
 function ulozKalibraci() {
   if (body.length < 4) return;
-  try {
-    localStorage.setItem(KLIC, JSON.stringify({ w:cv.width, h:cv.height, body }));
-  } catch(e) {}
+  try { localStorage.setItem(KLIC, JSON.stringify({ w:cv.width, h:cv.height, body })); } catch(e) {}
 }
 
 function nactiKalibraci() {
@@ -343,7 +492,7 @@ function nactiKalibraci() {
 }
 
 // ===== Texty =====
-function info(html) { document.getElementById('info').innerHTML = html; }
+function info(html) { el('info').innerHTML = html; }
 
 function aktualizujInfo() {
   if (body.length < 4) {
