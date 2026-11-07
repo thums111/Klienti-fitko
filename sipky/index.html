@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Šipky kamera</title>
+<style>
+  :root { --bg:#111; --panel:#1d1d1d; --text:#eee; --acc:#2ecc71; --warn:#f1c40f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui, sans-serif; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--panel); }
+  h1 { font-size:18px; margin:0; }
+  .ver { font-size:13px; color:#999; font-weight:normal; }
+  canvas { width:100%; display:block; touch-action:none; background:#000; }
+  #info { padding:10px 12px; font-size:16px; min-height:48px; line-height:1.4; }
+  #skore { font-size:28px; font-weight:bold; color:var(--acc); padding:0 12px; min-height:34px; }
+  .btns { display:flex; gap:8px; padding:0 12px 12px; flex-wrap:wrap; }
+  button { flex:1; min-width:120px; padding:12px; font-size:16px; border:0; border-radius:8px; background:#333; color:#eee; }
+  button.main { background:var(--acc); color:#000; font-weight:bold; }
+  button:disabled { opacity:0.4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Šipky – kamera <span class="ver">v1.0</span></h1>
+</header>
+
+<canvas id="cv" width="1280" height="720"></canvas>
+<div id="skore"></div>
+<div id="info">Postav telefon šikmo k terči (na šířku) a stiskni <b>Spustit kameru</b>.</div>
+
+<div class="btns">
+  <button id="bStart" class="main">Spustit kameru</button>
+  <button id="bFreeze" disabled>Zmrazit obraz</button>
+  <button id="bReset" disabled>Nová kalibrace</button>
+</div>
+
+<script>
+// ===== Konstanty terče (v mm, střed = 0,0, osa y nahoru) =====
+const PORADI = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+// Kalibrační body: vnější okraj doublu uprostřed čísel 20, 6, 3, 11
+const BODY_TERCE = [
+  { n:20, x:0,    y:170  },
+  { n:6,  x:170,  y:0    },
+  { n:3,  x:0,    y:-170 },
+  { n:11, x:-170, y:0    }
+];
+const KRUHY = [6.35, 15.9, 99, 107, 162, 170];
+const KLIC = 'sipky_kalibrace_v1';
+
+// ===== Stav =====
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const video = document.createElement('video');
+video.playsInline = true;
+video.muted = true;
+
+const snimek = document.createElement('canvas'); // zmrazený obraz
+let zmrazeno = false;
+let bezi = false;
+
+let body = [];        // kalibrační body v obraze [{x,y}]
+let H = null;         // terč (mm) -> obraz (px)
+let Hinv = null;      // obraz (px) -> terč (mm)
+let tahany = -1;      // index taženého bodu
+let posun = {x:0, y:0};
+let lupa = null;      // bod, kolem kterého ukázat lupu
+let posledni = null;  // poslední testovací ťuknutí
+
+// ===== Kamera =====
+document.getElementById('bStart').onclick = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    cv.width = video.videoWidth;
+    cv.height = video.videoHeight;
+    snimek.width = cv.width;
+    snimek.height = cv.height;
+    bezi = true;
+    document.getElementById('bStart').disabled = true;
+    document.getElementById('bFreeze').disabled = false;
+    document.getElementById('bReset').disabled = false;
+    try { await navigator.wakeLock.request('screen'); } catch(e) {}
+    nactiKalibraci();
+    aktualizujInfo();
+    requestAnimationFrame(kresli);
+  } catch (e) {
+    info('Kameru se nepodařilo spustit: ' + e.message +
+         '<br>Kamera funguje jen přes https (např. GitHub Pages) a musíš povolit přístup.');
+  }
+};
+
+document.getElementById('bFreeze').onclick = () => {
+  zmrazeno = !zmrazeno;
+  if (zmrazeno) snimek.getContext('2d').drawImage(video, 0, 0, snimek.width, snimek.height);
+  document.getElementById('bFreeze').textContent = zmrazeno ? 'Živý obraz' : 'Zmrazit obraz';
+};
+
+document.getElementById('bReset').onclick = () => {
+  body = []; H = null; Hinv = null; posledni = null;
+  document.getElementById('skore').textContent = '';
+  try { localStorage.removeItem(KLIC); } catch(e) {}
+  aktualizujInfo();
+};
+
+// ===== Ovládání dotykem =====
+function poziceVObraze(e) {
+  const r = cv.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) * cv.width / r.width,
+    y: (e.clientY - r.top) * cv.height / r.height
+  };
+}
+
+cv.addEventListener('pointerdown', e => {
+  if (!bezi) return;
+  const p = poziceVObraze(e);
+  const dosah = cv.width * 0.05;
+
+  // 1) chycení existujícího bodu
+  for (let i = 0; i < body.length; i++) {
+    if (Math.hypot(body[i].x - p.x, body[i].y - p.y) < dosah) {
+      tahany = i;
+      posun = { x: body[i].x - p.x, y: body[i].y - p.y };
+      lupa = { ...body[i] };
+      cv.setPointerCapture(e.pointerId);
+      return;
+    }
+  }
+
+  // 2) přidání nového kalibračního bodu
+  if (body.length < 4) {
+    body.push(p);
+    tahany = body.length - 1;
+    posun = { x:0, y:0 };
+    lupa = { ...p };
+    cv.setPointerCapture(e.pointerId);
+    spocitejHomografii();
+    aktualizujInfo();
+    return;
+  }
+
+  // 3) testovací ťuknutí – kolik by to bylo bodů
+  if (Hinv) {
+    const [mx, my] = aplikuj(Hinv, p.x, p.y);
+    const s = skore(mx, my);
+    posledni = { x:p.x, y:p.y, t:s.t };
+    document.getElementById('skore').textContent = s.t + ' = ' + s.b + ' b.';
+  }
+});
+
+cv.addEventListener('pointermove', e => {
+  if (tahany < 0) return;
+  const p = poziceVObraze(e);
+  body[tahany] = { x: p.x + posun.x, y: p.y + posun.y };
+  lupa = { ...body[tahany] };
+  spocitejHomografii();
+});
+
+function konecTahu() {
+  if (tahany < 0) return;
+  tahany = -1;
+  lupa = null;
+  ulozKalibraci();
+  aktualizujInfo();
+}
+cv.addEventListener('pointerup', konecTahu);
+cv.addEventListener('pointercancel', konecTahu);
+
+// ===== Matematika =====
+// Řešení soustavy lineárních rovnic Gaussovou eliminací
+function gauss(A, b) {
+  const n = b.length;
+  const M = A.map((radek, i) => [...radek, b[i]]);
+  for (let c = 0; c < n; c++) {
+    let max = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[max][c])) max = r;
+    if (Math.abs(M[max][c]) < 1e-12) return null;
+    [M[c], M[max]] = [M[max], M[c]];
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = M[r][c] / M[c][c];
+      for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
+    }
+  }
+  return M.map((radek, i) => radek[n] / radek[i]);
+}
+
+// Homografie ze 4 dvojic bodů: src -> dst
+function homografie(src, dst) {
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const [X, Y] = src[i], [x, y] = dst[i];
+    A.push([X, Y, 1, 0, 0, 0, -x * X, -x * Y]); b.push(x);
+    A.push([0, 0, 0, X, Y, 1, -y * X, -y * Y]); b.push(y);
+  }
+  const h = gauss(A, b);
+  if (!h) return null;
+  h.push(1);
+  return h;
+}
+
+function aplikuj(h, x, y) {
+  const w = h[6] * x + h[7] * y + h[8];
+  return [(h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w];
+}
+
+function spocitejHomografii() {
+  if (body.length < 4) { H = null; Hinv = null; return; }
+  const terc = BODY_TERCE.map(b => [b.x, b.y]);
+  const obraz = body.map(b => [b.x, b.y]);
+  H = homografie(terc, obraz);
+  Hinv = homografie(obraz, terc);
+}
+
+// Bodové hodnocení místa (x, y v mm od středu)
+function skore(x, y) {
+  const r = Math.hypot(x, y);
+  if (r <= 6.35) return { t:'Bull', b:50 };
+  if (r <= 15.9) return { t:'25', b:25 };
+  if (r > 170)   return { t:'Mimo', b:0 };
+  let u = Math.atan2(x, y) * 180 / Math.PI;
+  if (u < 0) u += 360;
+  const c = PORADI[Math.floor(((u + 9) % 360) / 18)];
+  if (r >= 99 && r <= 107) return { t:'T' + c, b:c * 3 };
+  if (r >= 162)            return { t:'D' + c, b:c * 2 };
+  return { t:String(c), b:c };
+}
+
+// ===== Kreslení =====
+function kresli() {
+  ctx.drawImage(zmrazeno ? snimek : video, 0, 0, cv.width, cv.height);
+  if (H) kresliMrizku();
+  kresliBody();
+  if (posledni) kresliKriz(posledni.x, posledni.y, '#ff3b3b');
+  if (lupa) kresliLupu();
+  requestAnimationFrame(kresli);
+}
+
+function kresliMrizku() {
+  const tl = Math.max(2, cv.width / 700);
+  ctx.lineWidth = tl;
+  ctx.strokeStyle = 'rgba(0,255,120,0.85)';
+
+  // kruhy
+  for (const r of KRUHY) {
+    ctx.beginPath();
+    for (let i = 0; i <= 120; i++) {
+      const a = i / 120 * 2 * Math.PI;
+      const [x, y] = aplikuj(H, r * Math.sin(a), r * Math.cos(a));
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // dráty mezi segmenty
+  for (let k = 0; k < 20; k++) {
+    const a = (9 + 18 * k) * Math.PI / 180;
+    const [x1, y1] = aplikuj(H, 15.9 * Math.sin(a), 15.9 * Math.cos(a));
+    const [x2, y2] = aplikuj(H, 170 * Math.sin(a), 170 * Math.cos(a));
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
+  // čísla
+  ctx.font = 'bold ' + Math.round(cv.width / 45) + 'px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = tl * 2;
+  ctx.strokeStyle = '#000';
+  ctx.fillStyle = '#fff';
+  for (let k = 0; k < 20; k++) {
+    const a = 18 * k * Math.PI / 180;
+    const [x, y] = aplikuj(H, 192 * Math.sin(a), 192 * Math.cos(a));
+    ctx.strokeText(PORADI[k], x, y);
+    ctx.fillText(PORADI[k], x, y);
+  }
+}
+
+function kresliBody() {
+  const r = cv.width / 80;
+  ctx.font = 'bold ' + Math.round(cv.width / 50) + 'px system-ui';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  body.forEach((b, i) => {
+    ctx.lineWidth = Math.max(2, cv.width / 600);
+    ctx.strokeStyle = '#000';
+    ctx.fillStyle = i === tahany ? '#ff9f1c' : '#f1c40f';
+    ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, 2 * Math.PI); ctx.stroke();
+    kresliKriz(b.x, b.y, ctx.fillStyle);
+    ctx.strokeText(BODY_TERCE[i].n, b.x + r, b.y - r);
+    ctx.fillText(BODY_TERCE[i].n, b.x + r, b.y - r);
+  });
+}
+
+function kresliKriz(x, y, barva) {
+  const d = cv.width / 60;
+  ctx.lineWidth = Math.max(2, cv.width / 700);
+  ctx.strokeStyle = barva;
+  ctx.beginPath();
+  ctx.moveTo(x - d, y); ctx.lineTo(x + d, y);
+  ctx.moveTo(x, y - d); ctx.lineTo(x, y + d);
+  ctx.stroke();
+}
+
+// Lupa: 3× zvětšený výřez kolem taženého bodu (v rohu, kde nepřekáží prst)
+function kresliLupu() {
+  const L = Math.round(cv.width * 0.25);
+  const zdroj = L / 3;
+  const vlevo = lupa.x > cv.width / 2;
+  const x0 = vlevo ? 10 : cv.width - L - 10;
+  const y0 = 10;
+  ctx.drawImage(cv, lupa.x - zdroj / 2, lupa.y - zdroj / 2, zdroj, zdroj, x0, y0, L, L);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#fff';
+  ctx.strokeRect(x0, y0, L, L);
+  ctx.strokeStyle = '#ff3b3b';
+  ctx.beginPath();
+  ctx.moveTo(x0 + L / 2, y0 + 8); ctx.lineTo(x0 + L / 2, y0 + L - 8);
+  ctx.moveTo(x0 + 8, y0 + L / 2); ctx.lineTo(x0 + L - 8, y0 + L / 2);
+  ctx.stroke();
+}
+
+// ===== Uložení kalibrace =====
+function ulozKalibraci() {
+  if (body.length < 4) return;
+  try {
+    localStorage.setItem(KLIC, JSON.stringify({ w:cv.width, h:cv.height, body }));
+  } catch(e) {}
+}
+
+function nactiKalibraci() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KLIC));
+    if (d && d.w === cv.width && d.h === cv.height && d.body.length === 4) {
+      body = d.body;
+      spocitejHomografii();
+    }
+  } catch(e) {}
+}
+
+// ===== Texty =====
+function info(html) { document.getElementById('info').innerHTML = html; }
+
+function aktualizujInfo() {
+  if (body.length < 4) {
+    const n = BODY_TERCE[body.length].n;
+    info('Bod ' + (body.length + 1) + ' ze 4: ťukni na <b>vnější okraj doublu uprostřed čísla ' + n + '</b>.' +
+         '<br>Bod pak můžeš doladit tažením – lupa v rohu ukáže detail.');
+  } else {
+    info('Kalibrace hotová. Zelená mřížka má ležet na drátech. Když nesedí, dotáhni žluté body.' +
+         '<br>Test: ťukni kamkoli do terče a ukáže se, kolik by to bylo bodů.');
+  }
+}
+</script>
+</body>
+</html>
