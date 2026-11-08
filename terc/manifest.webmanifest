@@ -1,9 +1,9 @@
 {
-  "id": "sipky-pocitadlo",
+  "id": "/Klienti-fitko/terc/?app=sipky-2",
   "name": "Šipky – počítadlo",
   "short_name": "Šipky",
   "description": "Počítadlo šipek: 301/501/701 a kriket",
-  "start_url": "./",
+  "start_url": "./?app=sipky-2",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
