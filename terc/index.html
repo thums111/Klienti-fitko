@@ -24,9 +24,9 @@
 
   header { display:flex; align-items:center; gap:.6em; padding:.35em .7em; background:var(--panel); }
   header { position:relative; }
-  header h1 { font-size:1.1em; margin:0; flex:1; white-space:nowrap; }
-  #cisloKola { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); font-size:1.35em; font-weight:800;
-               color:var(--acc); white-space:nowrap; pointer-events:none; }
+  header h1 { font-size:1.1em; margin:0; flex:none; white-space:nowrap; }
+  #cisloKola { flex:1; min-width:0; text-align:center; font-size:1.35em; font-weight:800;
+               color:var(--acc); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
   .ver { font-size:.7em; color:var(--muted); font-weight:normal; }
   header button { padding:.4em .7em; }
 
@@ -63,6 +63,8 @@
                grid-template-columns:minmax(0, .75fr) minmax(0, 1.9fr) minmax(0, .8fr); }
   #levy, #stred, #pravy { min-height:0; display:flex; flex-direction:column; gap:.5em; }
   #levy { overflow:auto; }
+  #pravy { overflow-y:auto; }
+  #pravy > * { flex-shrink:0; }
   #stred { align-items:center; justify-content:center; }
   #napovedaBox { margin-top:auto; display:flex; flex-direction:column; align-items:flex-end; gap:.4em; }
   #napoveda { font-size:.7em; color:var(--muted); line-height:1.6; background:var(--panel); border-radius:10px; padding:.6em .8em; align-self:stretch; }
@@ -78,6 +80,10 @@
   .hrac .stat { font-size:.62em; color:var(--muted); margin-top:.15em; }
   .hrac .zb { font-size:1.9em; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
   .hrac .legy { font-size:.8em; color:var(--acc); }
+  .legyPanel { background:var(--panel); border-radius:10px; padding:.35em .6em; margin-top:.2em; }
+  .legyPanel .nad { font-size:.7em; color:var(--muted); margin-bottom:.15em; }
+  .legyPanel .radek { display:flex; justify-content:space-between; gap:.5em; font-size:.95em; }
+  .legyPanel .radek b { color:var(--acc); font-size:1.15em; font-variant-numeric:tabular-nums; }
 
   /* kriket tabulka */
   #kriket { width:100%; border-collapse:separate; border-spacing:3px; }
@@ -134,6 +140,26 @@
   .karta .tl button { flex:1; padding:.9em; }
 
   /* Na výšku (mobil): pod sebou */
+  @media (orientation: landscape) and (max-height: 540px) {
+    header { padding:.2em .5em; }
+    header h1 { font-size:.85em; }
+    header button { padding:.25em .5em; font-size:.8em; }
+    #cisloKola { font-size:1em; }
+    #hra.vidit { height:calc(100vh - 2.2em); padding:.4em; gap:.5em; }
+    #levy, #stred, #pravy { gap:.3em; }
+    .hrac { padding:.2em .5em; }
+    .hrac .zb { font-size:1.5em; }
+    .hrac .stat { font-size:.55em; }
+    .sipka { padding:.2em .1em; font-size:.95em; }
+    #psani { font-size:1.1em; min-height:0; }
+    #rada, #hlaska { font-size:.75em; min-height:0; }
+    #bMimo, #bDalsi { padding:.35em; font-size:.9em; }
+    .rychle button { padding:.3em 0; font-size:.8em; }
+    .klavesy { gap:.25em; }
+    .klavesy button { padding:.25em 0; font-size:1em; }
+    #napovedaBox { display:none; }
+  }
+
   @media (orientation: portrait) {
     #hra.vidit { grid-template-columns:1fr; height:auto; }
     #napovedaBox { display:none; }
@@ -150,7 +176,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.15</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.16</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
@@ -252,7 +278,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.15';
+const VERZE = '1.16';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -728,6 +754,7 @@ function postavTerc() {
     const pt = t.createSVGPoint();
     pt.x = e.clientX; pt.y = e.clientY;
     const p = pt.matrixTransform(t.getScreenCTM().inverse());
+    if (Math.hypot(p.x, p.y) > 228) return;      // klik do prázdna vedle terče = nic
     const s = pole(p.x, -p.y);
     s.x = p.x; s.y = p.y;
     hod(s);
@@ -916,13 +943,7 @@ function kresliTabuliX01() {
     const d = document.createElement('div');
     d.className = 'hrac' + (i === stav.tah && !stav.konec ? ' tah' : '');
     d.innerHTML = '<div class="info"><div class="jm"></div><div class="stat"></div></div><div class="zb"></div>';
-    d.querySelector('.jm').textContent = h.jmeno + (h.legy ? '  ' : '');
-    if (h.legy) {
-      const l = document.createElement('span');
-      l.className = 'legy';
-      l.textContent = '● '.repeat(h.legy).trim();
-      d.querySelector('.jm').appendChild(l);
-    }
+    d.querySelector('.jm').textContent = h.jmeno;
     d.querySelector('.stat').textContent =
       'Ø ' + prumerX01(h) + ' · posl. ' + (h.posledni === null ? '–' : h.posledni) + ' · šipek ' + h.sipek;
     d.querySelector('.zb').textContent = h.zbyva;
@@ -934,6 +955,19 @@ function kresliTabuliX01() {
     d.appendChild(x);
     tab.appendChild(d);
   });
+  // Stav legů pod hráči (jako řádek Legy v kriketu)
+  const lp = document.createElement('div');
+  lp.className = 'legyPanel';
+  lp.innerHTML = '<div class="nad">Legy</div>';
+  stav.hraci.forEach(h => {
+    const r = document.createElement('div');
+    r.className = 'radek';
+    const j = document.createElement('span'); j.textContent = h.jmeno;
+    const b = document.createElement('b'); b.textContent = h.legy;
+    r.append(j, b);
+    lp.appendChild(r);
+  });
+  tab.appendChild(lp);
 }
 
 function kresliKriket() {
