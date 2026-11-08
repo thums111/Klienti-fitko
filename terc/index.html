@@ -144,7 +144,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.10</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.11</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
@@ -244,7 +244,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.10';
+const VERZE = '1.11';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -410,6 +410,7 @@ function novaHra(noveNastaveni) {
     tah: zacina,
     zacinal: zacina,
     cisloKola: 1,
+    cisloLegu: (!noveNastaveni && predchozi) ? (predchozi.cisloLegu || 1) + 1 : 1,
     kolo: [],
     koloHotovo: false,
     prehoz: false,
@@ -815,8 +816,8 @@ el('bNapoveda').onclick = () => {
 function prekresli() {
   if (!stav) return;
   const zbyva = (stav.konec || stav.koloHotovo) ? 0 : 3 - stav.kolo.length;
-  const sipkyText = stav.konec ? '' : zbyva === 0 ? ' · kolo hotovo' : zbyva === 1 ? ' · zbývá 1 šipka' : ' · zbývají ' + zbyva + ' šipky';
-  el('cisloKola').textContent = 'Kolo ' + (stav.cisloKola || 1) + sipkyText;
+  const sipkyText = stav.konec ? '' : zbyva === 0 ? ' · hotovo' : zbyva === 1 ? ' · 1 šipka' : ' · ' + zbyva + ' šipky';
+  el('cisloKola').textContent = 'Leg ' + (stav.cisloLegu || 1) + ' · Kolo ' + (stav.cisloKola || 1) + sipkyText;
   const x01 = stav.typ === 'x01';
 
   // přepínač a vstupy
