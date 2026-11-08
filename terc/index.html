@@ -144,7 +144,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.11</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.12</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
@@ -244,7 +244,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.11';
+const VERZE = '1.12';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -895,7 +895,6 @@ function kresliKriket() {
   let html = '<tr><th></th>';
   stav.hraci.forEach((h, i) => {
     html += '<th class="' + (i === stav.tah && !stav.konec ? 'tah' : '') + '">' + esc(h.jmeno) +
-            (h.legy ? ' <span style="color:var(--acc)">' + '●'.repeat(h.legy) + '</span>' : '') +
             '<button class="krizek" data-odeber="' + i + '" title="Odebrat ze hry">✕</button></th>';
   });
   html += '</tr>';
@@ -907,8 +906,8 @@ function kresliKriket() {
   }
   html += '<tr class="body"><td class="cislo">Body</td>';
   stav.hraci.forEach(h => { html += '<td>' + h.body + '</td>'; });
-  html += '</tr><tr><td class="cislo" style="font-size:.7em">MPR</td>';
-  stav.hraci.forEach(h => { html += '<td style="font-size:.8em;color:var(--muted)">' + mpr(h) + '</td>'; });
+  html += '</tr><tr class="body"><td class="cislo">Legy</td>';
+  stav.hraci.forEach(h => { html += '<td style="color:var(--acc)">' + h.legy + '</td>'; });
   html += '</tr>';
   t.innerHTML = html;
   t.querySelectorAll('[data-odeber]').forEach(b => { b.onclick = () => odeberHrace(Number(b.dataset.odeber)); });
@@ -920,9 +919,9 @@ function ukazVysledek() {
   const v = stav.hraci[stav.vitez];
   el('vitezJm').textContent = v.jmeno + ' vyhrál/a leg!';
   const x01 = stav.typ === 'x01';
-  let html = '<tr><td></td><td>' + (x01 ? 'Ø na 3 šipky' : 'MPR') + '</td><td>Šipek</td><td>Legy</td></tr>';
+  let html = '<tr><td></td><td>' + (x01 ? 'Ø na 3 šipky' : 'Body') + '</td><td>Šipek</td><td>Legy</td></tr>';
   stav.hraci.forEach(h => {
-    html += '<tr><td style="text-align:left">' + esc(h.jmeno) + '</td><td>' + (x01 ? prumerX01(h) : mpr(h)) +
+    html += '<tr><td style="text-align:left">' + esc(h.jmeno) + '</td><td>' + (x01 ? prumerX01(h) : h.body) +
             '</td><td>' + h.sipek + '</td><td>' + h.legy + '</td></tr>';
   });
   el('vysledekTab').innerHTML = html;
