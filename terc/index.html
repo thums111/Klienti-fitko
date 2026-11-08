@@ -137,6 +137,12 @@
   @media (orientation: portrait) {
     #hra.vidit { grid-template-columns:1fr; height:auto; }
     #napovedaBox { display:none; }
+    /* úzká obrazovka: číslo kola na vlastní řádek, menší tlačítka */
+    header { flex-wrap:wrap; row-gap:.2em; }
+    header h1 { font-size:.85em; }
+    header .ver { font-size:.65em; }
+    header button { padding:.3em .5em; font-size:.85em; }
+    #cisloKola { position:static; transform:none; order:10; width:100%; text-align:center; font-size:1.05em; }
     #tercBox { height:min(92vw, 60vh); flex:none; }
     .hrac .zb { font-size:2.1em; }
   }
@@ -144,11 +150,12 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.14</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.15</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
+  <button id="bCela" title="Celá obrazovka (klávesa F)">⛶</button>
   <button id="bMenu" title="Nastavení hry">☰ Menu</button>
 </header>
 
@@ -220,7 +227,7 @@
         <kbd>T</kbd><kbd>20</kbd> <kbd>Enter</kbd> triple · <kbd>25</kbd> / <kbd>50</kbd> bull<br>
         na numerické: <kbd>/</kbd> double · <kbd>*</kbd> triple<br>
         <kbd>Backspace</kbd> oprava · <kbd>Esc</kbd> smazat<br>
-        <kbd>mezerník</kbd> další hráč hned · <kbd>Z</kbd> zpět · <kbd>M</kbd> mimo
+        <kbd>mezerník</kbd> další hráč hned · <kbd>Z</kbd> zpět · <kbd>M</kbd> mimo · <kbd>F</kbd> celá obrazovka
       </div>
       <button id="bNapoveda">⌨ Nápověda</button>
     </div>
@@ -245,7 +252,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.14';
+const VERZE = '1.15';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -455,6 +462,18 @@ function ulozStav() { uloz(KLIC_STAV, { stav, historie: historie.slice(-60) }); 
 function zapamatuj() { historie.push(JSON.stringify(stav)); if (historie.length > 300) historie.shift(); }
 
 el('bZpet').onclick = zpet;
+
+// ⛶ Celá obrazovka: skryje lišty prohlížeče/tabletu. Druhým klikem (nebo Esc) zpět.
+function prepniCelou() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else document.documentElement.requestFullscreen().catch(() => {});
+}
+el('bCela').onclick = prepniCelou;
+if (!document.documentElement.requestFullscreen) el('bCela').style.display = 'none';   // zařízení to neumí
+document.addEventListener('fullscreenchange', () => {
+  el('bCela').textContent = document.fullscreenElement ? '🗗' : '⛶';
+  el('bCela').title = document.fullscreenElement ? 'Ukončit celou obrazovku (F)' : 'Celá obrazovka (klávesa F)';
+});
 
 // Restart rozehrané hry: stejní hráči, stejná hra, od nuly. Zpět vrátí stav před restartem.
 el('bRestart').onclick = () => {
@@ -993,6 +1012,8 @@ document.addEventListener('keydown', e => {
     e.preventDefault(); if (stav && !stav.konec) { psaniSmaz(); dalsiHrac(false); }
   } else if (k === 'z' || k === 'Z') {
     zpet();
+  } else if (k === 'f' || k === 'F') {
+    prepniCelou();
   } else if (k === 'm' || k === 'M') {
     el('bMimo').click();
   }
