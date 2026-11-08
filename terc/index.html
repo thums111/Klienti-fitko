@@ -23,7 +23,10 @@
   button.hlavni { background:var(--acc); color:#1a1300; font-weight:bold; }
 
   header { display:flex; align-items:center; gap:.6em; padding:.35em .7em; background:var(--panel); }
+  header { position:relative; }
   header h1 { font-size:1.1em; margin:0; flex:1; white-space:nowrap; }
+  #cisloKola { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); font-size:1.35em; font-weight:800;
+               color:var(--acc); white-space:nowrap; pointer-events:none; }
   .ver { font-size:.7em; color:var(--muted); font-weight:normal; }
   header button { padding:.4em .7em; }
 
@@ -141,7 +144,8 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.8</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.9</span></h1>
+  <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
   <button id="bMenu" title="Nastavení hry">☰ Menu</button>
@@ -240,7 +244,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.8';
+const VERZE = '1.9';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -374,6 +378,7 @@ function ukazObrazovku(id) {
   el('nastaveni').classList.toggle('vidit', id === 'nastaveni');
   el('hra').classList.toggle('vidit', id === 'hra');
   el('bZpet').style.visibility = id === 'hra' ? 'visible' : 'hidden';
+  el('cisloKola').style.display = id === 'hra' ? 'block' : 'none';
   if (id === 'hra') prekresli();
 }
 
@@ -404,6 +409,7 @@ function novaHra(noveNastaveni) {
     })),
     tah: zacina,
     zacinal: zacina,
+    cisloKola: 1,
     kolo: [],
     koloHotovo: false,
     prehoz: false,
@@ -559,6 +565,7 @@ function dalsiHrac(uzZapamatovano) {
   }
   if (stav.typ === 'kriket') h.posledni = stav.kolo.reduce((a, s) => a + (KRIKET_CISLA.includes(s.n) ? s.m : 0), 0);
   stav.tah = (stav.tah + 1) % stav.hraci.length;
+  if (stav.tah === stav.zacinal) stav.cisloKola = (stav.cisloKola || 1) + 1;
   stav.kolo = [];
   stav.koloHotovo = false;
   stav.prehoz = false;
@@ -806,6 +813,7 @@ el('bNapoveda').onclick = () => {
 
 function prekresli() {
   if (!stav) return;
+  el('cisloKola').textContent = 'Kolo ' + (stav.cisloKola || 1);
   const x01 = stav.typ === 'x01';
 
   // přepínač a vstupy
