@@ -144,7 +144,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.12</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.13</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
@@ -219,7 +219,7 @@
         <kbd>T</kbd><kbd>20</kbd> <kbd>Enter</kbd> triple · <kbd>25</kbd> / <kbd>50</kbd> bull<br>
         na numerické: <kbd>/</kbd> double · <kbd>*</kbd> triple<br>
         <kbd>Backspace</kbd> oprava · <kbd>Esc</kbd> smazat<br>
-        <kbd>mezerník</kbd> další hráč · <kbd>Z</kbd> zpět · <kbd>M</kbd> mimo
+        <kbd>mezerník</kbd> další hráč hned · <kbd>Z</kbd> zpět · <kbd>M</kbd> mimo
       </div>
       <button id="bNapoveda">⌨ Nápověda</button>
     </div>
@@ -244,7 +244,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.12';
+const VERZE = '1.13';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -419,6 +419,7 @@ function novaHra(noveNastaveni) {
     vitez: -1
   };
   historie = [];
+  zrusAutoDalsi();
   psaniSmaz();
   ulozStav();
   el('vysledek').classList.remove('vidit');
@@ -427,6 +428,7 @@ function novaHra(noveNastaveni) {
 
 // Odebrání hráče z rozehrané hry (křížek v jeho okénku). Jde vrátit tlačítkem Zpět.
 function odeberHrace(i) {
+  zrusAutoDalsi();
   const h = stav.hraci[i];
   zapamatuj();
   stav.hraci.splice(i, 1);
@@ -453,6 +455,7 @@ function zapamatuj() { historie.push(JSON.stringify(stav)); if (historie.length 
 el('bZpet').onclick = zpet;
 el('bZpetVysl').onclick = zpet;
 function zpet() {
+  zrusAutoDalsi();
   if (!historie.length) return;
   stav = JSON.parse(historie.pop());
   if (stav) { nast.jmena = stav.hraci.map(h => h.jmeno); uloz(KLIC_NAST, nast); }
@@ -553,10 +556,21 @@ function hod(s) {
   zapamatuj();
   if (stav.typ === 'x01') hodX01(s); else hodKriket(s);
   ulozStav();
+  if (stav.koloHotovo && !stav.konec) spustAutoDalsi();
   prekresli();
 }
 
+// Po 3. šipce (nebo přehozu) se kolo chvíli ukáže a pak se samo přepne na dalšího hráče
+const AUTO_DALSI_MS = 1500;
+let autoDalsi = null;
+function spustAutoDalsi() {
+  zrusAutoDalsi();
+  autoDalsi = setTimeout(() => { autoDalsi = null; dalsiHrac(false); }, AUTO_DALSI_MS);
+}
+function zrusAutoDalsi() { if (autoDalsi) { clearTimeout(autoDalsi); autoDalsi = null; } }
+
 function dalsiHrac(uzZapamatovano) {
+  zrusAutoDalsi();
   if (!stav || stav.konec) return;
   if (!uzZapamatovano) zapamatuj();
   const h = stav.hraci[stav.tah];
@@ -844,12 +858,12 @@ function prekresli() {
   el('rada').textContent = rada;
 
   if (stav.konec) hlaska('');
-  else if (stav.prehoz) hlaska('💥 Přehoz! ' + h.jmeno + ' zůstává na ' + stav.zacatek + '.');
-  else if (stav.koloHotovo) hlaska('Kolo hotovo – vytáhni šipky a dej Další hráč.');
+  else if (stav.prehoz) hlaska('💥 Přehoz! ' + h.jmeno + ' zůstává na ' + stav.zacatek + '.' + (autoDalsi ? ' Další hráč…' : ''));
+  else if (stav.koloHotovo) hlaska(autoDalsi ? '✔ Kolo hotovo – další hráč…' : 'Kolo hotovo. Pokračuj tlačítkem Další hráč, nebo opravuj ↶ Zpět.');
   else hlaska('Hází ' + h.jmeno + ' – ťukni do terče, nebo napiš šipku.');
 
-  el('bDalsi').classList.toggle('pulz', stav.koloHotovo && !stav.konec);
-  el('bDalsi').disabled = stav.konec;
+  el('bDalsi').style.display = (stav.koloHotovo && !stav.konec && !autoDalsi) ? 'block' : 'none';
+  el('bDalsi').classList.toggle('pulz', true);
   el('bMimo').disabled = stav.konec || stav.koloHotovo;
   el('bZpet').disabled = !historie.length;
 
