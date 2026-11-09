@@ -40,6 +40,9 @@
   .volby { display:flex; flex-wrap:wrap; gap:.5em; }
   .volby button { flex:1; min-width:5em; padding:.8em; font-size:1.05em; }
   .volby button.vybrano { background:var(--acc); color:#1a1300; font-weight:bold; }
+  #vlastniHra { flex:1; min-width:6em; font:inherit; font-size:1.05em; text-align:center; padding:.6em; border-radius:10px;
+                border:2px solid #3a4652; background:#0c1014; color:var(--text); }
+  #vlastniHra.vybrano { border-color:var(--acc); color:var(--acc); font-weight:bold; }
   .hracRadek { display:flex; gap:.5em; margin-bottom:.5em; }
   .hracRadek { align-items:center; }
   .hracJm { flex:1; background:var(--panel); border-radius:10px; padding:.55em .8em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -176,7 +179,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.16</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.17</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
@@ -196,6 +199,7 @@
       <button data-hra="501">501</button>
       <button data-hra="701">701</button>
       <button data-hra="kriket">Kriket</button>
+      <input id="vlastniHra" type="number" inputmode="numeric" min="2" max="9999" placeholder="Vlastní…" title="Vlastní počet bodů (2–9999)">
     </div>
     <div style="color:var(--muted);font-size:.8em;margin-top:.5em" id="popisHry"></div>
   </div>
@@ -278,7 +282,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.16';
+const VERZE = '1.17';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -318,7 +322,14 @@ function kresliNastaveni() {
     b.classList.toggle('vybrano', b.dataset.hra === nast.hra);
     b.onclick = () => { nast.hra = b.dataset.hra; uloz(KLIC_NAST, nast); kresliNastaveni(); };
   });
-  el('popisHry').textContent = POPISY[nast.hra];
+  // vlastní číslo: okénko se zvýrazní, když hra není 301/501/701/kriket
+  const vlastni = !['301', '501', '701', 'kriket'].includes(nast.hra);
+  const pole = el('vlastniHra');
+  pole.classList.toggle('vybrano', vlastni);
+  if (vlastni && document.activeElement !== pole) pole.value = nast.hra;
+  if (!vlastni && document.activeElement !== pole) pole.value = '';
+  el('popisHry').textContent = POPISY[nast.hra] ||
+    ('Odpočítávání z ' + nast.hra + ', zavírá se na double nebo bull.');
 
   // --- hráči v příští hře (pořadí = pořadí házení) ---
   const box = el('hraciSeznam');
@@ -403,6 +414,13 @@ function pridejNoveho() {
 }
 el('bNovy').onclick = pridejNoveho;
 el('novyHrac').addEventListener('keydown', e => { if (e.key === 'Enter') pridejNoveho(); });
+
+// Vlastní počet bodů: platí hned při psaní (2–9999 celé číslo)
+el('vlastniHra').oninput = () => {
+  const n = Math.floor(Number(el('vlastniHra').value));
+  if (n >= 2 && n <= 9999) { nast.hra = String(n); uloz(KLIC_NAST, nast); kresliNastaveni(); }
+};
+el('vlastniHra').addEventListener('keydown', e => { if (e.key === 'Enter') el('bStart').click(); });
 
 el('bStart').onclick = () => { novaHra(true); };
 el('bPokracovat').onclick = () => ukazObrazovku('hra');
