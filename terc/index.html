@@ -56,6 +56,13 @@
   .rekTr td { padding:.2em .3em; border-top:1px solid #2c3640; }
   .rekTr td.nej { white-space:nowrap; }
   .rekTr td.hist { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .rekNazev { display:flex; justify-content:space-between; align-items:center; }
+  .rekTr button { font:inherit; font-size:.85em; background:#2c3640; color:var(--text); border:0; border-radius:6px;
+                  padding:.15em .45em; margin:.1em .15em; cursor:pointer; }
+  .rekTr button:hover { background:#7a2d2d; }
+  .rekTr td.hist button { color:var(--muted); }
+  #rekVratit { background:#2c3640; border-radius:8px; padding:.4em .7em; margin-bottom:.5em; }
+  #rekVratit button { font:inherit; margin-left:.6em; background:var(--acc); color:#111; border:0; border-radius:6px; padding:.2em .6em; cursor:pointer; }
   .hrac.hotovy { opacity:.55; }
   #vlastniHra.vybrano { border-color:var(--acc); color:var(--acc); font-weight:bold; }
   .hracRadek { display:flex; gap:.5em; margin-bottom:.5em; }
@@ -194,7 +201,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.19</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.20</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
@@ -1310,22 +1317,61 @@ function ulozRekordy() {
 }
 
 // Přehled v nastavení: nejlepší výsledek a posledních 8 výsledků
+// ✏️ Mazání: ✕ u čísla smaže jeden výsledek, ✕ na konci řádku všechny výsledky hráče,
+//    „🗑 celý trénink“ všechno v tréninku. Žádné potvrzování – místo něj ↶ Vrátit.
+let rekZaloha = null, rekZprava = '';
+function smazRekordy(id, jmeno, kdeId) {
+  const rek = nacti(KLIC_REK, {});
+  if (!rek[id]) return;
+  rekZaloha = JSON.stringify(rek);                 // pro ↶ Vrátit
+  const tr = TRENINKY[id];
+  if (!jmeno) { delete rek[id]; rekZprava = 'Smazán celý trénink ' + tr.nazev + '.'; }
+  else if (!kdeId) { delete rek[id][jmeno]; rekZprava = 'Smazány výsledky: ' + jmeno + ' – ' + tr.nazev + '.'; }
+  else {
+    const r = rek[id][jmeno];
+    r.historie = r.historie.filter(x => x.id !== kdeId);
+    // rekord se přepočítá ze zbylých výsledků
+    r.nej = r.historie.reduce((a, x) => (a === null || lepsi(tr, x.v, a)) ? x.v : a, null);
+    if (!r.historie.length) delete rek[id][jmeno];
+    rekZprava = 'Smazán jeden výsledek: ' + jmeno + ' – ' + tr.nazev + '.';
+  }
+  if (rek[id] && !Object.keys(rek[id]).length) delete rek[id];
+  uloz(KLIC_REK, rek);
+  kresliRekordy();
+}
+
 function kresliRekordy() {
   const rek = nacti(KLIC_REK, {});
   let html = '';
   for (const [id, tr] of Object.entries(TRENINKY)) {
     const hraci = rek[id] ? Object.entries(rek[id]) : [];
     if (!hraci.length) continue;
-    html += '<div class="rekTr"><div class="rekNazev">' + esc(tr.nazev) + '</div><table>';
+    html += '<div class="rekTr"><div class="rekNazev">' + esc(tr.nazev) +
+            '<button data-sm="' + id + '" title="Smazat všechny výsledky tohoto tréninku">🗑 celý trénink</button></div><table>';
     for (const [j, r] of hraci) {
-      const posl = r.historie.slice(-8).map(x => trCislo(id, x.v)).join(' · ');
-      html += '<tr><td>' + esc(j) + '</td><td class="nej">🏆 ' + esc(trText(id, r.nej)) + '</td><td class="hist">' + esc(posl) + '</td></tr>';
+      const posl = r.historie.slice(-8).map(x =>
+        '<button data-sm="' + id + '" data-jm="' + esc(j) + '" data-kde="' + esc(x.id) + '" title="Smazat tento výsledek (' + esc(x.d) + ')">' +
+        esc(trCislo(id, x.v)) + ' ✕</button>').join('');
+      html += '<tr><td>' + esc(j) + '</td><td class="nej">🏆 ' + esc(trText(id, r.nej)) + '</td><td class="hist">' + posl +
+              '</td><td><button data-sm="' + id + '" data-jm="' + esc(j) + '" title="Smazat všechny výsledky hráče v tomto tréninku">✕ vše</button></td></tr>';
     }
     html += '</table></div>';
   }
-  el('rekordy').innerHTML = html ||
+  const box = el('rekordy');
+  box.innerHTML = html ||
     '<div class="prazdne">Zatím žádné výsledky. Odehraj trénink a objeví se tady.</div>';
-  if (html) el('rekordy').insertAdjacentHTML('afterbegin', '<div class="rekPozn">Rekord 🏆 a posledních 8 výsledků (nejnovější vpravo).</div>');
+  if (html) box.insertAdjacentHTML('afterbegin', '<div class="rekPozn">Rekord 🏆 a posledních 8 výsledků (nejnovější vpravo). ✕ smaže výsledek.</div>');
+  if (rekZaloha) {
+    box.insertAdjacentHTML('afterbegin', '<div id="rekVratit"></div>');
+    el('rekVratit').textContent = rekZprava;
+    const b = document.createElement('button');
+    b.textContent = '↶ Vrátit';
+    b.onclick = () => { localStorage.setItem(KLIC_REK, rekZaloha); rekZaloha = null; kresliRekordy(); };
+    el('rekVratit').appendChild(b);
+  }
+  box.querySelectorAll('button[data-sm]').forEach(b => {
+    b.onclick = () => smazRekordy(b.dataset.sm, b.dataset.jm, b.dataset.kde);
+  });
 }
 
 // Levý sloupec během tréninku
