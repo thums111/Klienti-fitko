@@ -1,0 +1,30 @@
+{
+  "id": "tabata",
+  "name": "Tabata",
+  "short_name": "Tabata",
+  "description": "Tabata časovač s rádiem Evropa 2",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0f1a",
+  "theme_color": "#0b0f1a",
+  "icons": [
+    {
+      "src": "ikona-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "ikona-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "ikona-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
