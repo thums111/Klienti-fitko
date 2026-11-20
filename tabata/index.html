@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Tabata">
-<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="manifest" href="manifest.webmanifest?v=3">
 <link rel="icon" type="image/png" href="favicon.png?v=1">
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1">
 <title>Tabata trenér</title>
@@ -183,7 +183,7 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA TRENÉR <small>v1.2</small></h1>
+    <h1>TABATA TRENÉR <small>v1.3</small></h1>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
   </div>
@@ -240,7 +240,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v1.2";
+const VERSION="v1.3";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -434,6 +434,8 @@ let wake=null;
 async function requestWake(){ try{ if("wakeLock" in navigator) wake=await navigator.wakeLock.request("screen"); }catch(e){} }
 function releaseWake(){ try{ wake&&wake.release(); wake=null; }catch(e){} }
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&running) requestWake(); });
+/* spuštěno jako nainstalovaná appka přes celou obrazovku → tlačítko ⛶ není potřeba */
+if(matchMedia("(display-mode: fullscreen)").matches) $("btnFull").style.display="none";
 $("btnFull").onclick=()=>{
   const d=document,el=d.documentElement;
   if(!(d.fullscreenElement||d.webkitFullscreenElement)) (el.requestFullscreen||el.webkitRequestFullscreen)?.call(el);
