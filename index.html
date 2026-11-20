@@ -113,7 +113,7 @@
 <body>
 <div class="app">
   <header>
-    <h1>💪 Fitko <span>evidence</span></h1>
+    <h1>💪 Fitko <span>evidence</span> <small style="font-size:12px;color:#888;font-weight:600">v2.1</small></h1>
     <button class="icon-btn" id="btnSettings" aria-label="Nastavení">⚙️</button>
   </header>
 
@@ -257,6 +257,11 @@ function load() {
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); }
   catch (e) { toast('Nepodařilo se uložit!', true); }
+}
+// Po zapsání návštěvy nebo platby nabídne zálohu (lišta dole)
+function nabidniZalohuFitka(nadpis) {
+  if (window.nabidniZalohu) setTimeout(() => nabidniZalohu(() => ({
+    nazev: `fitko-zaloha-${ymd(new Date())}.json`, text: JSON.stringify(db, null, 2) }), nadpis), 2400);
 }
 let db = load();
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -445,7 +450,7 @@ document.body.addEventListener('click', e => {
     const v = db.visits.find(x => x.id === tog.dataset.toggle);
     v.paid = !v.paid;
     if (v.paid && !v.method) v.method = 'Hotově';
-    save(); renderAll(); toast(v.paid ? 'Označeno jako zaplacené' : 'Označeno jako dluh');
+    save(); renderAll(); toast(v.paid ? 'Označeno jako zaplacené' : 'Označeno jako dluh'); nabidniZalohuFitka('Platba změněna.');
     return;
   }
   const pa = e.target.closest('[data-payall]');
@@ -461,7 +466,7 @@ function payAll(cid) {
   if (!debt) return;
   if (!confirm(`${clientName(cid)} zaplatil(a) celý dluh ${money(debt)}?`)) return;
   db.visits.forEach(v => { if (v.clientId === cid && !v.paid) { v.paid = true; v.method = v.method || 'Hotově'; } });
-  save(); renderAll(); toast('Dluh vyrovnán ✓');
+  save(); renderAll(); toast('Dluh vyrovnán ✓'); nabidniZalohuFitka('Dluh vyrovnán.');
 }
 
 // =========================================================
@@ -540,6 +545,7 @@ $('vSave').addEventListener('click', () => {
   else db.visits.push({ id: newId(), ...data });
   save(); closeSheets(); renderAll();
   toast(editVisitId ? 'Návštěva upravena' : 'Návštěva uložena 💪');
+  nabidniZalohuFitka(editVisitId ? 'Návštěva upravena.' : 'Návštěva uložena.');
 });
 
 $('vDelete').addEventListener('click', () => {
@@ -679,6 +685,71 @@ if ('serviceWorker' in navigator) {
 }
 // požádá prohlížeč, aby data aplikace nemazal při nedostatku místa
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+</script>
+<script>
+// =========================================================
+// DOTAZ NA ZÁLOHU – ukáže se dole po uložení nových dat.
+// [💾 Ano] uloží soubor do Stažených (Moje soubory → Stažené soubory),
+// [☁️ Jinam] pošle soubor třeba na Disk Google, [Teď ne] lištu zavře.
+// =========================================================
+(function () {
+  const css = document.createElement('style');
+  css.textContent = `
+  #zalohaLista{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translate(-50%,160%);
+    z-index:6000;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:18px;padding:12px 14px;
+    box-shadow:0 12px 40px rgba(0,0,0,.55);width:min(94vw,520px);font-family:system-ui,sans-serif;transition:transform .3s}
+  #zalohaLista.ukaz{transform:translate(-50%,0)}
+  #zalohaLista .t{font-weight:700;font-size:16px;margin-bottom:10px}
+  #zalohaLista .t small{display:block;font-weight:400;color:#94a3b8;font-size:12.5px;margin-top:2px}
+  #zalohaLista .b{display:flex;gap:8px}
+  #zalohaLista button{flex:1;border:none;border-radius:12px;padding:11px 8px;font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+  #zalohaLista .ano{background:#10b981;color:#052e1f}
+  #zalohaLista .jinam{background:#334155;color:#f1f5f9}
+  #zalohaLista .ne{background:transparent;color:#94a3b8;border:1px solid #334155}`;
+  document.head.appendChild(css);
+
+  let lista = null;
+  function zavri() { if (lista) lista.classList.remove('ukaz'); }
+
+  // data() vrací { nazev: 'soubor.json', text: '...' }
+  window.nabidniZalohu = function (data, nadpis) {
+    if (!lista) {
+      lista = document.createElement('div');
+      lista.id = 'zalohaLista';
+      document.body.appendChild(lista);
+    }
+    const umiSdilet = !!(navigator.canShare && window.File &&
+      navigator.canShare({ files: [new File(['x'], 'x.json', { type: 'application/json' })] }));
+    lista.innerHTML =
+      '<div class="t">💾 ' + (nadpis || 'Uloženo.') + ' Uložit zálohu?' +
+      '<small>Soubor se uloží do Moje soubory → Stažené soubory</small></div>' +
+      '<div class="b"><button class="ano">💾 Ano</button>' +
+      (umiSdilet ? '<button class="jinam">☁️ Jinam</button>' : '') +
+      '<button class="ne">Teď ne</button></div>';
+    lista.querySelector('.ano').onclick = () => {
+      const d = data();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([d.text], { type: 'application/json' }));
+      a.download = d.nazev;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      try { localStorage.setItem('posledniZaloha:' + d.nazev.split('-')[0], new Date().toISOString()); } catch (e) {}
+      lista.querySelector('.t').innerHTML = '✅ Záloha uložena do Stažených souborů';
+      lista.querySelector('.b').style.display = 'none';
+      setTimeout(zavri, 2500);
+    };
+    const j = lista.querySelector('.jinam');
+    if (j) j.onclick = async () => {
+      const d = data();
+      try {
+        await navigator.share({ files: [new File([d.text], d.nazev, { type: 'application/json' })], title: d.nazev });
+        zavri();
+      } catch (e) {}
+    };
+    lista.querySelector('.ne').onclick = zavri;
+    requestAnimationFrame(() => lista.classList.add('ukaz'));
+  };
+})();
 </script>
 </body>
 </html>

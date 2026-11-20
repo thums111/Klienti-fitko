@@ -311,7 +311,7 @@
 <body>
 
 <div class="hlavicka">
-  <h1>Trenažér <small style="color:#555">(verze 9.8)</small></h1>
+  <h1>Trenažér <small style="color:#555">(verze 9.9)</small></h1>
   <button class="rezim" id="btnSport" title="Přepnout kolo / běh">🚴 Kolo</button>
   <button id="btnKolo">Připojit kolo</button>
   <button id="btnPas">❤ Připojit tep</button>
@@ -2603,6 +2603,8 @@ function ukonciJizdu(ukazat, navic) {
   if (!j) return null;
   pridejDoHistorie(j);
   if (ukazat) ukazSouhrn(j, nactiHistorii().length - 1);
+  // po každé uložené jízdě nabídne zálohu
+  if (window.nabidniZalohu) setTimeout(() => nabidniZalohu(dataZalohy, (j.sport === 'beh' ? 'Běh' : 'Jízda') + ' uložena.'), 600);
   return j;
 }
 
@@ -3049,15 +3051,19 @@ function zmenKolo(i, kolo) {
   ukazSouhrn(j, i);
 }
 
-function stahniZalohu() {
+function dataZalohy() {
   const nastaveni = {};
   KLICE_NASTAVENI.forEach(k => { try { const v = localStorage.getItem(k); if (v !== null) nastaveni[k] = v; } catch (e) {} });
   const zaloha = { aplikace: 'trenazer', vytvoreno: new Date().toISOString(),
                    historie: nactiHistorii(), trasy: nactiMojeTrasy(), nastaveni };
-  const blob = new Blob([JSON.stringify(zaloha)], { type: 'application/json' });
+  return { nazev: 'trenazer-zaloha-' + new Date().toISOString().slice(0, 10) + '.json', text: JSON.stringify(zaloha) };
+}
+function stahniZalohu() {
+  const d = dataZalohy();
+  const blob = new Blob([d.text], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'trenazer-zaloha-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.download = d.nazev;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
@@ -3558,5 +3564,70 @@ document.addEventListener('visibilitychange', () => {
 })();
 </script>
 
+<script>
+// =========================================================
+// DOTAZ NA ZÁLOHU – ukáže se dole po uložení nových dat.
+// [💾 Ano] uloží soubor do Stažených (Moje soubory → Stažené soubory),
+// [☁️ Jinam] pošle soubor třeba na Disk Google, [Teď ne] lištu zavře.
+// =========================================================
+(function () {
+  const css = document.createElement('style');
+  css.textContent = `
+  #zalohaLista{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translate(-50%,160%);
+    z-index:6000;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:18px;padding:12px 14px;
+    box-shadow:0 12px 40px rgba(0,0,0,.55);width:min(94vw,520px);font-family:system-ui,sans-serif;transition:transform .3s}
+  #zalohaLista.ukaz{transform:translate(-50%,0)}
+  #zalohaLista .t{font-weight:700;font-size:16px;margin-bottom:10px}
+  #zalohaLista .t small{display:block;font-weight:400;color:#94a3b8;font-size:12.5px;margin-top:2px}
+  #zalohaLista .b{display:flex;gap:8px}
+  #zalohaLista button{flex:1;border:none;border-radius:12px;padding:11px 8px;font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+  #zalohaLista .ano{background:#10b981;color:#052e1f}
+  #zalohaLista .jinam{background:#334155;color:#f1f5f9}
+  #zalohaLista .ne{background:transparent;color:#94a3b8;border:1px solid #334155}`;
+  document.head.appendChild(css);
+
+  let lista = null;
+  function zavri() { if (lista) lista.classList.remove('ukaz'); }
+
+  // data() vrací { nazev: 'soubor.json', text: '...' }
+  window.nabidniZalohu = function (data, nadpis) {
+    if (!lista) {
+      lista = document.createElement('div');
+      lista.id = 'zalohaLista';
+      document.body.appendChild(lista);
+    }
+    const umiSdilet = !!(navigator.canShare && window.File &&
+      navigator.canShare({ files: [new File(['x'], 'x.json', { type: 'application/json' })] }));
+    lista.innerHTML =
+      '<div class="t">💾 ' + (nadpis || 'Uloženo.') + ' Uložit zálohu?' +
+      '<small>Soubor se uloží do Moje soubory → Stažené soubory</small></div>' +
+      '<div class="b"><button class="ano">💾 Ano</button>' +
+      (umiSdilet ? '<button class="jinam">☁️ Jinam</button>' : '') +
+      '<button class="ne">Teď ne</button></div>';
+    lista.querySelector('.ano').onclick = () => {
+      const d = data();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([d.text], { type: 'application/json' }));
+      a.download = d.nazev;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      try { localStorage.setItem('posledniZaloha:' + d.nazev.split('-')[0], new Date().toISOString()); } catch (e) {}
+      lista.querySelector('.t').innerHTML = '✅ Záloha uložena do Stažených souborů';
+      lista.querySelector('.b').style.display = 'none';
+      setTimeout(zavri, 2500);
+    };
+    const j = lista.querySelector('.jinam');
+    if (j) j.onclick = async () => {
+      const d = data();
+      try {
+        await navigator.share({ files: [new File([d.text], d.nazev, { type: 'application/json' })], title: d.nazev });
+        zavri();
+      } catch (e) {}
+    };
+    lista.querySelector('.ne').onclick = zavri;
+    requestAnimationFrame(() => lista.classList.add('ukaz'));
+  };
+})();
+</script>
 </body>
 </html>

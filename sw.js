@@ -1,7 +1,7 @@
 // Service worker – uloží aplikaci do mobilu, aby běžela i bez internetu.
 // Když nahraješ novou verzi aplikace, zvyš číslo verze níže (v1 -> v2),
 // jinak bude mobil dál používat starou uloženou verzi.
-const CACHE = 'fitko-v1';
+const CACHE = 'fitko-v2';
 const FILES = [
   './',
   './index.html',
