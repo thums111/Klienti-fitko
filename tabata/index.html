@@ -3,432 +3,466 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0f1a">
+<meta name="theme-color" content="#0b1120">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Tabata">
-<link rel="manifest" href="manifest.webmanifest?v=1">
+<link rel="manifest" href="manifest.webmanifest?v=2">
 <link rel="icon" type="image/png" href="favicon.png?v=1">
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1">
-<title>Tabata</title>
+<title>Tabata trenér</title>
 <style>
   :root{
-    --bg:#0b0f1a; --panel:#141a2b; --panel2:#1c2438; --text:#eef2ff; --muted:#8b95b3;
-    --work:#ff4d4d; --rest:#2ec4ff; --prep:#ffc23d; --setrest:#a77bff; --done:#3ddc84;
-    --accent:var(--prep);
-    --u:1vmin;               /* základní jednotka – roste s menším rozměrem obrazovky */
+    --bg:#0b1120; --card:#111a2e; --card2:#0a1222; --btn:#1e293b; --line:#1f2a40;
+    --text:#f1f5f9; --muted:#94a3b8;
+    --green:#10b981; --orange:#f59e0b; --red:#f43f5e; --blue:#60a5fa; --purple:#c084fc; --teal:#2dd4bf;
+    --radio:#dc2626;
+    --accent:var(--orange);
+    --u:1vmin;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%}
-  body{
-    font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
-    background:var(--bg);
-    color:var(--text); overflow:hidden;
-    height:100vh; height:100dvh;
-    display:flex; flex-direction:column;
-    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  }
-  .glow{position:fixed;inset:0;pointer-events:none;z-index:-1;
-    background:radial-gradient(ellipse at 50% 40%, var(--accent) 0%, transparent 60%);opacity:.18;transition:background .6s}
-  header{display:flex;align-items:center;justify-content:space-between;padding:calc(var(--u)*1.4) calc(var(--u)*2.5);gap:10px;flex:none}
-  h1{font-size:max(17px,calc(var(--u)*3));font-weight:800;letter-spacing:.5px}
-  h1 small{font-size:.6em;color:var(--muted);font-weight:600;margin-left:6px}
-  .hbtns{display:flex;gap:8px}
-  button{font:inherit;color:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent}
+  html{background:var(--bg)}
+  body{font-family:"Segoe UI",Roboto,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);
+    min-height:100vh;min-height:100dvh;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  button{font:inherit;color:inherit;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
   button:focus-visible,input:focus-visible{outline:3px solid var(--text);outline-offset:3px}
-  .icon{background:var(--panel2);border-radius:12px;padding:.45em .7em;font-size:max(17px,calc(var(--u)*2.8))}
-  .icon:hover{filter:brightness(1.25)}
+  button:disabled{opacity:.35;cursor:default}
 
-  /* ---------- rozložení: na výšku (mobil, tablet na výšku) ---------- */
-  main{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:0 16px 8px;gap:calc(var(--u)*1)}
-  .ringcol{display:flex;align-items:center;justify-content:center;min-height:0}
-  .side{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.8);width:100%}
-  .phase{order:-1}
-  .ringwrap{position:relative;width:min(84vw,50vh);width:min(84vw,50dvh);aspect-ratio:1;container-type:inline-size}
+  /* ---------- horní lišta ---------- */
+  .top{position:sticky;top:0;z-index:5;background:#0f172a;border-bottom:1px solid var(--line);padding:10px 14px 12px}
+  .head{display:flex;align-items:center;gap:12px}
+  .logo{width:46px;height:46px;border-radius:14px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.35);display:grid;place-items:center;font-size:24px;flex:none}
+  h1{font-size:22px;font-weight:800;letter-spacing:1.5px;color:#34d399;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  h1 small{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:0;margin-left:6px}
+  .hbtn{width:46px;height:46px;border-radius:14px;background:var(--btn);border:1px solid #334155;font-size:20px;flex:none}
+  .hbtn.off{opacity:.5}
 
-  /* ---------- na šířku (PC, TV, tablet a mobil na šířku) ---------- */
-  @media (orientation:landscape){
-    main{flex-direction:row;justify-content:center;gap:calc(var(--u)*6);padding:0 calc(var(--u)*4) calc(var(--u)*2)}
-    .ringwrap{width:min(50vw,74vh);width:min(50vw,74dvh)}
-    .side{width:auto;max-width:44vw;align-items:stretch}
-    .phase{order:0;text-align:center}
-  }
-  /* nízké obrazovky (mobil na šířku) */
-  @media (orientation:landscape) and (max-height:500px){
-    header{padding:4px 12px}
-    .ringwrap{width:min(46vw,80vh);width:min(46vw,80dvh)}
-    .side{gap:8px}
-    .dots{display:none!important}
-  }
+  .radio{display:flex;align-items:center;gap:12px;margin-top:10px;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:6px 14px 6px 6px}
+  .rbtn{background:var(--radio);color:#fff;font-weight:800;border-radius:999px;padding:9px 16px;display:flex;align-items:center;gap:8px;white-space:nowrap;box-shadow:0 4px 16px rgba(220,38,38,.35)}
+  .rbtn.on{background:#991b1b}
+  .eq{display:inline-flex;gap:3px;align-items:flex-end;height:16px;flex:none}
+  .eq i{width:4px;height:30%;background:var(--red);border-radius:2px}
+  .eq i:nth-child(2){height:70%}.eq i:nth-child(3){height:45%}.eq i:nth-child(4){height:25%}
+  .playing .eq i{animation:eq .9s infinite ease-in-out}
+  .eq i:nth-child(2){animation-delay:.15s}.eq i:nth-child(3){animation-delay:.3s}.eq i:nth-child(4){animation-delay:.45s}
+  @keyframes eq{50%{height:100%}}
+  .rstate{color:var(--muted);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+  .vol{display:flex;align-items:center;gap:8px;border-left:1px solid #334155;padding-left:12px;flex:none}
+  .vol span{color:var(--red);font-size:18px}
+  .vol input{width:110px;accent-color:var(--red)}
 
-  .phase{font-size:max(22px,calc(var(--u)*6.5));font-weight:900;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;text-shadow:0 0 30px color-mix(in srgb,var(--accent) 60%,transparent);transition:color .4s;white-space:nowrap}
-  svg.ring{width:100%;height:100%;transform:rotate(-90deg);display:block}
-  .ring .track{stroke:var(--panel2)}
-  .ring .prog{stroke:var(--accent);transition:stroke .4s;filter:drop-shadow(0 0 6px var(--accent))}
-  .ring .total{stroke:rgba(238,242,255,.35)}
+  /* ---------- obsah ---------- */
+  .wrap{padding:14px;display:flex;flex-direction:column;gap:14px;max-width:760px;margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:16px}
+
+  .tinfo{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:700;letter-spacing:1px;font-size:15px}
+  .tinfo b{color:var(--text);font-variant-numeric:tabular-nums}
+  .tinfo .dotc{display:inline-block;width:10px;height:10px;border-radius:50%;background:#475569;margin-right:6px;vertical-align:middle}
+  .running .tinfo .dotc{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  .stage{display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:14px}
+  .badge{border:3px solid var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent);
+    border-radius:999px;padding:6px 28px;font-weight:900;letter-spacing:4px;font-size:22px;text-transform:uppercase;transition:.3s;white-space:nowrap}
+  .ringwrap{position:relative;width:min(74vw,44vh);aspect-ratio:1;container-type:inline-size}
+  svg.ring{width:100%;height:100%;transform:rotate(-90deg);display:block;overflow:visible}
+  .ring .track{stroke:#1e293b}
+  .ring .prog{stroke:var(--accent);transition:stroke .3s;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--accent) 60%,transparent))}
   .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .time{font-size:30vmin;font-size:30cqw;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+  .time{font-size:30vmin;font-size:34cqw;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
   .time.pulse{animation:pulse .5s ease-out}
   @keyframes pulse{0%{transform:scale(1.12)}100%{transform:scale(1)}}
-  .sub{font-size:5vmin;font-size:max(13px,5.5cqw);color:var(--muted);margin-top:.4em;font-weight:600;text-align:center;padding:0 12%}
-  .sub b{color:var(--text)}
+  .next{color:var(--muted);font-weight:700;letter-spacing:1.5px;font-size:5vmin;font-size:6cqw;margin-top:.5em;text-transform:uppercase;text-align:center;padding:0 10%}
+  .dots{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+  .dot{width:12px;height:12px;border-radius:50%;background:#1e293b;transition:.3s}
+  .dot.done{background:var(--green)}
+  .dot.now{background:var(--accent);box-shadow:0 0 10px var(--accent);transform:scale(1.3)}
 
-  .stats{display:flex;gap:calc(var(--u)*1.5);flex-wrap:wrap;justify-content:center}
-  .stat{background:rgba(20,26,43,.85);border-radius:14px;padding:.5em 1em;text-align:center;min-width:6.5em;font-size:max(13px,calc(var(--u)*2.3))}
-  .stat .l{font-size:.62em;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
-  .stat .v{font-size:1.45em;font-weight:800;font-variant-numeric:tabular-nums}
-  .dots{display:flex;gap:calc(var(--u)*.9);flex-wrap:wrap;justify-content:center;max-width:min(90vw,60vmin)}
-  .dot{width:max(10px,calc(var(--u)*1.7));aspect-ratio:1;border-radius:50%;background:var(--panel2);transition:.3s}
-  .dot.done{background:var(--done)}
-  .dot.now{background:var(--accent);box-shadow:0 0 12px var(--accent);transform:scale(1.3)}
+  .start{width:100%;background:var(--green);color:#052e1f;font-weight:900;font-size:24px;letter-spacing:.5px;border-radius:26px;padding:20px;display:flex;align-items:center;justify-content:center;gap:14px;box-shadow:0 8px 28px rgba(16,185,129,.3)}
+  .start.pause{background:var(--orange);color:#3b2300;box-shadow:0 8px 28px rgba(245,158,11,.3)}
+  .start:active,.sbtn:active{transform:scale(.98)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .sbtn{border-radius:24px;padding:16px;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;gap:10px}
+  .skip{background:var(--btn);border:1px solid #334155}
+  .reset{background:#2a121b;border:1px solid #7f1d1d;color:var(--red)}
 
-  .controls{display:flex;gap:calc(var(--u)*2.5);align-items:center;justify-content:center}
-  .ctl{background:var(--panel2);width:max(52px,calc(var(--u)*9));aspect-ratio:1;border-radius:50%;font-size:max(20px,calc(var(--u)*3.6))}
-  .ctl.main{width:max(76px,calc(var(--u)*13.5));font-size:max(30px,calc(var(--u)*5.5));background:var(--accent);color:#0b0f1a;box-shadow:0 0 30px color-mix(in srgb,var(--accent) 50%,transparent)}
-  .ctl:active{transform:scale(.94)}
+  .sett h2{font-size:20px;display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .sett h2 span{color:var(--green)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:14px}
+  .chip{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#34d399;border-radius:999px;padding:8px 14px;font-weight:600;font-size:15px}
+  .chip.sel{background:var(--green);color:#052e1f}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .field{background:var(--card2);border:1px solid var(--line);border-radius:22px;padding:12px 14px}
+  .field label{display:block;font-weight:800;letter-spacing:1.5px;font-size:14px;text-transform:uppercase;margin-bottom:8px}
+  .stepper{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .stepper button{background:var(--btn);width:48px;height:48px;border-radius:16px;font-size:26px;font-weight:700;flex:none}
+  .stepper .val{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;text-align:center;flex:1}
+  .opts{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;color:var(--muted);font-size:15px;align-items:center}
+  .opts label{display:flex;align-items:center;gap:8px;cursor:pointer}
+  .opts input{width:20px;height:20px;accent-color:var(--green)}
+  .total{margin-left:auto;color:var(--muted)}
+  .total b{color:var(--text)}
+  .locked .grid,.locked .chips{opacity:.45;pointer-events:none}
+  .lockmsg{display:none;color:var(--orange);font-size:14px;margin-top:10px}
+  .locked .lockmsg{display:block}
 
-  /* ---------- rádio ---------- */
-  .radio{display:flex;align-items:center;gap:12px;background:var(--panel);padding:.5em .9em;border-radius:40px;width:100%;max-width:520px;font-size:max(14px,calc(var(--u)*2.2))}
-  .radio .rbtn{background:#e5007d;color:#fff;border-radius:50%;width:2.6em;height:2.6em;font-size:1.05em;flex:none}
-  .radio .rname{font-weight:800;white-space:nowrap}
-  .radio .rstate{font-size:.75em;color:var(--muted)}
-  .radio input{flex:1;accent-color:#e5007d;min-width:60px}
-  .eq{display:inline-flex;gap:2px;align-items:flex-end;height:.8em;margin-left:6px;vertical-align:middle}
-  .eq i{width:3px;background:#e5007d;height:25%}
-  .playing .eq i{animation:eq .8s infinite ease-in-out}
-  .eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
-  @keyframes eq{50%{height:100%}}
+  /* úzký mobil na výšku */
+  @media (max-width:520px) and (orientation:portrait){
+    h1{font-size:18px;letter-spacing:1px}
+    .logo,.hbtn{width:42px;height:42px;font-size:19px}
+    .head{gap:8px}
+    .radio{gap:8px;padding-right:10px}
+    .rbtn{padding:8px 12px;font-size:15px}
+    .rstate{font-size:13px}
+    .vol{padding-left:8px;gap:4px}
+    .vol input{width:84px}
+    .tinfo{font-size:12px;letter-spacing:.5px}
+    .tinfo>div{display:flex;flex-direction:column;align-items:center;gap:2px}
+    .tinfo>div:first-child{align-items:flex-start}.tinfo>div:last-child{align-items:flex-end}
+    .tinfo b{font-size:17px}
+    .start{font-size:21px;padding:17px}
+    .sbtn{font-size:17px;padding:14px}
+    .stepper button{width:44px;height:44px}
+    .stepper .val{font-size:26px}
+    .field label{font-size:12.5px;letter-spacing:1px}
+  }
 
-  /* ---------- nastavení ---------- */
-  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:10;padding:14px}
-  .overlay.open{display:flex}
-  .sheet{background:var(--panel);border-radius:20px;padding:20px;width:100%;max-width:620px;max-height:94vh;max-height:94dvh;overflow:auto;font-size:max(15px,calc(var(--u)*1.9))}
-  .sheet h2{margin-bottom:12px}
-  .presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-  .presets button{background:var(--panel2);padding:.5em .8em;border-radius:10px;font-size:.9em}
-  .presets button:hover{background:#2a3552}
-  .row{display:flex;align-items:center;justify-content:space-between;padding:.55em 0;border-bottom:1px solid var(--panel2);gap:10px}
-  .row label{font-weight:600}
-  .row small{display:block;color:var(--muted);font-weight:400;font-size:.8em}
-  .stepper{display:flex;align-items:center;gap:6px;flex:none}
-  .stepper button{background:var(--panel2);width:2.3em;height:2.3em;border-radius:10px;font-size:1.15em}
-  .stepper input{width:4em;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--panel2);border-radius:8px;padding:.45em;font:inherit;font-weight:700}
-  .row input[type=checkbox]{width:1.4em;height:1.4em;accent-color:var(--done);flex:none}
-  .row input[type=text]{flex:1;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--panel2);border-radius:8px;padding:.45em;font:inherit;font-size:.8em}
-  .summary{margin:14px 0;color:var(--muted)}
-  .summary b{color:var(--text)}
-  .ok{background:var(--done);color:#0b0f1a;font-weight:800;width:100%;padding:.8em;border-radius:12px;font-size:1.1em}
+  /* ---------- na šířku: PC, TV, tablet a mobil otočený ---------- */
+  @media (orientation:landscape) and (min-width:700px){
+    body{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+    .top{display:flex;align-items:center;gap:16px;padding:calc(var(--u)*1.2) calc(var(--u)*2)}
+    .head{flex:none}
+    .radio{margin-top:0;flex:1;max-width:760px;margin-left:auto}
+    .wrap{flex:1;min-height:0;max-width:none;width:100%;display:grid;grid-template-columns:1.15fr 1fr;
+      gap:calc(var(--u)*2);padding:calc(var(--u)*2)}
+    .timer{display:flex;flex-direction:column;min-height:0}
+    .stage{flex:1;justify-content:center;min-height:0}
+    .ringwrap{width:min(46vw,58vh);width:min(46vw,58dvh)}
+    .right{display:flex;flex-direction:column;gap:calc(var(--u)*1.6);min-height:0;overflow:auto}
+    /* písmo roste s velikostí obrazovky (TV) */
+    .top,.wrap{font-size:max(15px,calc(var(--u)*1.9))}
+    h1{font-size:max(20px,calc(var(--u)*3))}
+    .logo,.hbtn{width:max(44px,calc(var(--u)*6));height:max(44px,calc(var(--u)*6));font-size:max(20px,calc(var(--u)*2.8))}
+    .rbtn,.rstate{font-size:max(15px,calc(var(--u)*2))}
+    .vol input{width:max(110px,calc(var(--u)*16))}
+    .tinfo{font-size:max(14px,calc(var(--u)*2))}
+    .badge{font-size:max(20px,calc(var(--u)*3.4))}
+    .start{font-size:max(22px,calc(var(--u)*3.4));padding:calc(var(--u)*2.4)}
+    .sbtn{font-size:max(18px,calc(var(--u)*2.6));padding:calc(var(--u)*1.8)}
+    .sett h2{font-size:max(18px,calc(var(--u)*2.6))}
+    .chip{font-size:max(14px,calc(var(--u)*1.8))}
+    .field{padding:calc(var(--u)*1.2) calc(var(--u)*1.6)}
+    .field label{font-size:max(13px,calc(var(--u)*1.7));margin-bottom:calc(var(--u)*.8)}
+    .stepper button{width:max(42px,calc(var(--u)*5.6));height:max(42px,calc(var(--u)*5.6));font-size:max(22px,calc(var(--u)*3))}
+    .stepper .val{font-size:max(26px,calc(var(--u)*3.8))}
+    .opts,.lockmsg{font-size:max(14px,calc(var(--u)*1.8))}
+    .dot{width:max(10px,calc(var(--u)*1.5));height:max(10px,calc(var(--u)*1.5))}
+  }
+  /* mobil na šířku */
+  @media (orientation:landscape) and (max-height:520px){
+    body{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+    .top{display:flex;align-items:center;gap:10px;padding:6px 12px}
+    .logo,.hbtn{width:38px;height:38px;font-size:18px}
+    h1{font-size:17px;flex:none}
+    .radio{margin-top:0;flex:1}
+    .vol input{width:80px}
+    .wrap{flex:1;min-height:0;max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px}
+    .timer{padding:10px;display:flex;flex-direction:column;min-height:0}
+    .tinfo{padding-bottom:6px;font-size:13px}
+    .stage{flex:1;padding-top:6px;gap:6px;justify-content:center;min-height:0}
+    .badge{font-size:15px;padding:3px 18px}
+    .ringwrap{width:min(40vw,52vh);width:min(40vw,52dvh)}
+    .dots{display:none}
+    .right{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto}
+    .start{font-size:19px;padding:12px}
+    .sbtn{font-size:16px;padding:10px}
+  }
 </style>
 </head>
 <body>
-<div class="glow"></div>
-<header>
-  <h1>⏱️ TABATA <small>v1.1</small></h1>
-  <div class="hbtns">
-    <button class="icon" id="btnFull" title="Celá obrazovka">⛶</button>
-    <button class="icon" id="btnSettings" title="Nastavení">⚙️</button>
-  </div>
-</header>
 
-<main>
-  <div class="ringcol">
-    <div class="ringwrap">
-      <svg class="ring" viewBox="0 0 200 200">
-        <circle class="track" cx="100" cy="100" r="86" fill="none" stroke-width="12"/>
-        <circle class="prog" id="prog" cx="100" cy="100" r="86" fill="none" stroke-width="12" stroke-linecap="round"/>
-        <circle class="total" id="totalRing" cx="100" cy="100" r="96" fill="none" stroke-width="3" stroke-linecap="round"/>
-      </svg>
-      <div class="center">
-        <div class="time" id="time">0:20</div>
-        <div class="sub" id="sub">Stiskni ▶</div>
-      </div>
-    </div>
+<div class="top">
+  <div class="head">
+    <div class="logo">⏱️</div>
+    <h1>TABATA TRENÉR <small>v1.2</small></h1>
+    <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
+    <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
   </div>
-
-  <div class="side">
-    <div class="phase" id="phase">Připraven</div>
-    <div class="stats">
-      <div class="stat"><div class="l">Kolo</div><div class="v" id="stRound">0/8</div></div>
-      <div class="stat"><div class="l">Série</div><div class="v" id="stSet">0/1</div></div>
-      <div class="stat"><div class="l">Zbývá</div><div class="v" id="stTotal">0:00</div></div>
-    </div>
-    <div class="dots" id="dots"></div>
-    <div class="controls">
-      <button class="ctl" id="btnReset" title="Znovu">↺</button>
-      <button class="ctl main" id="btnPlay" title="Start / pauza">▶</button>
-      <button class="ctl" id="btnSkip" title="Přeskočit">⏭</button>
-    </div>
-    <div class="radio" id="radioBox">
-      <button class="rbtn" id="btnRadio" title="Rádio">▶</button>
-      <div>
-        <div class="rname">Evropa 2 <span class="eq"><i></i><i></i><i></i></span></div>
-        <div class="rstate" id="radioState">vypnuto</div>
-      </div>
-      <input type="range" id="radioVol" min="0" max="100" value="70" title="Hlasitost rádia">
-    </div>
-  </div>
-</main>
-<audio id="radio" preload="none"></audio>
-
-<div class="overlay" id="overlay">
-  <div class="sheet">
-    <h2>⚙️ Nastavení</h2>
-    <div class="presets">
-      <button data-p="20,10,8,1,60,10">Klasická 20/10 ×8</button>
-      <button data-p="20,10,8,4,60,10">4 série tabaty</button>
-      <button data-p="30,15,10,1,60,10">30/15 ×10</button>
-      <button data-p="40,20,8,3,90,10">40/20 ×8 ×3</button>
-      <button data-p="45,15,6,3,60,10">45/15 HIIT</button>
-    </div>
-    <div id="fields"></div>
-    <div class="row"><label>Zvukové signály<small>pípání 3-2-1 a gong při změně</small></label><input type="checkbox" id="optBeep" checked></div>
-    <div class="row"><label>Hlasové pokyny<small>„Cvič!“, „Pauza“ (česky)</small></label><input type="checkbox" id="optVoice" checked></div>
-    <div class="row"><label>Adresa streamu<small>prázdné = najít Evropu 2 automaticky</small></label><input type="text" id="optUrl"></div>
-    <div class="summary" id="summary"></div>
-    <button class="ok" id="btnOk">Hotovo</button>
+  <div class="radio" id="radioBox">
+    <button class="rbtn" id="btnRadio">▶ EVROPA 2</button>
+    <span class="eq"><i></i><i></i><i></i><i></i></span>
+    <div class="rstate" id="radioState">Připraveno</div>
+    <div class="vol"><span>♫</span><input type="range" id="radioVol" min="0" max="100" value="70" title="Hlasitost rádia"></div>
   </div>
 </div>
 
+<div class="wrap">
+  <div class="card timer" id="timerCard">
+    <div class="tinfo">
+      <div><span class="l"><span class="dotc"></span>SÉRIE:</span> <span><b id="stSet">1</b> / <span id="stSetMax">1</span></span></div>
+      <div><span class="l">KOLO:</span> <span><b id="stRound">0</b> / <span id="stRoundMax">8</span></span></div>
+      <div><span class="l">🕒 ODCVIČENO:</span> <b id="stDone">00:00</b></div>
+    </div>
+    <div class="stage">
+      <div class="badge" id="badge">Příprava</div>
+      <div class="ringwrap">
+        <svg class="ring" viewBox="0 0 200 200">
+          <circle class="track" cx="100" cy="100" r="90" fill="none" stroke-width="10"/>
+          <circle class="prog" id="prog" cx="100" cy="100" r="90" fill="none" stroke-width="10" stroke-linecap="round"/>
+        </svg>
+        <div class="center">
+          <div class="time" id="time">10</div>
+          <div class="next" id="next">Další: práce (20s)</div>
+        </div>
+      </div>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+
+  <div class="right">
+    <button class="start" id="btnPlay"><span id="playIco">▶</span><span id="playTxt">SPUSTIT TRÉNINK</span></button>
+    <div class="two">
+      <button class="sbtn skip" id="btnSkip">⏩ PŘESKOČIT</button>
+      <button class="sbtn reset" id="btnReset">↺ RESET</button>
+    </div>
+
+    <div class="card sett" id="sett">
+      <h2><span>☰</span> Nastavení tréninku</h2>
+      <div class="chips" id="chips"></div>
+      <div class="grid" id="grid"></div>
+      <div class="opts">
+        <label><input type="checkbox" id="optVoice"> Hlasové pokyny</label>
+        <div class="total">Celkem: <b id="total">0:00</b></div>
+      </div>
+      <div class="lockmsg">Nastavení můžeš měnit po pozastavení tréninku.</div>
+    </div>
+  </div>
+</div>
+<audio id="radio" preload="none"></audio>
+
 <script>
-const DEFAULT_URL = "https://ice.actve.net/fm-evropa2-128";
-const FIELDS = [
-  ["work","Cvičení","sekundy",5,600,5],
-  ["rest","Pauza","sekundy",0,600,5],
-  ["rounds","Počet kol","v jedné sérii",1,50,1],
-  ["sets","Počet sérií","",1,20,1],
-  ["setRest","Pauza mezi sériemi","sekundy",0,900,10],
-  ["prep","Příprava","odpočet před startem",0,120,5],
+const VERSION="v1.2";
+const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
+/* klíč, popisek, barva, min, max, krok */
+const FIELDS=[
+  ["prep","Příprava (s)","--orange",0,120,5],
+  ["work","Práce / cvik (s)","--green",5,600,5],
+  ["rest","Pauza (s)","--red",0,600,5],
+  ["rounds","Počet kol","--teal",1,50,1],
+  ["setRest","Mezi sériemi (s)","--blue",0,900,10],
+  ["sets","Počet sérií","--purple",1,20,1],
 ];
-let cfg = {work:20,rest:10,rounds:8,sets:1,setRest:60,prep:10,beep:true,voice:true,url:DEFAULT_URL};
-try{ Object.assign(cfg, JSON.parse(localStorage.getItem("tabataCfg")||"{}")); }catch(e){}
-function save(){ try{ localStorage.setItem("tabataCfg", JSON.stringify(cfg)); }catch(e){} }
+const PRESETS=[
+  ["Klasická Tabata (20s / 10s / 8×)",{prep:10,work:20,rest:10,rounds:8,sets:1,setRest:60}],
+  ["4 série tabaty",{prep:10,work:20,rest:10,rounds:8,sets:4,setRest:60}],
+  ["30s / 15s / 10×",{prep:10,work:30,rest:15,rounds:10,sets:1,setRest:60}],
+  ["40s / 20s / 8× ×3",{prep:10,work:40,rest:20,rounds:8,sets:3,setRest:90}],
+  ["45s / 15s HIIT",{prep:10,work:45,rest:15,rounds:6,sets:3,setRest:60}],
+];
+let cfg={prep:10,work:20,rest:10,rounds:8,sets:1,setRest:60,sound:true,voice:true,url:DEFAULT_URL};
+try{ Object.assign(cfg,JSON.parse(localStorage.getItem("tabataCfg")||"{}")); }catch(e){}
+if(cfg.beep===false) cfg.sound=false;
+function save(){ try{ localStorage.setItem("tabataCfg",JSON.stringify(cfg)); }catch(e){} }
 
-const $ = id => document.getElementById(id);
-const COLORS = {prep:"--prep",work:"--work",rest:"--rest",setRest:"--setrest",done:"--done"};
-const LABELS = {prep:"Připrav se",work:"Cvič!",rest:"Pauza",setRest:"Pauza mezi sériemi",done:"Hotovo! 💪"};
+const $=id=>document.getElementById(id);
+const PH={prep:["Příprava","--orange","příprava"],work:["Práce","--green","práce"],rest:["Pauza","--red","pauza"],
+          setRest:["Mezi sériemi","--blue","pauza mezi sériemi"],done:["Hotovo!","--purple",""]};
 
-/* ---------- plán tréninku ---------- */
-let plan=[], idx=0, segStart=0, elapsedInSeg=0, running=false, raf=null, lastSec=null;
+/* ---------- plán ---------- */
+let plan=[],idx=0,segStart=0,elapsedInSeg=0,running=false,raf=null,lastSec=null;
 function buildPlan(){
   plan=[];
   if(cfg.prep>0) plan.push({type:"prep",dur:cfg.prep,round:0,set:1});
   for(let s=1;s<=cfg.sets;s++){
     for(let r=1;r<=cfg.rounds;r++){
       plan.push({type:"work",dur:cfg.work,round:r,set:s});
-      if(r<cfg.rounds && cfg.rest>0) plan.push({type:"rest",dur:cfg.rest,round:r,set:s});
+      if(r<cfg.rounds&&cfg.rest>0) plan.push({type:"rest",dur:cfg.rest,round:r,set:s});
     }
-    if(s<cfg.sets && cfg.setRest>0) plan.push({type:"setRest",dur:cfg.setRest,round:cfg.rounds,set:s});
+    if(s<cfg.sets&&cfg.setRest>0) plan.push({type:"setRest",dur:cfg.setRest,round:cfg.rounds,set:s});
   }
 }
-const totalDur = () => plan.reduce((a,p)=>a+p.dur,0);
-function fmt(sec){ sec=Math.max(0,Math.ceil(sec)); const m=Math.floor(sec/60), s=sec%60; return m+":"+String(s).padStart(2,"0"); }
+const totalDur=()=>plan.reduce((a,p)=>a+p.dur,0);
+const mmss=s=>{s=Math.max(0,Math.floor(s));return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");};
+const fmt=s=>{s=Math.max(0,Math.ceil(s));const m=Math.floor(s/60),r=s%60;return m+":"+String(r).padStart(2,"0");};
+const big=s=>{s=Math.max(0,Math.ceil(s));return s<60?String(s):fmt(s);};
+const secTxt=s=>s<60?`${s}s`:fmt(s);
 
 /* ---------- zvuk ---------- */
 let actx=null;
 function ac(){ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume(); return actx; }
-function tone(freq,dur,vol=0.35,type="sine"){
-  if(!cfg.beep) return;
-  const a=ac(), o=a.createOscillator(), g=a.createGain();
-  o.type=type; o.frequency.value=freq;
-  g.gain.setValueAtTime(vol,a.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+dur);
-  o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime+dur);
+function tone(f,d,v=.35,t="sine"){
+  if(!cfg.sound) return;
+  const a=ac(),o=a.createOscillator(),g=a.createGain();
+  o.type=t;o.frequency.value=f;g.gain.setValueAtTime(v,a.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,a.currentTime+d);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+d);
 }
 function gong(type){
-  if(type==="work"){ tone(880,0.25,0.4,"square"); setTimeout(()=>tone(1320,0.5,0.4,"square"),180); }
-  else if(type==="done"){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,0.45,0.35,"triangle"),i*170)); }
-  else tone(440,0.6,0.4,"triangle");
+  if(type==="work"){tone(880,.25,.4,"square");setTimeout(()=>tone(1320,.5,.4,"square"),180);}
+  else if(type==="done"){[523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,.45,.35,"triangle"),i*170));}
+  else tone(440,.6,.4,"triangle");
 }
-function say(text){
-  if(!cfg.voice || !("speechSynthesis" in window)) return;
-  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang="cs-CZ"; u.rate=1.05; speechSynthesis.speak(u);}catch(e){}
+function say(t){
+  if(!cfg.sound||!cfg.voice||!("speechSynthesis" in window)) return;
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="cs-CZ";u.rate=1.05;speechSynthesis.speak(u);}catch(e){}
 }
+function soundUI(){ $("btnSound").textContent=cfg.sound?"🔊":"🔇"; $("btnSound").classList.toggle("off",!cfg.sound); }
+$("btnSound").onclick=()=>{ cfg.sound=!cfg.sound; save(); soundUI(); if(cfg.sound) tone(660,.15); };
 
-/* ---------- rádio Evropa 2 (hlasitost se nemění, hraje pořád stejně) ---------- */
-const radio=$("radio"); let radioOn=false, triedLookup=false;
-const radioVol = () => $("radioVol").value/100;
-function setRadioUI(state){
+/* ---------- rádio Evropa 2 (hraje pořád stejně nahlas) ---------- */
+const radio=$("radio");let radioOn=false,triedLookup=false;
+const radioVol=()=>$("radioVol").value/100;
+function radioUI(state){
   $("radioState").textContent=state;
-  $("btnRadio").textContent=radioOn?"⏸":"▶";
-  $("radioBox").classList.toggle("playing",radioOn && state==="hraje");
+  $("btnRadio").textContent=radioOn?"⏸ EVROPA 2":"▶ EVROPA 2";
+  $("btnRadio").classList.toggle("on",radioOn);
+  $("radioBox").classList.toggle("playing",radioOn&&state==="Hraje");
 }
-// Když výchozí adresa nehraje, najde aktuální stream Evropy 2 v katalogu radio-browser.info
 async function findEvropa2(){
-  for(const host of ["de1","de2","fi1","nl1"]){
+  for(const h of ["de1","de2","fi1","nl1"]){
     try{
-      const r=await fetch(`https://${host}.api.radio-browser.info/json/stations/byname/evropa%202?hidebroken=true&order=clickcount&reverse=true`);
-      const list=(await r.json()).filter(s=>/^evropa\s*2$/i.test(s.name.trim()) && (s.url_resolved||"").startsWith("https://"));
-      if(list.length) return list[0].url_resolved;
+      const r=await fetch(`https://${h}.api.radio-browser.info/json/stations/byname/evropa%202?hidebroken=true&order=clickcount&reverse=true`);
+      const l=(await r.json()).filter(s=>/^evropa\s*2$/i.test(s.name.trim())&&(s.url_resolved||"").startsWith("https://"));
+      if(l.length) return l[0].url_resolved;
     }catch(e){}
   }
   return null;
 }
-function playUrl(url){
-  radio.src=url; radio.volume=radioVol();
-  return radio.play();
-}
-async function radioStart(){
-  radioOn=true; setRadioUI("připojuji…");
-  try{ await playUrl(cfg.url||DEFAULT_URL); }
-  catch(e){ await radioFallback(); }
-}
+function playUrl(u){ radio.src=u; radio.volume=radioVol(); return radio.play(); }
 async function radioFallback(){
-  if(triedLookup||!radioOn){ radioOn=false; setRadioUI("nelze spustit – zkontroluj internet"); return; }
-  triedLookup=true; setRadioUI("hledám stream…");
-  const url=await findEvropa2();
-  if(!url){ radioOn=false; setRadioUI("stream nenalezen"); return; }
-  cfg.url=url; save();
-  try{ await playUrl(url); }catch(e){ radioOn=false; setRadioUI("nelze spustit"); }
+  if(triedLookup||!radioOn){ radioOn=false; radioUI("Nelze spustit – zkontroluj internet"); return; }
+  triedLookup=true; radioUI("Hledám stream…");
+  const u=await findEvropa2();
+  if(!u){ radioOn=false; radioUI("Stream nenalezen"); return; }
+  cfg.url=u; save();
+  try{ await playUrl(u); }catch(e){ radioOn=false; radioUI("Nelze spustit"); }
 }
-$("btnRadio").onclick=()=>{
-  if(radioOn){ radioOn=false; radio.pause(); radio.removeAttribute("src"); radio.load(); setRadioUI("vypnuto"); return; }
-  triedLookup=false; radioStart();
+$("btnRadio").onclick=async()=>{
+  if(radioOn){ radioOn=false; radio.pause(); radio.removeAttribute("src"); radio.load(); radioUI("Připraveno"); return; }
+  radioOn=true; triedLookup=false; radioUI("Připojuji…");
+  try{ await playUrl(cfg.url||DEFAULT_URL); }catch(e){ await radioFallback(); }
 };
-radio.addEventListener("playing",()=>radioOn&&setRadioUI("hraje"));
-radio.addEventListener("waiting",()=>radioOn&&setRadioUI("načítám…"));
+radio.addEventListener("playing",()=>radioOn&&radioUI("Hraje"));
+radio.addEventListener("waiting",()=>radioOn&&radioUI("Načítám…"));
 radio.addEventListener("error",()=>{ if(radioOn) radioFallback(); });
 $("radioVol").oninput=()=>{ radio.volume=radioVol(); try{localStorage.setItem("tabataVol",$("radioVol").value);}catch(e){} };
 try{ const v=localStorage.getItem("tabataVol"); if(v) $("radioVol").value=v; }catch(e){}
 
 /* ---------- zobrazení ---------- */
-const R1=2*Math.PI*86, R2=2*Math.PI*96;
-$("prog").style.strokeDasharray=R1; $("totalRing").style.strokeDasharray=R2;
-function setAccent(type){ document.documentElement.style.setProperty("--accent",`var(${COLORS[type]})`); }
+const RC=2*Math.PI*90; $("prog").style.strokeDasharray=RC;
+function accent(v){ document.documentElement.style.setProperty("--accent",`var(${v})`); }
 function buildDots(){
-  const d=$("dots"); d.innerHTML="";
-  const n=cfg.rounds*cfg.sets;
-  if(n>60) return;
+  const d=$("dots"); d.innerHTML=""; const n=cfg.rounds*cfg.sets; if(n>60) return;
   for(let i=0;i<n;i++){ const e=document.createElement("div"); e.className="dot"; d.appendChild(e); }
 }
+function playBtn(){
+  const fresh=idx===0&&elapsedInSeg===0;
+  $("btnPlay").classList.toggle("pause",running);
+  $("playIco").textContent=running?"⏸":"▶";
+  $("playTxt").textContent=running?"POZASTAVIT":(idx>=plan.length?"ZNOVU":fresh?"SPUSTIT TRÉNINK":"POKRAČOVAT");
+  $("sett").classList.toggle("locked",running);
+  $("timerCard").classList.toggle("running",running);
+}
 function render(){
-  const seg=plan[idx];
+  const seg=plan[idx], before=plan.slice(0,idx).reduce((a,p)=>a+p.dur,0);
+  $("stDone").textContent=mmss(before+(seg?elapsedInSeg:0));
+  $("stSetMax").textContent=cfg.sets; $("stRoundMax").textContent=cfg.rounds;
   if(!seg){
-    setAccent("done"); $("phase").textContent=LABELS.done;
-    $("time").textContent="0:00"; $("sub").textContent="Skvělá práce!";
-    $("prog").style.strokeDashoffset=0; $("totalRing").style.strokeDashoffset=0;
-    $("stTotal").textContent="0:00";
-    [...$("dots").children].forEach(e=>{e.className="dot done"});
-    return;
+    accent(PH.done[1]); $("badge").textContent=PH.done[0];
+    $("time").textContent="✓"; $("next").textContent="Skvělá práce!";
+    $("prog").style.strokeDashoffset=0;
+    [...$("dots").children].forEach(e=>e.className="dot done"); playBtn(); return;
   }
-  const left=seg.dur-elapsedInSeg;
-  setAccent(seg.type);
-  $("phase").textContent=LABELS[seg.type];
-  $("time").textContent=fmt(left);
-  $("prog").style.strokeDashoffset=R1*(elapsedInSeg/seg.dur);
-  const before=plan.slice(0,idx).reduce((a,p)=>a+p.dur,0), tot=totalDur();
-  $("totalRing").style.strokeDashoffset=R2*(1-(before+elapsedInSeg)/tot);
-  $("stTotal").textContent=fmt(tot-before-elapsedInSeg);
-  $("stRound").textContent=`${seg.type==="prep"?0:seg.round}/${cfg.rounds}`;
-  $("stSet").textContent=`${seg.set}/${cfg.sets}`;
-  const next=plan[idx+1];
-  $("sub").innerHTML = !running && elapsedInSeg===0 && idx===0 ? "Stiskni ▶"
-    : next ? `Další: <b>${LABELS[next.type].replace("!","")}</b> ${fmt(next.dur)}` : "Poslední úsek!";
-  const dots=[...$("dots").children], cur=(seg.set-1)*cfg.rounds+seg.round-1;
-  dots.forEach((e,i)=>{
-    if(seg.type==="prep"){ e.className="dot"; return; }
+  accent(PH[seg.type][1]); $("badge").textContent=PH[seg.type][0];
+  $("time").textContent=big(seg.dur-elapsedInSeg);
+  $("prog").style.strokeDashoffset=RC*(elapsedInSeg/seg.dur);
+  $("stSet").textContent=seg.set; $("stRound").textContent=seg.type==="prep"?0:seg.round;
+  const nx=plan[idx+1];
+  $("next").textContent=nx?`Další: ${PH[nx.type][2]} (${secTxt(nx.dur)})`:"Poslední úsek!";
+  const cur=(seg.set-1)*cfg.rounds+seg.round-1;
+  [...$("dots").children].forEach((e,i)=>{
+    if(seg.type==="prep"){e.className="dot";return;}
     e.className="dot"+(i<cur||(i===cur&&seg.type!=="work")?" done":"")+(i===cur&&seg.type==="work"?" now":"");
   });
+  playBtn();
 }
 
-/* ---------- běh časovače ---------- */
+/* ---------- časovač ---------- */
 function tick(now){
   if(!running) return;
   elapsedInSeg=(now-segStart)/1000;
-  const seg=plan[idx], left=Math.ceil(seg.dur-elapsedInSeg);
+  const seg=plan[idx],left=Math.ceil(seg.dur-elapsedInSeg);
   if(left!==lastSec){
     lastSec=left;
-    if(left<=3 && left>=1){ tone(left===1?660:520,0.15); const t=$("time"); t.classList.remove("pulse"); void t.offsetWidth; t.classList.add("pulse"); }
+    if(left<=3&&left>=1){ tone(left===1?660:520,.15); const t=$("time"); t.classList.remove("pulse"); void t.offsetWidth; t.classList.add("pulse"); }
   }
   if(elapsedInSeg>=seg.dur){ nextSeg(now); if(!running) return; }
-  render();
-  raf=requestAnimationFrame(tick);
+  render(); raf=requestAnimationFrame(tick);
 }
 function enterSeg(){
   const seg=plan[idx]; lastSec=null;
   if(!seg){ finish(); return; }
   gong(seg.type);
-  if(seg.type==="work") say(seg.round===1&&seg.set>1?`Série ${seg.set}. Cvič!`:"Cvič!");
+  if(seg.type==="work") say(seg.round===1&&seg.set>1?`Série ${seg.set}. Práce!`:"Práce!");
   else if(seg.type==="rest") say("Pauza");
   else if(seg.type==="setRest") say("Pauza mezi sériemi");
-  else if(seg.type==="prep") say("Připrav se");
+  else say("Připrav se");
 }
 function nextSeg(now){ idx++; elapsedInSeg=0; segStart=now??performance.now(); enterSeg(); }
-function finish(){
-  running=false; cancelAnimationFrame(raf);
-  gong("done"); say("Hotovo, skvělá práce!");
-  $("btnPlay").textContent="▶"; releaseWake(); render();
-}
+function finish(){ running=false; cancelAnimationFrame(raf); gong("done"); say("Hotovo, skvělá práce!"); releaseWake(); render(); }
 function start(){
-  ac();
-  if(idx>=plan.length) reset();
-  running=true; $("btnPlay").textContent="⏸";
-  const fresh = elapsedInSeg===0;
+  ac(); if(idx>=plan.length) reset();
+  running=true; const fresh=elapsedInSeg===0;
   segStart=performance.now()-elapsedInSeg*1000;
   if(fresh) enterSeg();
-  requestWake();
-  raf=requestAnimationFrame(tick);
+  requestWake(); render(); raf=requestAnimationFrame(tick);
 }
-function pause(){ running=false; cancelAnimationFrame(raf); $("btnPlay").textContent="▶"; releaseWake(); render(); $("sub").textContent="Pozastaveno"; }
-function reset(){
-  running=false; cancelAnimationFrame(raf); buildPlan(); buildDots();
-  idx=0; elapsedInSeg=0; lastSec=null; $("btnPlay").textContent="▶"; releaseWake(); render();
-}
-$("btnPlay").onclick=()=> running?pause():start();
+function pause(){ running=false; cancelAnimationFrame(raf); releaseWake(); render(); }
+function reset(){ running=false; cancelAnimationFrame(raf); buildPlan(); buildDots(); idx=0; elapsedInSeg=0; lastSec=null; releaseWake(); render(); }
+$("btnPlay").onclick=()=>running?pause():start();
 $("btnReset").onclick=reset;
-$("btnSkip").onclick=()=>{ if(idx>=plan.length) return; if(running) nextSeg(); else { idx++; elapsedInSeg=0; if(idx>=plan.length) finish(); else render(); } };
+$("btnSkip").onclick=()=>{ if(idx>=plan.length) return; if(running) nextSeg(); else{ idx++; elapsedInSeg=0; if(idx>=plan.length) finish(); else render(); } };
 
-/* klávesnice a dálkový ovladač (PC, TV): mezerník / OK = start-pauza, → = přeskočit, R = znovu */
+/* klávesnice / TV ovladač: mezerník nebo OK = start/pauza, → = přeskočit, R = reset */
 document.addEventListener("keydown",e=>{
-  if($("overlay").classList.contains("open")){ if(e.key==="Escape") $("btnOk").click(); return; }
-  const onButton = e.target.tagName==="BUTTON" || e.target.tagName==="INPUT";
-  if(e.code==="Space" || e.key==="MediaPlayPause" || (e.key==="Enter" && !onButton)){ e.preventDefault(); running?pause():start(); }
-  else if(e.key==="ArrowRight" && !onButton) $("btnSkip").click();
+  const onCtl=e.target.tagName==="BUTTON"||e.target.tagName==="INPUT";
+  if(e.code==="Space"||e.key==="MediaPlayPause"||(e.key==="Enter"&&!onCtl)){ e.preventDefault(); running?pause():start(); }
+  else if(e.key==="ArrowRight"&&!onCtl) $("btnSkip").click();
   else if(e.key==="r"||e.key==="R") reset();
 });
 
-/* ---------- obrazovka nezhasne + celá obrazovka ---------- */
+/* ---------- obrazovka nezhasne, celá obrazovka ---------- */
 let wake=null;
 async function requestWake(){ try{ if("wakeLock" in navigator) wake=await navigator.wakeLock.request("screen"); }catch(e){} }
 function releaseWake(){ try{ wake&&wake.release(); wake=null; }catch(e){} }
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&running) requestWake(); });
 $("btnFull").onclick=()=>{
-  const d=document, el=d.documentElement;
+  const d=document,el=d.documentElement;
   if(!(d.fullscreenElement||d.webkitFullscreenElement)) (el.requestFullscreen||el.webkitRequestFullscreen)?.call(el);
   else (d.exitFullscreen||d.webkitExitFullscreen)?.call(d);
 };
 
 /* ---------- nastavení ---------- */
-function buildFields(){
-  $("fields").innerHTML=FIELDS.map(([k,l,s,min,max,step])=>`
-    <div class="row"><label>${l}<small>${s}</small></label>
-    <div class="stepper"><button data-k="${k}" data-d="-${step}">−</button>
-    <input type="number" inputmode="numeric" id="f_${k}" min="${min}" max="${max}" value="${cfg[k]}">
-    <button data-k="${k}" data-d="${step}">+</button></div></div>`).join("");
-  FIELDS.forEach(([k,,,min,max])=>{
-    $("f_"+k).onchange=e=>{ cfg[k]=Math.min(max,Math.max(min,parseInt(e.target.value)||min)); e.target.value=cfg[k]; summary(); };
+function buildSettings(){
+  $("chips").innerHTML=PRESETS.map((p,i)=>`<button class="chip" data-i="${i}">⚡ ${p[0]}</button>`).join("");
+  $("chips").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{ Object.assign(cfg,PRESETS[b.dataset.i][1]); changed(); });
+  $("grid").innerHTML=FIELDS.map(([k,l,c,,,st])=>`
+    <div class="field"><label style="color:var(${c})">${l}</label>
+      <div class="stepper"><button data-k="${k}" data-d="-${st}">−</button><div class="val" id="v_${k}"></div><button data-k="${k}" data-d="${st}">+</button></div>
+    </div>`).join("");
+  $("grid").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    const f=FIELDS.find(x=>x[0]===b.dataset.k);
+    cfg[f[0]]=Math.min(f[4],Math.max(f[3],cfg[f[0]]+parseInt(b.dataset.d))); changed();
   });
-  $("fields").querySelectorAll("button").forEach(b=>b.onclick=()=>{
-    const f=FIELDS.find(x=>x[0]===b.dataset.k), inp=$("f_"+b.dataset.k);
-    cfg[b.dataset.k]=Math.min(f[4],Math.max(f[3],cfg[b.dataset.k]+parseInt(b.dataset.d))); inp.value=cfg[b.dataset.k]; summary();
-  });
+  $("optVoice").checked=cfg.voice;
+  $("optVoice").onchange=()=>{ cfg.voice=$("optVoice").checked; save(); };
 }
-function summary(){ buildPlan(); $("summary").innerHTML=`Celková délka tréninku: <b>${fmt(totalDur())}</b> · ${cfg.rounds*cfg.sets} cvičebních úseků`; }
-document.querySelectorAll(".presets button").forEach(b=>b.onclick=()=>{
-  const [w,r,ro,s,sr,p]=b.dataset.p.split(",").map(Number);
-  Object.assign(cfg,{work:w,rest:r,rounds:ro,sets:s,setRest:sr,prep:p}); buildFields(); summary();
-});
-$("btnSettings").onclick=()=>{
-  if(running) pause();
-  buildFields(); $("optBeep").checked=cfg.beep; $("optVoice").checked=cfg.voice; $("optUrl").value=cfg.url;
-  summary(); $("overlay").classList.add("open");
-};
-$("btnOk").onclick=()=>{
-  cfg.beep=$("optBeep").checked; cfg.voice=$("optVoice").checked;
-  cfg.url=$("optUrl").value.trim()||DEFAULT_URL;
-  save(); $("overlay").classList.remove("open"); reset();
-};
+function showSettings(){
+  FIELDS.forEach(([k])=>$("v_"+k).textContent=cfg[k]);
+  [...$("chips").children].forEach((b,i)=>{ const p=PRESETS[i][1]; b.classList.toggle("sel",Object.keys(p).every(k=>p[k]===cfg[k])); });
+  buildPlan(); $("total").textContent=fmt(totalDur());
+}
+function changed(){ save(); showSettings(); reset(); }
 
-reset();
+buildSettings(); soundUI(); showSettings(); reset();
 </script>
 </body>
 </html>

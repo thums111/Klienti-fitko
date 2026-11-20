@@ -1,14 +1,14 @@
 {
   "id": "tabata",
-  "name": "Tabata",
+  "name": "Tabata trenér",
   "short_name": "Tabata",
   "description": "Tabata časovač s rádiem Evropa 2",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0b0f1a",
-  "theme_color": "#0b0f1a",
+  "background_color": "#0b1120",
+  "theme_color": "#0b1120",
   "icons": [
     {
       "src": "ikona-192.png",
