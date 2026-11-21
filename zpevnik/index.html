@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<title>Můj zpěvník</title>
+<link rel="manifest" href="manifest.webmanifest?v=1">
+<link rel="icon" type="image/png" href="favicon.png?v=1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1">
+<meta name="theme-color" content="#0a6a65">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* Layout: mobile songbook — sticky header with chord-diagram strip pinned under it, monospace song sheet, fixed control bar at the bottom */
+:root{
+  --bg:#f3f5f3; --surface:#ffffff; --ink:#17201d; --muted:#5d6a64; --line:#d6ddd9;
+  --chord:#0a6a65; --chord-bg:#e1f0ed; --star:#b7791f; --danger:#b42318;
+  --display:"Bricolage Grotesque",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --song-size:17px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1412; --surface:#18201d; --ink:#e5ece8; --muted:#97a59f; --line:#2b3531;
+  --chord:#62d2c6; --chord-bg:#15302d; --star:#f2b84b; --danger:#f97066; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1412; --surface:#18201d; --ink:#e5ece8; --muted:#97a59f; --line:#2b3531;
+  --chord:#62d2c6; --chord-bg:#15302d; --star:#f2b84b; --danger:#f97066; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px;min-height:40px}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--chord);outline-offset:2px}
+.primary{background:var(--chord);border-color:var(--chord);color:var(--bg);font-weight:600}
+.ghost{background:transparent;border-color:transparent;color:var(--chord);font-weight:600;padding-inline:6px}
+.label{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+header{display:flex;align-items:center;gap:6px;padding-block:8px}
+header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800;font-size:1.25rem;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em}
+.star{color:var(--star)}
+
+/* list */
+.tabs{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-block:12px 0}
+.tabs button,.seg button{flex:1;border:0;border-radius:0;background:transparent;min-height:38px;padding-inline:8px}
+.tabs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:var(--chord-bg);color:var(--chord);font-weight:600}
+.search{width:100%;margin-block:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.songs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.songs li{display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--line)}
+.songs .open{flex:1;min-width:0;text-align:left;border:0;border-radius:0;background:transparent;padding:13px 2px;display:flex;flex-direction:column;gap:2px}
+.songs .t{font-weight:600;font-size:1.05rem}
+.songs .c{font-family:var(--mono);font-size:.8rem;color:var(--chord);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.songs .n{font-family:var(--mono);color:var(--muted);font-size:.85rem;width:1.8em;text-align:right;font-variant-numeric:tabular-nums}
+.songs .mini{min-width:36px;min-height:36px;padding:4px;border-color:transparent;background:transparent;color:var(--muted)}
+.empty{color:var(--muted);padding:20px 0;border:0!important}
+.box{display:flex;flex-direction:column;gap:10px;padding-block:18px;border-top:1px solid var(--line);margin-top:18px}
+.box p{margin:0;color:var(--muted);font-size:.88rem;max-width:65ch}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;max-width:420px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.status{font-size:.88rem;color:var(--chord);min-height:1.2em}
+.foot{padding-bottom:40px}
+
+/* song */
+.menu{display:flex;flex-direction:column;gap:6px;padding-bottom:10px}
+.menu button{text-align:left}
+.strip{display:flex;gap:6px;overflow-x:auto;padding-block:6px 8px;scrollbar-width:thin}
+.dg{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 5px 3px;border-radius:9px;background:var(--surface);border:1px solid var(--line)}
+.dg b{font-family:var(--mono);font-size:.82rem;color:var(--chord)}
+.dg svg{display:block;width:52px;height:auto}
+.dg .na{font-size:.68rem;color:var(--muted);height:62px;display:flex;align-items:center;padding-inline:4px}
+.capnote{font-size:.78rem;color:var(--muted);padding-bottom:6px}
+.sheet{font-family:var(--mono);font-size:var(--song-size);line-height:1.35;padding-block:12px 360px;overflow-x:auto}
+/* ozvučení */
+.cp{cursor:pointer;border-radius:4px;transition:background .15s}
+.cp.on{background:var(--chord);color:var(--bg)}
+.dg{cursor:pointer;transition:box-shadow .15s}
+.dg.on{border-color:var(--chord);box-shadow:0 0 0 2px var(--chord)}
+.pads{display:flex;flex-wrap:wrap;gap:6px}
+.pad{flex:1 0 60px;min-height:56px;font-family:var(--mono);font-weight:700;font-size:1.2rem;color:var(--chord);background:var(--chord-bg);border-color:var(--chord);touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:transform .05s}
+.pad.on{background:var(--chord);color:var(--bg)}
+.pad:active{transform:scale(.95)}
+.mrow{display:flex;align-items:center;gap:10px;padding:4px 12px;color:var(--muted);font-size:.9rem}
+.mrow input{flex:1;max-width:240px;accent-color:var(--chord)}
+.rhy{flex-wrap:nowrap}
+#rPlay{display:flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600}
+#rPlay[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.dots{display:inline-flex;gap:4px}
+.dots i{width:9px;height:9px;border-radius:50%;background:currentColor;opacity:.22}
+.dots i.on{opacity:1}
+.dots i.cnt{background:var(--star);opacity:1}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+.chips button{min-height:34px;padding:4px 10px;border-radius:999px;font-size:.85rem;white-space:nowrap;flex:0 0 auto}
+.chips button[aria-pressed="true"]{background:var(--chord-bg);color:var(--chord);border-color:var(--chord);font-weight:600}
+#rStyle{flex:1;min-width:0;min-height:40px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:6px 8px}
+.strip{padding-inline:3px}
+.ln{white-space:pre;min-height:1.35em}
+.ln.ch{color:var(--chord);font-weight:700}
+.ln.lab{font-family:var(--body);font-weight:600;color:var(--muted);font-size:.8em;text-transform:uppercase;letter-spacing:.06em;margin-top:.6em}
+.hint{font-family:var(--body);font-size:.8rem;color:var(--muted);text-align:center}
+
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);
+  padding:8px max(10px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px));
+  display:grid;gap:8px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.grp{display:flex;align-items:center;gap:4px}
+.grp button{min-width:36px;padding:6px 8px}
+.val{min-width:3.3em;text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:.95rem;line-height:1.15}
+.val small{display:block;font-family:var(--body);font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+#play{flex:1;min-height:44px}
+#play[aria-pressed="true"]{background:var(--ink);border-color:var(--ink)}
+.nav{min-width:44px;min-height:44px;font-size:1.1rem}
+
+@media (orientation:landscape) and (max-height:540px){
+  header{padding-block:4px}
+  header h1{font-size:1.05rem}
+  .dg svg{width:42px}
+  .dg .na{height:50px}
+  .bar{grid-template-columns:auto 1fr;padding-top:5px}
+  .bar .row{flex-wrap:nowrap}
+}
+
+/* jamování */
+.jam{padding-bottom:170px}
+.seg.small{flex:0 0 auto}
+.seg.small button{min-height:34px;padding-inline:10px}
+.keys{position:relative;display:flex;gap:6px;overflow-x:auto;padding-block:10px 6px;scrollbar-width:thin}
+.keys button{flex:0 0 auto;min-width:46px;font-family:var(--mono);font-weight:700;padding:6px 8px}
+.keys button[aria-pressed="true"]{background:var(--chord);border-color:var(--chord);color:var(--bg)}
+.jrow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.jpads{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding-block:8px}
+.jpad{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px 6px;min-height:118px;border-radius:14px;
+  touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:transform .08s}
+.jpad .rn{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.jpad .nm{font-family:var(--display);font-weight:800;font-size:1.35rem;color:var(--chord);line-height:1.1}
+.jpad svg{width:46px;height:auto}
+.jpad.extra{border-style:dashed}
+.jpad.on{background:var(--chord-bg);border-color:var(--chord);border-style:solid;box-shadow:0 0 0 2px var(--chord)}
+.jpad:active{transform:scale(.95)}
+.jnote{color:var(--muted);font-size:.88rem;margin:4px 0 0;max-width:65ch}
+.rec{display:flex;flex-direction:column;gap:8px;padding-block:12px;border-top:1px solid var(--line);margin-top:10px}
+.jchips{display:flex;flex-wrap:wrap;gap:6px}
+.jchip{font-family:var(--mono);font-weight:700;color:var(--chord);background:var(--chord-bg);border-radius:8px;padding:3px 8px}
+#jPlay{display:flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600}
+#jPlay[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+#jStyle{flex:1;min-width:0;min-height:40px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:6px 8px}
+#jRec[aria-pressed="true"]{background:var(--danger);border-color:var(--danger);color:var(--surface)}
+@media (orientation:landscape) and (max-height:540px){.jpads{grid-template-columns:repeat(5,minmax(0,1fr))}.jpad{min-height:96px}.jpad svg{width:38px}}
+
+/* v5: verze, nástroje, hraj od akordu */
+.ver{font-family:var(--mono);font-size:.7rem;font-weight:400;color:var(--muted);letter-spacing:0}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.tools button{min-height:52px;font-weight:600;font-size:1rem}
+.from{display:flex;flex-direction:column;gap:8px;padding-block:4px 10px}
+.from p{margin:0;font-size:.88rem;color:var(--muted)}
+.from p b{color:var(--chord);font-family:var(--mono)}
+.fgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px}
+.fgrid button{min-height:46px;padding:3px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1.1}
+.fgrid b{font-family:var(--mono);font-size:.9rem;color:var(--chord)}
+.fgrid small{font-size:.62rem;color:var(--muted)}
+.fgrid .easy{border-color:var(--chord)}
+.fgrid .easy small{color:var(--chord);font-weight:600}
+.fgrid [aria-pressed="true"]{background:var(--chord);border-color:var(--chord)}
+.fgrid [aria-pressed="true"] b,.fgrid [aria-pressed="true"] small{color:var(--bg)}
+.capo3{display:flex;gap:6px;flex-wrap:wrap}
+.capo3 button{min-height:36px;padding:4px 10px;font-size:.85rem}
+/* jamování: vše na jednu obrazovku + všechny akordy */
+.jpad{min-height:92px!important;padding:6px 4px 4px!important}
+.jpad svg{width:40px!important}
+.jpads.all{grid-template-columns:repeat(6,minmax(0,1fr));gap:5px}
+.jpads.all .jpad{min-height:46px!important;padding:2px!important;border-radius:10px;justify-content:center}
+.jpads.all .jpad .nm{font-family:var(--mono);font-size:.95rem}
+.jpads.all .jpad.m7{border-style:dashed}
+.jnow{display:flex;align-items:center;gap:10px;min-height:66px;color:var(--muted);font-size:.88rem}
+.jnow svg{width:46px;height:auto}
+.jnow b{font-family:var(--display);font-size:1.6rem;color:var(--chord)}
+/* trenažér */
+.train{padding-block:14px 60px;display:flex;flex-direction:column;gap:14px;max-width:560px}
+.train p{margin:0;color:var(--muted);font-size:.9rem;max-width:65ch}
+.tnote{font-family:var(--display);font-weight:800;font-size:4.5rem;line-height:1;text-align:center;color:var(--chord)}
+.tnote.ok{color:var(--chord)}
+.tfreq{text-align:center;color:var(--muted);font-family:var(--mono);font-size:.9rem;min-height:1.3em}
+.meter{position:relative;height:46px;border-radius:12px;background:var(--surface);border:1px solid var(--line);overflow:hidden}
+.meter .mid{position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--chord);opacity:.5}
+.meter .zone{position:absolute;left:45%;width:10%;top:0;bottom:0;background:var(--chord-bg)}
+.needle{position:absolute;top:6px;bottom:6px;width:6px;margin-left:-3px;border-radius:3px;background:var(--star);left:50%;transition:left .12s}
+.needle.ok{background:var(--chord)}
+.tcents{text-align:center;font-weight:600;min-height:1.4em}
+.strings{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.strings button{min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.strings b{font-family:var(--mono);font-size:1.1rem;color:var(--chord)}
+.strings small{font-size:.65rem;color:var(--muted)}
+.strings button.hit{background:var(--chord-bg);border-color:var(--chord)}
+.pair{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.pair select,.train select{min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:6px 8px;font:inherit;color:inherit;width:100%}
+.pair span{font-size:1.3rem;color:var(--muted)}
+.pairdg{display:flex;justify-content:center;gap:30px;color:var(--ink)}
+.pairdg div{display:flex;flex-direction:column;align-items:center}
+.pairdg b{font-family:var(--mono);color:var(--chord)}
+.pairdg svg{width:70px;height:auto}
+.bigtime{display:flex;justify-content:center;gap:28px;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:center}
+.bigtime div{display:flex;flex-direction:column}
+.bigtime b{font-size:2.6rem;line-height:1.1}
+.bigtime small{font-family:var(--body);font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.huge{min-height:84px;font-size:1.3rem;font-weight:700;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.hist li{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.hist .best{color:var(--star);font-weight:700}
+.earAns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.earAns.two{grid-template-columns:1fr 1fr}
+.earAns button{min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;font-weight:600}
+.earAns small{font-family:var(--mono);font-size:.7rem;color:var(--muted);font-weight:400}
+.earAns button.good{background:var(--chord);border-color:var(--chord);color:var(--bg)}
+.earAns button.bad{border-color:var(--danger);color:var(--danger)}
+.earRes{min-height:1.5em;font-weight:600;text-align:center}
+.score{display:flex;justify-content:center;gap:24px;font-family:var(--mono);color:var(--muted);font-size:.9rem}
+.score b{color:var(--ink)}
+
+/* edit */
+.form{display:flex;flex-direction:column;gap:12px;padding-block:14px 40px}
+.form input,.form textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.form textarea{font-family:var(--mono);font-size:14px;min-height:50vh;line-height:1.4;white-space:pre;overflow-x:auto}
+.help{font-size:.85rem;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-width:65ch}
+.help code{font-family:var(--mono);color:var(--chord)}
+.danger{color:var(--danger);border-color:var(--danger);background:transparent}
+.danger.armed{background:var(--danger);color:var(--surface)}
+</style>
+</head>
+<body>
+
+
+<!-- ===== Seznam ===== -->
+<section id="vList">
+  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.0</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
+  <div class="tools">
+    <button id="jamBtn">🎸 Jamování</button>
+    <button id="trainBtn">🎯 Trenažér</button>
+  </div>
+  <div class="tabs" role="group" aria-label="Zobrazit">
+    <button id="tabAll" type="button">Všechny</button>
+    <button id="tabFav" type="button">★ Oblíbené</button>
+    <button id="tabPl" type="button">Playlist</button>
+  </div>
+  <input class="search" id="q" type="search" placeholder="Hledat podle názvu nebo textu…" aria-label="Hledat píseň">
+  <ul class="songs" id="songs"></ul>
+  <div class="btns" id="plTools" hidden style="margin-top:12px">
+    <button class="primary" id="plStart">▶ Hrát playlist od začátku</button>
+    <button class="danger" id="plClear">Vyprázdnit</button>
+  </div>
+
+  <div class="box">
+    <div class="label">Záloha písní</div>
+    <p id="backupInfo"></p>
+    <div class="btns">
+      <button id="expBtn">Uložit zálohu do souboru</button>
+      <button id="copyBtn">Kopírovat zálohu</button>
+      <button id="impBtn">Načíst zálohu</button>
+      <input type="file" id="impFile" accept=".json,application/json,text/plain" hidden>
+    </div>
+    <div class="status" id="bStatus" role="status"></div>
+  </div>
+  <div class="box foot">
+    <div class="label">Značení akordů</div>
+    <div class="seg" role="group" aria-label="Značení akordů">
+      <button id="nCz" type="button">H a B (české)</button>
+      <button id="nEn" type="button">B a Bb (anglické)</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Píseň ===== -->
+<section id="vSong" hidden>
+  <div class="top">
+    <header>
+      <button class="ghost" id="backBtn" aria-label="Zpět na seznam">←</button>
+      <h1 id="songTitle"></h1>
+      <button class="ghost star" id="favBtn" aria-label="Oblíbená">☆</button>
+      <button class="ghost" id="menuBtn" aria-expanded="false" aria-label="Další volby">⋯</button>
+    </header>
+    <div class="menu" id="menu" hidden>
+      <button id="plBtn"></button>
+      <button id="stripBtn"></button>
+      <button id="padsBtn"></button>
+      <label class="mrow">Hlasitost nástroje <input type="range" id="volIn" min="0" max="1" step="0.05"></label>
+      <label class="mrow">Hlasitost bicích <input type="range" id="dVol" min="0" max="1" step="0.05"></label>
+      <label class="mrow">Hlasitost basy <input type="range" id="bVol" min="0" max="1" step="0.05"></label>
+      <button id="editBtn">Upravit píseň</button>
+    </div>
+    <div class="chips" role="group" aria-label="Zvuk">
+      <button id="soundBtn" type="button"></button>
+      <button id="strumBtn" type="button"></button>
+      <button id="autoBtn" type="button"></button>
+      <button id="bassBtn" type="button"></button>
+      <button id="fromBtn" type="button" aria-expanded="false">🎯 Od akordu</button>
+    </div>
+    <div class="from" id="fromPanel" hidden></div>
+    <div class="strip" id="strip"></div>
+    <div class="capnote" id="capNote" hidden></div>
+  </div>
+  <div class="sheet" id="sheet"></div>
+  <div class="bar">
+    <div class="pads" id="pads"></div>
+    <div class="row rhy">
+      <button id="rPlay" aria-pressed="false"></button>
+      <select id="rStyle" aria-label="Styl rytmu"></select>
+      <div class="grp"><button id="bDown" aria-label="Pomalejší tempo">−</button><div class="val" id="bVal"></div><button id="bUp" aria-label="Rychlejší tempo">+</button></div>
+    </div>
+    <div class="row">
+      <div class="grp"><button id="tDown" aria-label="Tónina o půltón níž">−</button><div class="val" id="tVal"></div><button id="tUp" aria-label="Tónina o půltón výš">+</button></div>
+      <div class="grp"><button id="cDown" aria-label="Kapodastr níž">−</button><div class="val" id="cVal"></div><button id="cUp" aria-label="Kapodastr výš">+</button></div>
+      <div class="grp"><button id="fDown" aria-label="Menší písmo">A−</button><button id="fUp" aria-label="Větší písmo">A+</button></div>
+    </div>
+    <div class="row">
+      <button class="nav" id="prevBtn" aria-label="Předchozí píseň v playlistu" hidden>‹</button>
+      <button class="primary" id="play" aria-pressed="false">▶ Posouvat</button>
+      <div class="grp"><button id="sDown" aria-label="Pomaleji">−</button><div class="val" id="sVal"></div><button id="sUp" aria-label="Rychleji">+</button></div>
+      <button class="nav" id="nextBtn" aria-label="Další píseň v playlistu" hidden>›</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Jamování ===== -->
+<section id="vJam" hidden>
+  <div class="top"><header>
+    <button class="ghost" id="jBack" aria-label="Zpět na seznam">←</button>
+    <h1>Jamování</h1>
+    <div class="seg small" role="group" aria-label="Dur nebo moll">
+      <button id="mDur" type="button">Dur</button><button id="mMoll" type="button">Moll</button>
+    </div>
+  </header></div>
+  <div class="jam">
+    <div class="keys" id="keys" role="group" aria-label="Tónina"></div>
+    <div class="jrow">
+      <div class="label" id="jKey"></div>
+      <div class="seg small" role="group" aria-label="Které akordy">
+        <button id="jvKey" type="button">Tónina</button><button id="jvAll" type="button">Všechny</button>
+      </div>
+    </div>
+    <div class="jnow" id="jNow" hidden></div>
+    <div class="jpads" id="jPads"></div>
+    <div class="rec">
+      <div class="label">Nahraný postup</div>
+      <div class="jchips" id="jChips"></div>
+      <div class="btns">
+        <button class="primary" id="recSave">Uložit do zpěvníku</button>
+        <button id="recUndo">Smazat poslední</button>
+        <button class="danger" id="recClear">Vymazat</button>
+      </div>
+    </div>
+    <p class="jnote" id="jNote"></p>
+  </div>
+  <div class="bar">
+    <div class="row rhy">
+      <button id="jPlay" aria-pressed="false"></button>
+      <select id="jStyle" aria-label="Styl rytmu"></select>
+      <div class="grp"><button id="jbDown" aria-label="Pomalejší tempo">−</button><div class="val" id="jbVal"></div><button id="jbUp" aria-label="Rychlejší tempo">+</button></div>
+    </div>
+    <div class="row">
+      <button id="jRec" aria-pressed="false"></button>
+      <div class="grp"><button id="jSound" type="button"></button><button id="jAuto" type="button"></button><button id="jBass" type="button"></button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Trenažér ===== -->
+<section id="vTrain" hidden>
+  <div class="top">
+    <header><button class="ghost" id="tBack" aria-label="Zpět na seznam">←</button><h1>Trenažér</h1></header>
+    <div class="tabs" role="group" aria-label="Cvičení" style="margin-bottom:10px">
+      <button id="ttTun" type="button">Ladička</button>
+      <button id="ttChg" type="button">Přechody</button>
+      <button id="ttEar" type="button">Sluch</button>
+    </div>
+  </div>
+  <div class="train" id="pTun">
+    <div class="tnote" id="tnNote">–</div>
+    <div class="tfreq" id="tnFreq">Zapni mikrofon a drnkni na jednu strunu.</div>
+    <div class="meter" aria-hidden="true"><div class="zone"></div><div class="mid"></div><div class="needle" id="tnNeedle"></div></div>
+    <div class="tcents" id="tnCents"></div>
+    <button class="primary" id="tnMic">🎤 Zapnout mikrofon</button>
+    <div class="label">Referenční tóny strun</div>
+    <div class="strings" id="tnStrings"></div>
+    <p>Ručička vlevo znamená, že struna je podladěná (povol méně, přitáhni), vpravo je přeladěná. Zelená uprostřed je naladěno. Mikrofon funguje v appce z GitHubu, ne v souboru otevřeném z telefonu.</p>
+  </div>
+  <div class="train" id="pChg" hidden>
+    <p>Minuta přechodů: střídáš dva akordy a po každém čistém přehození klepneš na velké tlačítko. Kytaroví učitelé to doporučují jako nejrychlejší cestu k plynulému hraní. Zkoušej každý den a sleduj rekordy.</p>
+    <div class="pair"><select id="chA" aria-label="První akord"></select><span>↔</span><select id="chB" aria-label="Druhý akord"></select></div>
+    <div class="pairdg" id="chDg"></div>
+    <div class="jrow"><span class="label">Délka</span><select id="chSec" aria-label="Délka cvičení" style="width:auto"><option value="30">30 sekund</option><option value="60">1 minuta</option><option value="120">2 minuty</option></select></div>
+    <div class="bigtime"><div><b id="chTime">60</b><small>sekund</small></div><div><b id="chCount">0</b><small>přehození</small></div><div><b id="chBest">–</b><small>rekord</small></div></div>
+    <button class="primary huge" id="chBtn">▶ Start</button>
+    <div class="label">Poslední pokusy</div>
+    <ul class="hist" id="chHist"></ul>
+  </div>
+  <div class="train" id="pEar" hidden>
+    <div class="seg" role="group" aria-label="Druh cvičení"><button id="emDm" type="button">Dur nebo moll</button><button id="emKey" type="button">Akordy v tónině</button></div>
+    <p id="earInfo"></p>
+    <button class="primary" id="earPlay">▶ Přehrát</button>
+    <div class="earAns" id="earAns"></div>
+    <div class="earRes" id="earRes" role="status"></div>
+    <div class="score"><span>Správně <b id="earOk">0</b> z <b id="earN">0</b></span><span>Série <b id="earStreak">0</b></span><span>Nejlepší <b id="earBest">0</b></span></div>
+    <button id="earReset" type="button">Vynulovat skóre</button>
+  </div>
+</section>
+
+<!-- ===== Úprava ===== -->
+<section id="vEdit" hidden>
+  <div class="top"><header><button class="ghost" id="cancelBtn">← Zpět</button><h1 id="editHead">Nová píseň</h1></header></div>
+  <form class="form" id="form">
+    <input id="fTitle" placeholder="Název písně" aria-label="Název písně">
+    <textarea id="fText" spellcheck="false" aria-label="Text s akordy" placeholder="G        D&#10;Skákal pes přes oves…"></textarea>
+    <div class="help">
+      Akordy piš <b>nad text</b> (řádek, na kterém jsou jen akordy), nebo <b>přímo do textu</b> v hranatých závorkách: <code>[G]Skákal pes [D]přes oves</code>.
+      Řádky jako <code>[Ref]</code> nebo <code>R:</code> se zobrazí jako nadpis části. Funguje i <code>Ami</code>, <code>Hm</code>, <code>C/G</code>.
+      Text zkopírovaný z webu se zpěvníky stačí vložit.
+    </div>
+    <div class="btns">
+      <button class="primary" type="submit">Uložit</button>
+      <button type="button" class="danger" id="delBtn">Smazat</button>
+    </div>
+  </form>
+</section>
+
+<script>
+(function(){
+const KEY='zpevnik.v1';
+const SAMPLES=[
+ {id:'s1',title:'Pec nám spadla (ukázka)',transpose:0,capo:0,speed:4,fav:false,text:
+`[Sloka]
+D               A
+Pec nám spadla, pec nám spadla,
+D               A
+kdopak nám ji postaví?
+D               G
+Starý pecař není doma
+A               D
+a mladý to neumí.`},
+ {id:'s2',title:'Skákal pes (ukázka)',transpose:0,capo:0,speed:4,fav:false,text:
+`[G]Skákal pes [D]přes oves,
+[G]přes zelenou [D]louku.
+[G]Šel za ním [C]myslivec,
+[G]péro na [D]klo[G]bouku.`}
+];
+let st={songs:SAMPLES,notation:'cz',font:17,playlist:[],tab:'all',showStrip:true,lastBackup:null,showPads:true,strum:'down',vol:0.8,sound:'guitar',auto:true,bass:true,dvol:0.7,bvol:0.8};
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.songs))st=Object.assign(st,s);}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const byId=id=>st.songs.find(s=>s.id===id);
+
+/* ---------- akordy ---------- */
+const BASE={C:0,D:2,E:4,F:5,G:7,A:9,H:11};
+const NAMES={cz:['C','C#','D','Eb','E','F','F#','G','G#','A','B','H'],en:['C','C#','D','Eb','E','F','F#','G','G#','A','Bb','B']};
+const SUF='(?:maj7|maj9|maj|mi7|min7|mi|min|m7|m|dim7|dim|aug|\\+|sus2|sus4|sus|add9|add11|add2|7|9|6|11|13|5)*';
+const RE=new RegExp('^([A-H])([#b]?)('+SUF+')(?:\\/([A-H])([#b]?))?$');
+function pcOf(l,a){let p=l==='B'?(st.notation==='cz'?10:11):BASE[l];if(a==='#')p++;if(a==='b')p--;return (p+12)%12;}
+function parseChord(t){const m=RE.exec(t);if(!m)return null;return{pc:pcOf(m[1],m[2]),suf:m[3],bass:m[4]?pcOf(m[4],m[5]):null};}
+const EXTRA=/^(\|\|?|:\|\|?|\|\|?:|-+|\(?\d?[x×]\d?\)?|\(|\)|N\.?C\.?|\/|%)$/i;
+function chordLine(line){const tk=line.trim().split(/\s+/);let n=0;for(const t of tk){if(parseChord(t))n++;else if(!EXTRA.test(t))return false;}return n>0;}
+function itemsOf(line){const out=[],re=/\S+/g;let m;while((m=re.exec(line)))out.push({col:m.index,raw:m[0],c:parseChord(m[0])});return out;}
+function nameOf(c,t){const N=NAMES[st.notation];return N[(c.pc+t+120)%12]+c.suf+(c.bass!=null?'/'+N[(c.bass+t+120)%12]:'');}
+
+function parseSong(text){
+  const lines=[];
+  for(const raw of text.replace(/\r/g,'').split('\n')){
+    const line=raw.replace(/\t/g,'    ').replace(/\s+$/,'');
+    if(!line.trim()){lines.push({k:'blank'});continue;}
+    const br=/^\s*\[([^\]]+)\]\s*$/.exec(line);
+    if((br&&!parseChord(br[1]))||/^\s*(R\d*:|Ref\.?:?|Refrén:?|\d+\.)\s*$/i.test(line)){lines.push({k:'lab',text:line.trim().replace(/^\[|\]$/g,'')});continue;}
+    if(/\[[^\]]+\]/.test(line)){
+      let lyric='',items=[],any=false,last=0,m;const re=/\[([^\]]+)\]/g;
+      while((m=re.exec(line))){const c=parseChord(m[1]);lyric+=line.slice(last,m.index);if(c){items.push({col:lyric.length,raw:m[1],c});any=true;}else lyric+=m[0];last=re.lastIndex;}
+      lyric+=line.slice(last);
+      if(any){lines.push({k:'ch',items});if(lyric.trim())lines.push({k:'ly',text:lyric});continue;}
+    }
+    if(chordLine(line)){lines.push({k:'ch',items:itemsOf(line)});continue;}
+    lines.push({k:'ly',text:line});
+  }
+  return lines;
+}
+
+/* ---------- hmaty ---------- */
+const DICT={'0':'x32010','0maj7':'x32000','07':'x32310','0add9':'x32030',
+'2':'xx0232','2m':'xx0231','27':'xx0212','2maj7':'xx0222','2sus4':'xx0233','2sus2':'xx0230','2m7':'xx0211',
+'4':'022100','4m':'022000','47':'020100','4m7':'022030','4sus4':'022200',
+'5':'133211','5maj7':'xx3210','7':'320003','77':'320001','7maj7':'320002',
+'9':'x02220','9m':'x02210','97':'x02020','9m7':'x02010','9maj7':'x02120','9sus4':'x02230','9sus2':'x02200',
+'117':'x21202'};
+function quality(s){const minor=/^(mi|min|m)(?!aj)/.test(s);const maj7=/maj7/.test(s);const sev=!maj7&&/7/.test(s);
+  if(minor)return sev?'m7':'m';if(maj7)return'maj7';if(sev&&/sus4/.test(s))return'7sus4';if(sev)return'7';
+  if(/sus4|sus$/.test(s))return'sus4';if(/sus2/.test(s))return'sus2';if(/add9|add2/.test(s))return'add9';
+  if(s===''||s==='5')return'';return'?';}
+function shape(pc,q){
+  if(DICT[pc+q])return DICT[pc+q].split('').map(ch=>ch==='x'?-1:+ch);
+  if(!['','m','7','m7'].includes(q))return null;
+  const rE=(pc-4+12)%12||12,rA=(pc-9+12)%12||12;
+  const E={'':[0,2,2,1,0,0],'m':[0,2,2,0,0,0],'7':[0,2,0,1,0,0],'m7':[0,2,0,0,0,0]};
+  const A={'':[null,0,2,2,2,0],'m':[null,0,2,2,1,0],'7':[null,0,2,0,2,0],'m7':[null,0,2,0,1,0]};
+  return rE<=rA?E[q].map(v=>v+rE):A[q].map(v=>v==null?-1:v+rA);
+}
+function svg(f){
+  const pos=f.filter(v=>v>0),mx=Math.max(...pos,0),mn=Math.min(...pos,99);
+  const start=mx<=4?1:mn,X=i=>8+i*9,Y=n=>16+n*13;
+  let s=`<svg viewBox="0 0 62 74" aria-hidden="true" fill="none" stroke="currentColor">`;
+  for(let i=0;i<6;i++)s+=`<line x1="${X(i)}" y1="16" x2="${X(i)}" y2="68" stroke-width="1" opacity=".55"/>`;
+  for(let n=0;n<=4;n++)s+=`<line x1="8" y1="${Y(n)}" x2="53" y2="${Y(n)}" stroke-width="${n===0&&start===1?3:1}" opacity="${n===0&&start===1?1:.55}"/>`;
+  if(start>1)s+=`<text x="57" y="${Y(.5)+4}" font-size="9" fill="currentColor" stroke="none" font-family="sans-serif">${start}</text>`;
+  if(f[5]===mn&&mn>0){let j=5;while(j>0&&f[j-1]>=mn)j--;const k=f.slice(j).filter(v=>v===mn).length;
+    if(k>=2&&j<4)s+=`<rect x="${X(j)-3.5}" y="${Y(mn-start+.5)-3.5}" width="${X(5)-X(j)+7}" height="7" rx="3.5" fill="var(--chord)" stroke="none"/>`;}
+  f.forEach((v,i)=>{if(v<0)s+=`<text x="${X(i)}" y="12" font-size="8" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif">×</text>`;
+    else if(v===0)s+=`<circle cx="${X(i)}" cy="9" r="2.6" stroke-width="1.2"/>`;
+    else s+=`<circle cx="${X(i)}" cy="${Y(v-start+.5)}" r="3.6" fill="var(--chord)" stroke="none"/>`;});
+  return s+'</svg>';
+}
+
+/* ---------- zvuk (syntéza drnknuté struny, Karplus-Strong) ---------- */
+const OPEN=[40,45,50,55,59,64];               // prázdné struny E A D G H e (MIDI)
+let actx=null,master=null,curGain=null,altUp=false;const pcache={};
+function audio(){
+  if(actx){if(actx.state==='suspended')actx.resume();return true;}
+  const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return false;
+  actx=new AC();master=actx.createGain();master.gain.value=st.vol;
+  const lp=actx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=4500;   // "tělo" kytary
+  master.connect(lp);lp.connect(actx.destination);return true;
+}
+function pluck(m){
+  if(pcache[m])return pcache[m];
+  const sr=actx.sampleRate,f=440*Math.pow(2,(m-69)/12),len=Math.floor(sr*4);
+  const buf=actx.createBuffer(1,len,sr),d=buf.getChannelData(0),N=Math.round(sr/f),r=new Float32Array(N);
+  for(let i=0;i<N;i++)r[i]=Math.random()*2-1;           // úder = šum
+  for(let i=1;i<N;i++)r[i]=(r[i]+r[i-1])*.5;              // měkčí trsátko
+  for(let i=0,k=0;i<len;i++){const n=(k+1)%N,v=r[k];d[i]=v*.3;r[k]=.9965*.5*(v+r[n]);k=n;}  // tlumení struny
+  return pcache[m]=buf;
+}
+// intervaly akordu podle přípony – pro akordy, které nemají hmat
+function intervals(s){
+  const mi=/^(mi|min|m)(?!aj)/.test(s),dim=s.includes('dim'),aug=s.includes('aug')||s.includes('+');
+  const iv=[0,dim?3:s.includes('sus2')?2:s.includes('sus')?5:mi?3:4,dim?6:aug?8:7];
+  if(s.includes('dim7'))iv.push(9);
+  else if(/maj(7|9)/.test(s))iv.push(11);
+  else if(/7|9|11|13/.test(s.replace(/add\d+/,'')))iv.push(10);
+  if(/(^|[^1])6/.test(s))iv.push(9);
+  if(/9|add2/.test(s))iv.push(14);
+  return iv;
+}
+const low=pc=>40+((pc-4)%12+12)%12;   // tón v rozsahu basové struny E..D#
+function voicing(c,tr,capo){
+  const f=shape((c.pc+tr-capo+120)%12,quality(c.suf));
+  let notes;
+  if(f)notes=f.map((v,i)=>v<0?null:OPEN[i]+v+capo).filter(v=>v!=null);   // hmat + kapodastr
+  else{const r=low((c.pc+tr+120)%12);notes=[r,...intervals(c.suf).map(iv=>r+12+iv)];}
+  if(c.bass!=null){const b=low((c.bass+tr+120)%12);notes=notes.filter(n=>n>b);notes.unshift(b);}
+  return notes;
+}
+// ztlumit to, co právě zní (kytaru i varhany)
+function release(rel,at){
+  if(!actx||!curGain)return;
+  const g=curGain,now=Math.max(at||0,actx.currentTime);curGain=null;
+  g.gain.cancelScheduledValues(now);g.gain.setValueAtTime(g.gain.value,now);g.gain.linearRampToValueAtTime(0,now+rel);
+  (g._osc||[]).forEach(o=>{try{o.stop(now+rel+.05);}catch(e){}});
+  setTimeout(()=>{try{g.disconnect();}catch(e){}},(now-actx.currentTime+rel+.3)*1000);
+}
+// varhany: tón drží, dokud nepřijde další akord
+let organWave=null,trem=null;
+function organ(notes){
+  if(!audio())return;
+  if(!organWave){   // rejstříky jako táhla Hammondu: základ, oktáva, kvinta, 2 oktávy…
+    const amp=[0,1,.75,.45,.35,.1,.2,0,.12];
+    organWave=actx.createPeriodicWave(new Float32Array(amp.length),new Float32Array(amp));
+    trem=actx.createGain();trem.gain.value=.85;trem.connect(master);           // "Leslie" – jemné chvění
+    const lfo=actx.createOscillator(),lg=actx.createGain();lfo.frequency.value=5.6;lg.gain.value=.12;
+    lfo.connect(lg);lg.connect(trem.gain);lfo.start();
+  }
+  release(.12);
+  const now=actx.currentTime+.01,g=actx.createGain();
+  g.gain.setValueAtTime(0,now);g.gain.linearRampToValueAtTime(.32,now+.06);
+  g.connect(trem);g._osc=[];curGain=g;
+  notes.forEach(m=>{const o=actx.createOscillator(),ng=actx.createGain();
+    o.setPeriodicWave(organWave);o.frequency.value=440*Math.pow(2,(m-69)/12);
+    ng.gain.value=1/notes.length;o.connect(ng);ng.connect(g);o.start(now);g._osc.push(o);});
+}
+// úder přes struny; dir/at/vel posílá rytmus, při ručním hraní se berou z nastavení
+function strum(notes,dir,at,vel){
+  if(!audio())return;
+  if(!dir){dir=st.strum;if(dir==='alt'){dir=altUp?'up':'down';altUp=!altUp;}}
+  const ord=dir==='up'?notes.slice().reverse():notes,now=at||actx.currentTime+.01;
+  release(.08,now);                                                   // ztlumit předchozí
+  const g=actx.createGain();g.connect(master);curGain=g;
+  const gap=dir==='up'?.018:.028;                                    // rozestup strun při úderu
+  ord.forEach((m,i)=>{const s=actx.createBufferSource();s.buffer=pluck(m);const ng=actx.createGain();
+    ng.gain.value=(vel||1)*(dir==='up'?.7:1)*(1-i*.04);s.connect(ng);ng.connect(g);s.start(now+i*gap);});
+}
+let usedNow=[],curIdx=-1;
+function markPads(i){document.querySelectorAll('#pads .pad,#strip .dg,#jPads .jpad').forEach(el=>el.classList.toggle('on',+el.dataset.u===i));}
+function silence(){release(.25);curIdx=-1;markPads(-1);}
+function playUsed(i){
+  const u=usedNow[i];if(!u)return;
+  const autoOn=rhy.on&&st.auto&&st.sound==='guitar';
+  if(curIdx===i&&((st.sound==='organ'&&curGain)||autoOn)){silence();return;}   // znovu ťuknout = ztichnout
+  const notes=voicing(u.c,cur.transpose||0,cur.capo||0);
+  if(st.sound==='organ')organ(notes);
+  else if(autoOn)autoTap(notes);      // automatické brnkání: chytí i ťuknutí kousek vedle doby
+  else strum(notes);
+  curIdx=i;markPads(i);
+  document.querySelectorAll('#sheet .cp.on').forEach(el=>el.classList.remove('on'));
+}
+const STRUM={down:'↓ Dolů',up:'↑ Nahoru',alt:'↕ Střídavě'};
+const SOUND={guitar:'🎸 Kytara',organ:'🎹 Varhany'};
+
+/* ---------- rytmus: bicí, basa, automatické brnkání ---------- */
+// takt rozdělený na šestnáctiny (valčík 12 kroků): k=kopák, s=virbl, h=činel, c=klik
+// g = brnkání: D dolů, U nahoru, B basová struna, b druhá struna (střídavý bas)
+const E8=[0,2,4,6,8,10,12,14];
+const STY={
+  balada:{n:'Balada',bpm:70,len:16,beats:4,k:[0,7,8],s:[4,12],sv:.7,h:E8,g:{0:'D',4:'D',8:'D',10:'U',12:'D'}},
+  pop:{n:'Pop',bpm:100,len:16,beats:4,k:[0,6,8],s:[4,12],sv:1,h:E8,g:{0:'D',4:'D',6:'U',10:'U',12:'D',14:'U'}},
+  rock:{n:'Rock',bpm:120,len:16,beats:4,k:[0,8,10],s:[4,12],sv:1.1,h:E8,g:{0:'D',2:'D',4:'D',6:'D',8:'D',10:'D',12:'D',14:'D'}},
+  tramp:{n:'Tramp',bpm:110,len:16,beats:4,k:[0,8],s:[4,12],sv:.8,h:[2,6,10,14],alt:true,g:{0:'B',4:'D',6:'U',8:'b',12:'D',14:'U'}},
+  valcik:{n:'Valčík 3/4',bpm:100,len:12,beats:3,k:[0],s:[4,8],sv:.5,h:[0,4,8],g:{0:'B',4:'D',8:'D'}},
+  metronom:{n:'Metronom',bpm:80,len:16,beats:4,k:[],s:[],sv:0,h:[],c:[0,4,8,12],g:{0:'D',4:'D',8:'D',12:'D'}}
+};
+const styKey=()=>STY[cur&&cur.style]?cur.style:'balada';
+const sty=()=>STY[styKey()];
+const bpm=()=>cur.bpm||sty().bpm;
+let rhy={on:false,step:0,next:0,timer:null,count:0},dbus=null,noiseBuf=null,wl=null;
+function drums(){
+  if(!dbus){dbus=actx.createGain();dbus.gain.value=st.dvol;dbus.connect(actx.destination);
+    const len=actx.sampleRate;noiseBuf=actx.createBuffer(1,len,len);const d=noiseBuf.getChannelData(0);
+    for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
+  return dbus;
+}
+function env(g,t,peak,dec){g.gain.setValueAtTime(peak,t);g.gain.exponentialRampToValueAtTime(.001,t+dec);}
+function kick(t){const o=actx.createOscillator(),g=actx.createGain();
+  o.frequency.setValueAtTime(140,t);o.frequency.exponentialRampToValueAtTime(42,t+.12);env(g,t,.9,.45);
+  o.connect(g);g.connect(drums());o.start(t);o.stop(t+.5);}
+function noiseHit(t,type,freq,peak,dec){const s=actx.createBufferSource(),f=actx.createBiquadFilter(),g=actx.createGain();
+  s.buffer=noiseBuf;f.type=type;f.frequency.value=freq;env(g,t,peak,dec);
+  s.connect(f);f.connect(g);g.connect(drums());s.start(t,Math.random()*.5);s.stop(t+dec+.05);}
+function snare(t,v){drums();noiseHit(t,'highpass',1200,.5*v,.18);
+  const o=actx.createOscillator(),g=actx.createGain();o.type='triangle';o.frequency.value=185;env(g,t,.3*v,.08);
+  o.connect(g);g.connect(drums());o.start(t);o.stop(t+.1);}
+function hat(t,acc){drums();noiseHit(t,'highpass',7500,acc?.2:.12,.045);}
+function click(t,first){const o=actx.createOscillator(),g=actx.createGain();o.type='square';
+  o.frequency.value=first?1800:1200;env(g,t,.2,.05);o.connect(g);g.connect(drums());o.start(t);o.stop(t+.08);}
+function bassNote(t,fifth){
+  const u=usedNow[curIdx];if(!u)return;
+  let m=40+((((u.c.bass!=null?u.c.bass:u.c.pc)+(cur.transpose||0))%12-4)%12+12)%12;   // E2..D#3 – slyšet i z mobilu
+  if(fifth){m+=7;if(m>52)m-=12;}
+  const o=actx.createOscillator(),f=actx.createBiquadFilter(),g=actx.createGain();
+  o.type='sawtooth';o.frequency.value=440*Math.pow(2,(m-69)/12);f.type='lowpass';f.frequency.value=1100;f.Q.value=3;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.45*st.bvol,t+.008);g.gain.exponentialRampToValueAtTime(.001,t+Math.min(.9,60/bpm()*1.5));
+  o.connect(f);f.connect(g);g.connect(master);o.start(t);o.stop(t+1);
+}
+function beatUI(t,i,count){setTimeout(()=>{['rPlay','jPlay'].forEach(id=>$(id).querySelectorAll('i').forEach((d,j)=>d.className=j===i?(count?'cnt':'on'):''));},
+  Math.max(0,(t-actx.currentTime)*1000));}
+function playStep(t){
+  const S=sty();
+  if(rhy.count<S.beats*4){                        // nápočet 1-2-3-4 před začátkem
+    if(rhy.count%4===0){click(t,rhy.count===0);beatUI(t,rhy.count/4,true);}
+    rhy.count++;return;
+  }
+  const s=rhy.step%S.len,acc=s===0;
+  if(acc&&jamRec&&cur===st.jam&&curIdx>=0&&usedNow[curIdx])jamAdd(usedNow[curIdx].n);   // jamování: zapsat akord taktu
+  if(S.k.includes(s))kick(t);
+  if(S.s.includes(s))snare(t,S.sv);
+  if(S.h.includes(s))hat(t,s%4===0);
+  if(S.c&&S.c.includes(s))click(t,acc);
+  if(s%4===0)beatUI(t,s/4,false);
+  const k=S.g[s],has=curIdx>=0&&usedNow[curIdx];
+  if(k&&st.auto&&st.sound==='guitar'){
+    if(has)hit(k,t,voicing(usedNow[curIdx].c,cur.transpose||0,cur.capo||0),acc);
+    else rhy.pend={k,t,acc,g:null};        // zatím bez akordu – ale první ťuknutí se chytí
+  }
+  if(has&&st.bass&&S.k.includes(s))bassNote(t,S.alt&&s===8);
+  rhy.step=s+1;
+}
+// jeden úder vzoru; zapamatuje si ho, aby šel vyměnit, když ťukneš na akord těsně před ním
+function hit(k,t,notes,acc){
+  if(k==='B')strum([notes[0]],'down',t,1);
+  else if(k==='b')strum([notes[1]||notes[0]],'down',t,.9);
+  else strum(notes,k==='U'?'up':'down',t,acc?1:.85);
+  rhy.pend={k,t,acc,g:curGain};
+}
+// ťuknutí při automatickém brnkání: těsně před dobou = vymění čekající úder, kousek po době = zahraje hned
+function autoTap(notes){
+  const now=actx.currentTime,p=rhy.pend,beat=60/bpm();
+  if(!p)return;
+  if(p.t>now){if(p.g)try{p.g.gain.cancelScheduledValues(0);p.g.gain.setValueAtTime(0,now);}catch(e){}hit(p.k,p.t,notes,p.acc);}
+  else if(now-p.t<.35*beat)strum(notes,'down',0,.9);
+}
+function sched(){while(rhy.next<actx.currentTime+.12){playStep(rhy.next);rhy.next+=60/bpm()/4;}}
+async function rhyStart(){
+  if(!audio())return;drums();
+  rhy.on=true;rhy.step=0;rhy.count=0;rhy.pend=null;rhy.next=actx.currentTime+.1;
+  clearInterval(rhy.timer);rhy.timer=setInterval(sched,25);rhyUI();
+  try{wl=await navigator.wakeLock?.request('screen');}catch(e){wl=null;}
+}
+function rhyStop(){
+  if(!rhy.on)return;rhy.on=false;clearInterval(rhy.timer);rhy.timer=null;
+  if(st.sound==='guitar')release(.3);
+  try{wl&&wl.release();}catch(e){}wl=null;rhyUI();
+}
+function rhyUI(){
+  if(!cur)return;const S=sty();
+  $('rPlay').innerHTML=(rhy.on?'■ Stop':'🥁 Rytmus')+' <span class="dots">'+'<i></i>'.repeat(S.beats)+'</span>';
+  $('rPlay').setAttribute('aria-pressed',rhy.on);
+  $('bVal').innerHTML=`<small>Tempo</small>${bpm()}`;
+  $('rStyle').value=styKey();
+  $('autoBtn').textContent=(st.auto?'✓ ':'')+'Auto';$('autoBtn').setAttribute('aria-pressed',st.auto);
+  $('autoBtn').hidden=st.sound==='organ';
+  $('bassBtn').textContent=(st.bass?'✓ ':'')+'Basa';$('bassBtn').setAttribute('aria-pressed',st.bass);
+  $('bVol').value=st.bvol;
+  $('dVol').value=st.dvol;
+  jamUI();
+}
+
+/* ---------- seznam ---------- */
+let cur=null,ctx='all';
+function show(v){['vList','vSong','vEdit','vJam','vTrain'].forEach(id=>$(id).hidden=id!==v);window.scrollTo(0,0);if(v!=='vSong')stop();if(v!=='vTrain')trainStop();rhyStop();silence();$('menu').hidden=true;$('fromPanel').hidden=true;}
+function firstChords(t){const set=[];for(const l of parseSong(t))if(l.k==='ch')for(const it of l.items)if(it.c){const n=nameOf(it.c,0);if(!set.includes(n))set.push(n);}return set.slice(0,8).join(' ');}
+function renderList(){
+  st.playlist=st.playlist.filter(id=>byId(id));
+  const q=$('q').value.trim().toLowerCase(),tab=st.tab;
+  ['All','Fav','Pl'].forEach(k=>$('tab'+k).setAttribute('aria-pressed',tab===k.toLowerCase()));
+  $('tabPl').textContent=`Playlist (${st.playlist.length})`;
+  let songs;
+  if(tab==='pl')songs=st.playlist.map(byId);
+  else songs=st.songs.slice().sort((a,b)=>a.title.localeCompare(b.title,'cs')).filter(s=>tab!=='fav'||s.fav);
+  if(q)songs=songs.filter(s=>s.title.toLowerCase().includes(q)||s.text.toLowerCase().includes(q));
+  const empty=tab==='pl'?'Playlist je prázdný. V písni otevři ⋯ a zvol Přidat do playlistu.':tab==='fav'?'Zatím žádné oblíbené. V písni klepni na ☆.':q?'Nic nenalezeno.':'Zatím tu nejsou žádné písně. Přidej první tlačítkem + Nová.';
+  $('songs').innerHTML=songs.length?songs.map((s,i)=>{
+    const head=tab==='pl'?`<span class="n">${i+1}.</span>`:'';
+    const tools=tab==='pl'&&!q?`<button class="mini" data-up="${i}" aria-label="Posunout výš">↑</button><button class="mini" data-down="${i}" aria-label="Posunout níž">↓</button><button class="mini" data-rm="${i}" aria-label="Odebrat z playlistu">✕</button>`:'';
+    return`<li>${head}<button class="open" data-id="${s.id}"><span class="t">${s.fav?'<span class="star">★</span> ':''}${esc(s.title)}</span><span class="c">${esc(firstChords(s.text))}</span></button>${tools}</li>`;
+  }).join(''):`<li class="empty">${empty}</li>`;
+  $('plTools').hidden=!(tab==='pl'&&st.playlist.length);
+  $('nCz').setAttribute('aria-pressed',st.notation==='cz');$('nEn').setAttribute('aria-pressed',st.notation==='en');
+  $('backupInfo').textContent=`Písně jsou uložené jen v tomto prohlížeči. Zálohu si ulož do souboru a přeneseš ji tak i do jiného telefonu. `+
+    (st.lastBackup?`Poslední záloha: ${new Date(st.lastBackup).toLocaleDateString('cs-CZ')}.`:'Zatím jsi zálohu neuložil.');
+}
+
+/* ---------- píseň ---------- */
+function renderSong(){
+  const s=cur,tr=s.transpose||0,capo=s.capo||0,t=tr-capo,lines=parseSong(s.text),used=[];
+  $('songTitle').textContent=s.title;
+  $('favBtn').textContent=s.fav?'★':'☆';$('favBtn').setAttribute('aria-pressed',!!s.fav);
+  $('tVal').innerHTML=`<small>Tónina</small>${tr>0?'+'+tr:tr}`;
+  $('cVal').innerHTML=`<small>Kapo</small>${capo}`;
+  $('sVal').innerHTML=`<small>Rychlost</small>${s.speed||4}`;
+  $('plBtn').textContent=st.playlist.includes(s.id)?'Odebrat z playlistu':'Přidat do playlistu';
+  $('stripBtn').textContent=st.showStrip?'Skrýt hmaty':'Zobrazit hmaty';
+  document.documentElement.style.setProperty('--song-size',st.font+'px');
+  $('sheet').innerHTML=lines.map(l=>{
+    if(l.k==='blank')return'<div class="ln"> </div>';
+    if(l.k==='lab')return`<div class="ln lab">${esc(l.text)}</div>`;
+    if(l.k==='ly')return`<div class="ln">${esc(l.text)}</div>`;
+    let str='',cursor=0;
+    for(const it of l.items){let txt,html;
+      if(it.c){txt=nameOf(it.c,t);let ui=used.findIndex(u=>u.n===txt);if(ui<0){used.push({n:txt,c:it.c});ui=used.length-1;}
+        html=`<span class="cp" data-u="${ui}">${esc(txt)}</span>`;}
+      else{txt=it.raw;html=esc(txt);}
+      const col=Math.max(it.col,cursor);str+=' '.repeat(col-cursor)+html+' ';cursor=col+txt.length+1;}
+    return`<div class="ln ch">${str.replace(/ $/,'')}</div>`;
+  }).join('')+'<p class="hint">Klepni na akord a zazní. Varhany drží tón do dalšího akordu, opětovné klepnutí je ztiší. S rytmem kytara brnká sama, ty jen přepínáš akordy. Klepnutím na text spustíš nebo zastavíš posouvání.</p>';
+  usedNow=used;
+  $('strip').hidden=!st.showStrip||!used.length;
+  $('strip').innerHTML=used.map((u,i)=>{const f=shape((u.c.pc+t+120)%12,quality(u.c.suf));
+    return`<div class="dg" data-u="${i}"><b>${esc(u.n)}</b>${f?svg(f):'<span class="na">bez hmatu</span>'}</div>`;}).join('');
+  $('pads').hidden=!st.showPads||!used.length;
+  $('pads').innerHTML=used.map((u,i)=>`<button class="pad" data-u="${i}">${esc(u.n)}</button>`).join('');
+  $('padsBtn').textContent=st.showPads?'Skrýt tlačítka akordů':'Zobrazit tlačítka akordů';
+  $('soundBtn').textContent=SOUND[st.sound];$('soundBtn').setAttribute('aria-pressed','true');
+  $('strumBtn').textContent=STRUM[st.strum];$('strumBtn').hidden=st.sound==='organ';
+  if(curIdx>=0&&(curGain||rhy.on))markPads(curIdx);
+  rhyUI();
+  $('volIn').value=st.vol;
+  $('capNote').hidden=!capo;
+  if(capo){const N=NAMES[st.notation];$('capNote').textContent=`Kapodastr na ${capo}. pražci. Akordy jsou hmaty, zní o ${capo} ${capo===1?'půltón':capo<5?'půltóny':'půltónů'} výš.`;}
+  const pi=st.playlist.indexOf(s.id),inPl=ctx==='pl'&&pi>=0;
+  $('prevBtn').hidden=!inPl;$('nextBtn').hidden=!inPl;
+  if(inPl){$('prevBtn').disabled=pi===0;$('nextBtn').disabled=pi===st.playlist.length-1;}
+}
+function openSong(id,c){cur=byId(id);if(!cur)return;if(c)ctx=c;renderSong();show('vSong');}
+function openEdit(s){cur=s;$('editHead').textContent=s?'Upravit píseň':'Nová píseň';$('fTitle').value=s?s.title:'';$('fText').value=s?s.text:'';
+  $('delBtn').hidden=!s;$('delBtn').classList.remove('armed');$('delBtn').textContent='Smazat';show('vEdit');}
+function step(d){const i=st.playlist.indexOf(cur.id)+d;if(i>=0&&i<st.playlist.length)openSong(st.playlist[i],'pl');}
+
+/* ---------- posouvání ---------- */
+let playing=false,last=0,acc=0,lock=null;
+function tick(ts){if(!playing)return;const dt=last?(ts-last)/1000:0;last=ts;acc+=dt*(cur.speed||4)*5;const n=Math.floor(acc);
+  if(n>0){window.scrollBy(0,n);acc-=n;}
+  if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-2){stop();return;}
+  requestAnimationFrame(tick);}
+async function start(){playing=true;last=0;acc=0;$('play').setAttribute('aria-pressed','true');$('play').textContent='❚❚ Zastavit';requestAnimationFrame(tick);
+  try{lock=await navigator.wakeLock?.request('screen');}catch(e){lock=null;}}
+function stop(){playing=false;$('play').setAttribute('aria-pressed','false');$('play').textContent='▶ Posouvat';try{lock&&lock.release();}catch(e){}lock=null;}
+
+/* ---------- záloha ---------- */
+function backupJson(){return JSON.stringify({app:'zpevnik',verze:1,datum:new Date().toISOString(),songs:st.songs,playlist:st.playlist},null,1);}
+function markBackup(msg){st.lastBackup=Date.now();save();renderList();$('bStatus').textContent=msg;}
+$('expBtn').onclick=()=>{
+  try{const blob=new Blob([backupJson()],{type:'application/json'});const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download='zpevnik-zaloha-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    markBackup('Záloha se ukládá do Stažených souborů. Pokud se nic nestáhlo, použij Kopírovat zálohu.');
+  }catch(e){$('bStatus').textContent='Soubor se nepodařilo uložit. Použij Kopírovat zálohu.';}
+};
+$('copyBtn').onclick=()=>{const txt=backupJson();
+  navigator.clipboard.writeText(txt).then(()=>markBackup('Záloha je ve schránce. Vlož ji třeba do poznámek nebo e-mailu.'))
+  .catch(()=>{$('bStatus').textContent='Kopírování se nepovedlo, zkus Uložit zálohu do souboru.';});};
+$('impBtn').onclick=()=>$('impFile').click();
+$('impFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.songs))throw 0;let n=0;
+      for(const s of d.songs){if(!s||typeof s.text!=='string')continue;
+        if(st.songs.some(x=>x.title===s.title&&x.text===s.text))continue;
+        const id=byId(s.id)?'p'+Date.now()+'_'+n:s.id||('p'+Date.now()+'_'+n);
+        st.songs.push({id,title:s.title||'Bez názvu',text:s.text,transpose:s.transpose||0,capo:s.capo||0,speed:s.speed||4,fav:!!s.fav,style:s.style,bpm:s.bpm});n++;}
+      save();renderList();$('bStatus').textContent=n?`Načteno ${n} ${n===1?'nová píseň':n<5?'nové písně':'nových písní'}.`:'Všechny písně ze zálohy už ve zpěvníku jsou.';
+    }catch(err){$('bStatus').textContent='Tohle není soubor se zálohou zpěvníku.';}
+    e.target.value='';};
+  r.readAsText(f);};
+
+/* ---------- jamování ---------- */
+// jam se chová jako „virtuální píseň“: využívá stejný zvuk, rytmus, bicí a basu jako písně
+st.jam=Object.assign({id:'jam',title:'Jamování',transpose:0,capo:0,style:'pop',bpm:null,key:7,mode:'dur',rec:[]},st.jam||{});
+const MODES={
+  dur:{deg:[[0,'','I'],[2,'m','ii'],[4,'m','iii'],[5,'','IV'],[7,'','V'],[9,'m','vi']],ext:[[7,'7','V7'],[10,'','♭VII'],[2,'','II']]},
+  moll:{deg:[[0,'m','i'],[3,'','III'],[5,'m','iv'],[7,'m','v'],[8,'','VI'],[10,'','VII']],ext:[[7,'','V'],[7,'7','V7'],[5,'','IV']]}
+};
+let jamRec=false;
+const minS=()=>st.notation==='cz'?'mi':'m';
+function jamChords(){
+  const J=st.jam,M=MODES[J.mode]||MODES.dur,N=NAMES[st.notation];
+  if(J.view==='all'){const out=[];   // všech 12 tónů × dur, moll, sedmička
+    for(let pc=0;pc<12;pc++)for(const q of ['','m','7'])out.push({n:N[pc]+(q==='m'?minS():q),c:{pc,suf:q,bass:null},rn:'',x:0,q});
+    return out;}
+  return M.deg.map(d=>[d,0]).concat(M.ext.map(d=>[d,1])).map(([d,x])=>{const pc=(J.key+d[0])%12;
+    return{n:N[pc]+(d[1]==='m'?minS():d[1]),c:{pc,suf:d[1],bass:null},rn:d[2],x};});
+}
+function renderJam(){
+  const J=st.jam,N=NAMES[st.notation];cur=J;usedNow=jamChords();curIdx=-1;
+  $('keys').innerHTML=N.map((n,i)=>`<button type="button" data-k="${i}" aria-pressed="${i===J.key}">${n}${J.mode==='moll'?minS():''}</button>`).join('');
+  {const k=$('keys'),b=k.querySelector('[aria-pressed="true"]');if(b)k.scrollLeft=b.offsetLeft-k.clientWidth/2+b.offsetWidth/2;}
+  $('mDur').setAttribute('aria-pressed',J.mode==='dur');$('mMoll').setAttribute('aria-pressed',J.mode==='moll');
+  const all=J.view==='all';
+  $('jvKey').setAttribute('aria-pressed',!all);$('jvAll').setAttribute('aria-pressed',all);
+  $('keys').hidden=all;$('mDur').parentNode.hidden=all;$('jNow').hidden=!all;
+  $('jKey').textContent=all?'Všechny akordy':`Tónina ${N[J.key]}${J.mode==='moll'?minS():''} ${J.mode}`;
+  $('jPads').classList.toggle('all',all);
+  $('jPads').innerHTML=all
+    ?usedNow.map((u,i)=>`<button type="button" class="jpad${u.q==='7'?' m7':''}" data-u="${i}"><span class="nm">${esc(u.n)}</span></button>`).join('')
+    :usedNow.map((u,i)=>{const f=shape(u.c.pc,quality(u.c.suf));
+    return`<button type="button" class="jpad${u.x?' extra':''}" data-u="${i}"><span class="rn">${u.rn}</span><span class="nm">${esc(u.n)}</span>${f?svg(f):''}</button>`;}).join('');
+  $('jNow').innerHTML='Klepni na akord. Tady uvidíš jeho hmat.';
+  $('jNote').textContent=all
+    ?'Všech 12 tónů v dur, moll a se sedmičkou (čárkovaně). Hodí se, když chceš zkusit akord mimo tóninu.'
+    :'Plné rámečky jsou akordy tóniny, čárkované jsou akordy navíc, které se k ní hodí. Klepni a akord zazní. Varhany drží tón do dalšího akordu, opětovné klepnutí je ztiší. S rytmem hrají bicí a basa a kytara brnká sama, ty jen přepínáš akordy.';
+  renderJChips();rhyUI();
+}
+function jamUI(){
+  if(cur!==st.jam)return;const S=sty();
+  $('jPlay').innerHTML=(rhy.on?'■ Stop':'🥁 Rytmus')+' <span class="dots">'+'<i></i>'.repeat(S.beats)+'</span>';
+  $('jPlay').setAttribute('aria-pressed',rhy.on);
+  $('jbVal').innerHTML=`<small>Tempo</small>${bpm()}`;
+  $('jStyle').value=styKey();
+  $('jSound').textContent=SOUND[st.sound];
+  $('jAuto').textContent=(st.auto?'✓ ':'')+'Auto';$('jAuto').setAttribute('aria-pressed',st.auto);$('jAuto').hidden=st.sound==='organ';
+  $('jBass').textContent=(st.bass?'✓ ':'')+'Basa';$('jBass').setAttribute('aria-pressed',st.bass);
+  $('jRec').setAttribute('aria-pressed',jamRec);$('jRec').textContent=jamRec?'■ Stop nahrávání':'● Nahrávat';
+}
+function renderJChips(){
+  const r=st.jam.rec;
+  $('jChips').innerHTML=r.length?r.map(n=>`<span class="jchip">${esc(n)}</span>`).join(''):'<span class="jnote">Zapni Nahrávat a hraj. Akordy se sem zapíšou, s rytmem jeden akord za každý takt.</span>';
+  $('recSave').disabled=$('recUndo').disabled=$('recClear').disabled=!r.length;
+}
+function jamAdd(n){if(st.jam.rec.length>=200)return;st.jam.rec.push(n);save();renderJChips();}
+function jamTap(i){
+  playUsed(i);if(jamRec&&!rhy.on&&curIdx===i)jamAdd(usedNow[i].n);
+  if(st.jam.view==='all'){const u=usedNow[i],f=shape(u.c.pc,quality(u.c.suf));$('jNow').innerHTML=`${f?svg(f):''}<b>${esc(u.n)}</b>`;}
+}
+
+$('jamBtn').onclick=()=>{show('vJam');renderJam();};
+$('jBack').onclick=()=>{jamRec=false;renderList();show('vList');};
+$('jvKey').onclick=()=>{silence();st.jam.view='key';save();renderJam();};
+$('jvAll').onclick=()=>{silence();st.jam.view='all';save();renderJam();};
+$('keys').onclick=e=>{const b=e.target.closest('button[data-k]');if(!b)return;silence();st.jam.key=+b.dataset.k;save();renderJam();};
+$('mDur').onclick=()=>{silence();st.jam.mode='dur';save();renderJam();};
+$('mMoll').onclick=()=>{silence();st.jam.mode='moll';save();renderJam();};
+$('jPads').addEventListener('pointerdown',e=>{const b=e.target.closest('.jpad');if(!b)return;e.preventDefault();jamTap(+b.dataset.u);});
+$('jPads').addEventListener('click',e=>{if(e.detail!==0)return;const b=e.target.closest('.jpad');if(b)jamTap(+b.dataset.u);});
+$('jStyle').innerHTML=Object.entries(STY).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join('');
+$('jStyle').onchange=e=>{st.jam.style=e.target.value;save();rhyUI();};
+$('jPlay').onclick=()=>rhy.on?rhyStop():rhyStart();
+$('jbUp').onclick=()=>{st.jam.bpm=Math.min(220,bpm()+2);save();rhyUI();};
+$('jbDown').onclick=()=>{st.jam.bpm=Math.max(40,bpm()-2);save();rhyUI();};
+$('jSound').onclick=()=>{st.sound=st.sound==='guitar'?'organ':'guitar';silence();save();rhyUI();};
+$('jAuto').onclick=()=>{st.auto=!st.auto;save();rhyUI();};
+$('jBass').onclick=()=>{st.bass=!st.bass;save();rhyUI();};
+$('jRec').onclick=()=>{jamRec=!jamRec;jamUI();};
+$('recUndo').onclick=()=>{st.jam.rec.pop();save();renderJChips();};
+$('recClear').onclick=e=>{const b=e.currentTarget;if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Opravdu vymazat?';return;}
+  b.classList.remove('armed');b.textContent='Vymazat';st.jam.rec=[];save();renderJChips();};
+$('recSave').onclick=()=>{
+  const r=st.jam.rec;if(!r.length)return;const N=NAMES[st.notation];
+  const lines=[`[Tónina ${N[st.jam.key]}${st.jam.mode==='moll'?minS():''} ${st.jam.mode}]`];
+  for(let i=0;i<r.length;i+=4)lines.push(r.slice(i,i+4).map(n=>n.padEnd(8)).join('').trimEnd());
+  const song={id:'p'+Date.now(),title:'Můj jam '+new Date().toLocaleDateString('cs-CZ'),text:lines.join('\n')+'\n',
+    transpose:0,capo:0,speed:4,fav:false,style:st.jam.style,bpm:st.jam.bpm||undefined};
+  st.songs.push(song);st.jam.rec=[];jamRec=false;save();openEdit(song);
+};
+
+/* ---------- hraj od akordu ---------- */
+// Vybereš, od kterého akordu chceš píseň hrát, a všechny akordy se posunou.
+// Kapodastr zůstane, jak je – akordy na obrazovce jsou vždy hmaty, které chytáš.
+const mod12=v=>((v%12)+12)%12;
+const wrap12=v=>{v=mod12(v);return v>6?v-12:v;};
+function songChords(){const set=[];for(const l of parseSong(cur.text))if(l.k==='ch')for(const it of l.items)
+  if(it.c&&!set.some(c=>c.pc===it.c.pc&&c.suf===it.c.suf))set.push(it.c);return set;}
+// „těžký“ akord = bez hmatu, nebo hmat bez jediné prázdné struny (barré)
+function hardCount(chs,t){let n=0;for(const c of chs){const f=shape(mod12(c.pc+t),quality(c.suf));if(!f||!f.includes(0))n++;}return n;}
+const barreTxt=n=>n===0?'bez barré':n+'× barré';
+function renderFrom(){
+  const P=$('fromPanel'),chs=songChords();
+  if(!chs.length){P.innerHTML='<p>Píseň nemá žádné akordy.</p>';return;}
+  const f0=chs[0],N=NAMES[st.notation],tr=cur.transpose||0,capo=cur.capo||0,t=tr-capo;
+  const nm=pc=>N[pc]+f0.suf;
+  const opts=[...Array(12)].map((_,x)=>({x,h:hardCount(chs,x-f0.pc)}));
+  const min=Math.min(...opts.map(o=>o.h)),now=mod12(f0.pc+t);
+  let h=`<p>Píseň začíná akordem <b>${esc(nm(f0.pc))}</b>${now!==f0.pc?`, teď hraješ od <b>${esc(nm(now))}</b>`:''}. Vyber, od kterého akordu chceš hrát:</p><div class="fgrid">`;
+  h+=opts.map(o=>`<button type="button" data-x="${o.x}" class="${o.h===min?'easy':''}" aria-pressed="${o.x===now}"><b>${esc(nm(o.x))}</b><small>${barreTxt(o.h)}</small></button>`).join('')+'</div>';
+  // stejný zvuk písně, jen jiný kapodastr
+  const caps=[...Array(8)].map((_,c)=>({c,h:hardCount(chs,tr-c)})).sort((a,b)=>a.h-b.h||a.c-b.c).slice(0,3);
+  h+=`<p>Chceš, aby píseň zněla stejně, ale hrála se snadněji? Zkus kapodastr:</p><div class="capo3">`+
+    caps.map(o=>`<button type="button" data-c="${o.c}" aria-pressed="${o.c===capo}">${o.c?'Kapo '+o.c:'Bez kapa'} · od ${esc(nm(mod12(f0.pc+tr-o.c)))} · ${barreTxt(o.h)}</button>`).join('')+
+    `<button type="button" data-reset="1">Původní tónina</button></div>`;
+  P.innerHTML=h;
+}
+$('fromBtn').onclick=()=>{const P=$('fromPanel');P.hidden=!P.hidden;$('fromBtn').setAttribute('aria-expanded',!P.hidden);if(!P.hidden)renderFrom();};
+$('fromPanel').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  const f0=songChords()[0];if(!f0)return;
+  if(b.dataset.x!=null)cur.transpose=wrap12(+b.dataset.x-f0.pc+(cur.capo||0));
+  else if(b.dataset.c!=null)cur.capo=+b.dataset.c;
+  else if(b.dataset.reset){cur.transpose=0;cur.capo=0;}
+  silence();save();renderSong();renderFrom();});
+
+/* ---------- trenažér ---------- */
+st.train=Object.assign({tab:'tun',a:'C',b:'G',sec:60,chg:[],earMode:'dm',earOk:0,earN:0,earBest:0},st.train||{});
+const COMMON=[[0,''],[2,''],[4,''],[5,''],[7,''],[9,''],[9,'m'],[2,'m'],[4,'m'],[11,'m'],[9,'7'],[2,'7'],[4,'7'],[7,'7'],[0,'7'],[11,'7'],[5,'maj7'],[0,'maj7'],[2,'sus4'],[9,'sus2']];
+const cName=(pc,q)=>NAMES[st.notation][pc]+(q==='m'?minS():q);
+const cKey=(pc,q)=>pc+':'+q;
+function trainTab(t){st.train.tab=t;save();
+  [['tun','ttTun','pTun'],['chg','ttChg','pChg'],['ear','ttEar','pEar']].forEach(([k,b,p])=>{$(b).setAttribute('aria-pressed',k===t);$(p).hidden=k!==t;});
+  if(t!=='tun')micStop();if(t!=='chg')chgStop(false);
+  if(t==='tun')renderTuner();if(t==='chg')renderChg();if(t==='ear')renderEar();}
+function trainStop(){micStop();chgStop(false);}
+
+// --- ladička: mikrofon + autokorelace (najde, jak často se vlna opakuje)
+let mic=null,an=null,tbuf=null,tRaf=0,tHist=[];
+function renderTuner(){
+  $('tnStrings').innerHTML=OPEN.map((m,i)=>`<button type="button" data-m="${m}"><b>${NAMES[st.notation][m%12]}</b><small>${6-i}. struna</small></button>`).join('');
+  $('tnMic').textContent=mic?'■ Vypnout mikrofon':'🎤 Zapnout mikrofon';
+}
+async function micStart(){
+  if(!audio())return;
+  try{
+    const ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    const src=actx.createMediaStreamSource(ms);an=actx.createAnalyser();an.fftSize=4096;src.connect(an);
+    tbuf=new Float32Array(an.fftSize);mic={ms,src};tHist=[];renderTuner();tunerLoop();
+  }catch(e){$('tnFreq').textContent='Mikrofon se nepodařilo zapnout. Povol ho prohlížeči a otevři appku z GitHubu.';}
+}
+function micStop(){if(!mic)return;cancelAnimationFrame(tRaf);try{mic.src.disconnect();mic.ms.getTracks().forEach(t=>t.stop());}catch(e){}mic=null;
+  if(!$('vTrain').hidden)renderTuner();}
+function detectPitch(b,sr){
+  let rms=0;for(const v of b)rms+=v*v;rms=Math.sqrt(rms/b.length);if(rms<.008)return -1;
+  const n=b.length,minL=Math.floor(sr/1000),maxL=Math.floor(sr/60);   // hledáme 60–1000 Hz
+  let best=-1,bestC=0,prev=1,found=false;const c=new Float32Array(maxL+2);
+  for(let l=minL;l<=maxL+1;l++){let s=0;for(let i=0;i<n-l;i++)s+=b[i]*b[i+l];c[l]=s;}
+  let e=0;for(let i=0;i<n;i++)e+=b[i]*b[i];
+  for(let l=minL;l<=maxL;l++){const v=c[l]/e;
+    if(v>.5&&v>prev&&!found){found=true;}
+    if(found&&v>bestC){bestC=v;best=l;}
+    if(found&&v<prev&&bestC>.5)break;prev=v;}
+  if(best<0)return -1;
+  const a=c[best-1],m=c[best],z=c[best+1],sh=(a-z)/(2*(a-2*m+z)||1);   // jemné doladění mezi vzorky
+  return sr/(best+(isFinite(sh)?sh:0));
+}
+function tunerLoop(){
+  if(!mic)return;an.getFloatTimeDomainData(tbuf);const f=detectPitch(tbuf,actx.sampleRate);
+  if(f>0){tHist.push(f);if(tHist.length>4)tHist.shift();
+    const fs=[...tHist].sort((x,y)=>x-y)[Math.floor(tHist.length/2)];
+    const midi=12*Math.log2(fs/440)+69,n=Math.round(midi),cents=Math.round((midi-n)*100);
+    const s=OPEN.reduce((a,m)=>Math.abs(m-midi)<Math.abs(a-midi)?m:a,OPEN[0]),si=OPEN.indexOf(s);
+    const ok=Math.abs(cents)<=5;
+    $('tnNote').textContent=NAMES[st.notation][mod12(n)];
+    $('tnFreq').textContent=`${fs.toFixed(1)} Hz · nejbližší struna: ${6-si}. (${NAMES[st.notation][s%12]})`;
+    $('tnNeedle').style.left=(50+Math.max(-50,Math.min(50,cents)))+'%';$('tnNeedle').classList.toggle('ok',ok);
+    $('tnCents').textContent=ok?'✓ Naladěno':cents<0?`${-cents} centů níž, přitáhni`:`${cents} centů výš, povol`;}
+  tRaf=requestAnimationFrame(tunerLoop);
+}
+$('tnMic').onclick=()=>mic?micStop():micStart();
+$('tnStrings').addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(!b)return;
+  strum([+b.dataset.m],'down',0,1);b.classList.add('hit');setTimeout(()=>b.classList.remove('hit'),400);});
+
+// --- přechody akordů (minuta přechodů)
+let chg={on:false,t0:0,n:0,timer:null};
+function chgPair(){return st.train.a+'|'+st.train.b;}
+function renderChg(){
+  const opt=COMMON.map(([pc,q])=>`<option value="${cKey(pc,q)}">${esc(cName(pc,q))}</option>`).join('');
+  const ok=k=>COMMON.some(([pc,q])=>cKey(pc,q)===k);
+  if(!ok(st.train.a))st.train.a='0:';if(!ok(st.train.b))st.train.b='7:';
+  $('chA').innerHTML=opt;$('chB').innerHTML=opt;$('chA').value=st.train.a;$('chB').value=st.train.b;$('chSec').value=st.train.sec;
+  $('chDg').innerHTML=[st.train.a,st.train.b].map(k=>{const [pc,q]=k.split(':');const f=shape(+pc,quality(q));
+    return`<div><b>${esc(cName(+pc,q))}</b>${f?svg(f):''}</div>`;}).join('');
+  const mine=st.train.chg.filter(r=>r.p===chgPair()&&r.s===st.train.sec),best=mine.length?Math.max(...mine.map(r=>r.n)):null;
+  $('chBest').textContent=best==null?'–':best;
+  if(!chg.on){$('chTime').textContent=st.train.sec;$('chCount').textContent=chg.n||0;}
+  const last=st.train.chg.slice(-8).reverse();
+  $('chHist').innerHTML=last.length?last.map(r=>{const [a,b]=r.p.split('|').map(k=>{const [pc,q]=k.split(':');return cName(+pc,q);});
+    const isBest=st.train.chg.filter(x=>x.p===r.p&&x.s===r.s).every(x=>x.n<=r.n);
+    return`<li><span>${esc(a)} ↔ ${esc(b)} · ${r.s} s</span><span class="${isBest?'best':''}">${r.n}${isBest?' ★':''} · ${new Date(r.d).toLocaleDateString('cs-CZ')}</span></li>`;}).join('')
+    :'<li><span class="jnote">Zatím žádný pokus.</span></li>';
+}
+function chgStart(){audio();drums();chg={on:true,t0:performance.now(),n:0,timer:setInterval(chgTick,100)};
+  click(actx.currentTime+.02,true);$('chBtn').textContent='+1 přehozeno';$('chCount').textContent=0;}
+function chgTick(){const left=st.train.sec-(performance.now()-chg.t0)/1000;
+  if(left<=0){chgStop(true);return;}$('chTime').textContent=Math.ceil(left);}
+function chgStop(done){
+  if(!chg.on)return;clearInterval(chg.timer);chg.on=false;$('chBtn').textContent='▶ Start';
+  if(done){try{click(actx.currentTime+.02,true);click(actx.currentTime+.25,true);}catch(e){}
+    st.train.chg.push({p:chgPair(),s:st.train.sec,n:chg.n,d:Date.now()});if(st.train.chg.length>200)st.train.chg.shift();save();}
+  renderChg();
+}
+$('chBtn').addEventListener('pointerdown',e=>{e.preventDefault();
+  if(!chg.on)chgStart();else{chg.n++;$('chCount').textContent=chg.n;}});
+$('chBtn').addEventListener('click',e=>{if(e.detail!==0)return;if(!chg.on)chgStart();else{chg.n++;$('chCount').textContent=chg.n;}});
+$('chA').onchange=e=>{st.train.a=e.target.value;save();renderChg();};
+$('chB').onchange=e=>{st.train.b=e.target.value;save();renderChg();};
+$('chSec').onchange=e=>{st.train.sec=+e.target.value;save();renderChg();};
+
+// --- sluch: dur/moll a akordy v tónině
+let ear=null;
+const EKEYS=[0,7,2,9,4,5];   // C G D A E F dur
+function renderEar(){
+  const m=st.train.earMode;$('emDm').setAttribute('aria-pressed',m==='dm');$('emKey').setAttribute('aria-pressed',m==='key');
+  $('earInfo').textContent=m==='dm'
+    ?'Zazní jeden akord. Poznej, jestli je durový (veselý, jasný), nebo mollový (smutnější).'
+    :'Nejdřív zazní základní akord tóniny (I), pak hádaný akord. Poznej, který z akordů tóniny to byl.';
+  $('earOk').textContent=st.train.earOk;$('earN').textContent=st.train.earN;$('earBest').textContent=st.train.earBest;
+  $('earStreak').textContent=ear?ear.streak:0;$('earPlay').textContent=ear&&ear.q&&!ear.q.done?'↻ Přehrát znovu':'▶ Nový akord';
+  const A=$('earAns');
+  if(!ear||!ear.q){A.innerHTML='';A.className='earAns';return;}
+  if(m==='dm'){A.className='earAns two';A.innerHTML='<button type="button" data-a="">Dur</button><button type="button" data-a="m">Moll</button>';}
+  else{A.className='earAns';A.innerHTML=MODES.dur.deg.map((d,i)=>`<button type="button" data-a="${i}">${d[2]}<small>${esc(cName((ear.q.key+d[0])%12,d[1]))}</small></button>`).join('');}
+}
+function earSound(){const q=ear.q;audio();
+  if(q.mode==='dm')strum(voicing({pc:q.pc,suf:q.suf,bass:null},0,0),'down',0,1);
+  else{const I={pc:q.key,suf:'',bass:null},d=MODES.dur.deg[q.i];
+    strum(voicing(I,0,0),'down',0,1);
+    setTimeout(()=>{if(ear&&ear.q===q)strum(voicing({pc:(q.key+d[0])%12,suf:d[1],bass:null},0,0),'down',0,1);},1400);}
+}
+function earNew(){
+  ear=ear||{streak:0};const m=st.train.earMode;
+  if(m==='dm'){const pc=Math.floor(Math.random()*12);ear.q={mode:'dm',pc,suf:Math.random()<.5?'':'m'};}
+  else{const key=EKEYS[Math.floor(Math.random()*EKEYS.length)];let i;do{i=Math.floor(Math.random()*6);}while(ear.q&&ear.q.mode==='key'&&ear.q.i===i&&Math.random()<.6);
+    ear.q={mode:'key',key,i};}
+  $('earRes').textContent='';renderEar();earSound();
+}
+$('earPlay').onclick=()=>{if(ear&&ear.q&&!ear.q.done)earSound();else earNew();};
+$('earAns').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b||!ear||!ear.q||ear.q.done)return;
+  const q=ear.q;let good,name;
+  if(q.mode==='dm'){good=b.dataset.a===q.suf;name=cName(q.pc,q.suf)+(q.suf?' (moll)':' (dur)');}
+  else{good=+b.dataset.a===q.i;const d=MODES.dur.deg[q.i];name=d[2]+' = '+cName((q.key+d[0])%12,d[1])+' v tónině '+cName(q.key,'')+' dur';}
+  q.done=true;st.train.earN++;if(good){st.train.earOk++;ear.streak++;st.train.earBest=Math.max(st.train.earBest,ear.streak);}else ear.streak=0;save();
+  renderEar();
+  [...$('earAns').children].forEach(x=>{const v=x.dataset.a,right=q.mode==='dm'?v===q.suf:+v===q.i;if(right)x.classList.add('good');else if(x===b)x.classList.add('bad');});
+  $('earRes').textContent=(good?'✓ Správně! ':'✗ Vedle. ')+'Byl to '+name+'.';
+});
+$('emDm').onclick=()=>{st.train.earMode='dm';ear=null;save();renderEar();$('earRes').textContent='';};
+$('emKey').onclick=()=>{st.train.earMode='key';ear=null;save();renderEar();$('earRes').textContent='';};
+$('earReset').onclick=()=>{st.train.earOk=st.train.earN=st.train.earBest=0;if(ear)ear.streak=0;save();renderEar();};
+
+$('trainBtn').onclick=()=>{show('vTrain');trainTab(st.train.tab);};
+$('tBack').onclick=()=>{renderList();show('vList');};
+$('ttTun').onclick=()=>trainTab('tun');$('ttChg').onclick=()=>trainTab('chg');$('ttEar').onclick=()=>trainTab('ear');
+
+/* ---------- události ---------- */
+$('songs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const pl=st.playlist;
+  if(b.dataset.id)return openSong(b.dataset.id,st.tab==='pl'?'pl':'all');
+  const sw=(i,j)=>{if(j<0||j>=pl.length)return;[pl[i],pl[j]]=[pl[j],pl[i]];save();renderList();};
+  if(b.dataset.up)sw(+b.dataset.up,+b.dataset.up-1);
+  if(b.dataset.down)sw(+b.dataset.down,+b.dataset.down+1);
+  if(b.dataset.rm){pl.splice(+b.dataset.rm,1);save();renderList();}});
+['All','Fav','Pl'].forEach(k=>$('tab'+k).onclick=()=>{st.tab=k.toLowerCase();save();renderList();});
+$('q').addEventListener('input',renderList);
+$('plStart').onclick=()=>{if(st.playlist.length)openSong(st.playlist[0],'pl');};
+$('plClear').onclick=e=>{const b=e.currentTarget;if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Opravdu vyprázdnit?';return;}
+  b.classList.remove('armed');b.textContent='Vyprázdnit';st.playlist=[];save();renderList();};
+$('nCz').onclick=()=>{st.notation='cz';save();renderList();};
+$('nEn').onclick=()=>{st.notation='en';save();renderList();};
+$('newBtn').onclick=()=>openEdit(null);
+$('backBtn').onclick=()=>{renderList();show('vList');};
+$('favBtn').onclick=()=>{cur.fav=!cur.fav;save();renderSong();};
+$('menuBtn').onclick=()=>{const m=$('menu');m.hidden=!m.hidden;$('menuBtn').setAttribute('aria-expanded',!m.hidden);};
+$('plBtn').onclick=()=>{const i=st.playlist.indexOf(cur.id);if(i>=0)st.playlist.splice(i,1);else st.playlist.push(cur.id);save();$('menu').hidden=true;renderSong();};
+$('stripBtn').onclick=()=>{st.showStrip=!st.showStrip;save();$('menu').hidden=true;renderSong();};
+$('editBtn').onclick=()=>openEdit(cur);
+const wrap=v=>v>6?v-12:v<-6?v+12:v;
+$('tUp').onclick=()=>{cur.transpose=wrap((cur.transpose||0)+1);save();renderSong();};
+$('tDown').onclick=()=>{cur.transpose=wrap((cur.transpose||0)-1);save();renderSong();};
+$('cUp').onclick=()=>{cur.capo=Math.min(9,(cur.capo||0)+1);save();renderSong();};
+$('cDown').onclick=()=>{cur.capo=Math.max(0,(cur.capo||0)-1);save();renderSong();};
+$('fUp').onclick=()=>{st.font=Math.min(32,st.font+1);save();renderSong();};
+$('fDown').onclick=()=>{st.font=Math.max(11,st.font-1);save();renderSong();};
+$('sUp').onclick=()=>{cur.speed=Math.min(15,(cur.speed||4)+1);save();renderSong();};
+$('sDown').onclick=()=>{cur.speed=Math.max(1,(cur.speed||4)-1);save();renderSong();};
+$('prevBtn').onclick=()=>step(-1);
+$('nextBtn').onclick=()=>step(1);
+$('play').onclick=()=>playing?stop():start();
+$('sheet').addEventListener('click',e=>{
+  const sp=e.target.closest('.cp');
+  if(sp){playUsed(+sp.dataset.u);sp.classList.add('on');setTimeout(()=>sp.classList.remove('on'),600);return;}  // akord v textu zahraje
+  playing?stop():start();});
+$('strip').addEventListener('click',e=>{const d=e.target.closest('.dg');if(d)playUsed(+d.dataset.u);});
+$('pads').addEventListener('pointerdown',e=>{const b=e.target.closest('.pad');if(!b)return;e.preventDefault();playUsed(+b.dataset.u);});
+$('padsBtn').onclick=()=>{st.showPads=!st.showPads;save();$('menu').hidden=true;renderSong();};
+$('rStyle').innerHTML=Object.entries(STY).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join('');
+$('rPlay').onclick=()=>rhy.on?rhyStop():rhyStart();
+$('rStyle').onchange=e=>{cur.style=e.target.value;save();rhyUI();};
+$('bUp').onclick=()=>{cur.bpm=Math.min(220,bpm()+2);save();rhyUI();};
+$('bDown').onclick=()=>{cur.bpm=Math.max(40,bpm()-2);save();rhyUI();};
+$('autoBtn').onclick=()=>{st.auto=!st.auto;save();renderSong();};
+$('bassBtn').onclick=()=>{st.bass=!st.bass;save();rhyUI();};
+$('bVol').addEventListener('input',e=>{st.bvol=+e.target.value;save();});
+$('dVol').addEventListener('input',e=>{st.dvol=+e.target.value;if(dbus)dbus.gain.value=st.dvol;save();});
+$('soundBtn').onclick=()=>{st.sound=st.sound==='guitar'?'organ':'guitar';silence();save();renderSong();};
+$('strumBtn').onclick=()=>{st.strum=st.strum==='down'?'up':st.strum==='up'?'alt':'down';altUp=false;save();renderSong();};
+$('volIn').addEventListener('input',e=>{st.vol=+e.target.value;if(master)master.gain.value=st.vol;save();});
+// klávesnice v PC: 1–9 zahraje 1.–9. akord písně
+document.addEventListener('keydown',e=>{
+  if(($('vSong').hidden&&$('vJam').hidden)||e.repeat||e.ctrlKey||e.altKey||e.metaKey||/INPUT|TEXTAREA/.test(document.activeElement.tagName))return;
+  if(e.key===' '){e.preventDefault();rhy.on?rhyStop():rhyStart();return;}
+  const n=parseInt(e.key,10);if(n>=1&&n<=9&&usedNow[n-1]){e.preventDefault();playUsed(n-1);}});
+$('cancelBtn').onclick=()=>{if(cur)openSong(cur.id);else{renderList();show('vList');}};
+$('form').addEventListener('submit',e=>{e.preventDefault();const title=$('fTitle').value.trim()||'Bez názvu',text=$('fText').value;
+  if(cur){cur.title=title;cur.text=text;}else{cur={id:'p'+Date.now(),title,text,transpose:0,capo:0,speed:4,fav:false};st.songs.push(cur);}
+  save();openSong(cur.id);});
+$('delBtn').onclick=e=>{const b=e.currentTarget;if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Opravdu smazat? Klepni znovu';return;}
+  st.playlist=st.playlist.filter(id=>id!==cur.id);st.songs=st.songs.filter(s=>s!==cur);cur=null;save();renderList();show('vList');};
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&playing)start();});
+
+renderList();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+
+</body>
+</html>
