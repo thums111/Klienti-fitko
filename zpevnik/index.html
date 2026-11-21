@@ -220,6 +220,27 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 .score{display:flex;justify-content:center;gap:24px;font-family:var(--mono);color:var(--muted);font-size:.9rem}
 .score b{color:var(--ink)}
 
+/* v5.1: video z YouTube */
+.yt{display:flex;flex-direction:column;gap:6px;padding-bottom:8px}
+.ytwrap{width:min(100%,calc(22vh*16/9));aspect-ratio:16/9;margin-inline:auto;border-radius:10px;overflow:hidden;background:#000;max-width:100%}
+.ytwrap iframe,.ytwrap>div{width:100%;height:100%;border:0;display:block}
+.yt.small .ytwrap{width:min(100%,calc(13vh*16/9))}
+.ynow{display:flex;align-items:center;gap:10px;min-height:40px;font-size:.85rem;color:var(--muted)}
+.ynow b{font-family:var(--mono);font-size:1.25rem;color:var(--chord)}
+.ynow .nx b{font-size:1rem;color:var(--ink)}
+.ynow svg{width:38px;height:auto}
+.yrow{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.yrow button{min-height:34px;padding:4px 9px;font-size:.85rem}
+.yrow button[aria-pressed="true"]{background:var(--chord-bg);border-color:var(--chord);color:var(--chord);font-weight:600}
+.yrow .sp{flex:1}
+.ylink{display:flex;gap:6px}
+.ylink input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.ymsg{font-size:.82rem;color:var(--muted);margin:0}
+.ymsg.warn{color:var(--danger)}
+.ytap{min-height:64px;font-size:1.1rem;font-weight:700;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.cp.now{background:var(--star);color:var(--ink);border-radius:4px;box-shadow:0 0 0 2px var(--star)}
+.cp.done{opacity:.55}
+
 /* edit */
 .form{display:flex;flex-direction:column;gap:12px;padding-block:14px 40px}
 .form input,.form textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
@@ -235,7 +256,7 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 
 <!-- ===== Seznam ===== -->
 <section id="vList">
-  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.0</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
+  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.1</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
   <div class="tools">
     <button id="jamBtn">🎸 Jamování</button>
     <button id="trainBtn">🎯 Trenažér</button>
@@ -296,8 +317,10 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
       <button id="autoBtn" type="button"></button>
       <button id="bassBtn" type="button"></button>
       <button id="fromBtn" type="button" aria-expanded="false">🎯 Od akordu</button>
+      <button id="ytBtn" type="button" aria-expanded="false">📺 Video</button>
     </div>
     <div class="from" id="fromPanel" hidden></div>
+    <div class="yt" id="ytPanel" hidden></div>
     <div class="strip" id="strip"></div>
     <div class="capnote" id="capNote" hidden></div>
   </div>
@@ -720,7 +743,7 @@ function rhyUI(){
 
 /* ---------- seznam ---------- */
 let cur=null,ctx='all';
-function show(v){['vList','vSong','vEdit','vJam','vTrain'].forEach(id=>$(id).hidden=id!==v);window.scrollTo(0,0);if(v!=='vSong')stop();if(v!=='vTrain')trainStop();rhyStop();silence();$('menu').hidden=true;$('fromPanel').hidden=true;}
+function show(v){['vList','vSong','vEdit','vJam','vTrain'].forEach(id=>$(id).hidden=id!==v);window.scrollTo(0,0);if(v!=='vSong')stop();if(v!=='vTrain')trainStop();rhyStop();silence();$('menu').hidden=true;$('fromPanel').hidden=true;if(v!=='vSong'||!cur||cur.id!==yt.song)ytClose();}
 function firstChords(t){const set=[];for(const l of parseSong(t))if(l.k==='ch')for(const it of l.items)if(it.c){const n=nameOf(it.c,0);if(!set.includes(n))set.push(n);}return set.slice(0,8).join(' ');}
 function renderList(){
   st.playlist=st.playlist.filter(id=>byId(id));
@@ -745,7 +768,7 @@ function renderList(){
 
 /* ---------- píseň ---------- */
 function renderSong(){
-  const s=cur,tr=s.transpose||0,capo=s.capo||0,t=tr-capo,lines=parseSong(s.text),used=[];
+  const s=cur,tr=s.transpose||0,capo=s.capo||0,t=tr-capo,lines=parseSong(s.text),used=[];let kk=0;ytOcc=[];
   $('songTitle').textContent=s.title;
   $('favBtn').textContent=s.fav?'★':'☆';$('favBtn').setAttribute('aria-pressed',!!s.fav);
   $('tVal').innerHTML=`<small>Tónina</small>${tr>0?'+'+tr:tr}`;
@@ -761,13 +784,13 @@ function renderSong(){
     let str='',cursor=0;
     for(const it of l.items){let txt,html;
       if(it.c){txt=nameOf(it.c,t);let ui=used.findIndex(u=>u.n===txt);if(ui<0){used.push({n:txt,c:it.c});ui=used.length-1;}
-        html=`<span class="cp" data-u="${ui}">${esc(txt)}</span>`;}
+        ytOcc.push(ui);html=`<span class="cp" data-u="${ui}" data-k="${kk++}">${esc(txt)}</span>`;}
       else{txt=it.raw;html=esc(txt);}
       const col=Math.max(it.col,cursor);str+=' '.repeat(col-cursor)+html+' ';cursor=col+txt.length+1;}
     return`<div class="ln ch">${str.replace(/ $/,'')}</div>`;
   }).join('')+'<p class="hint">Klepni na akord a zazní. Varhany drží tón do dalšího akordu, opětovné klepnutí je ztiší. S rytmem kytara brnká sama, ty jen přepínáš akordy. Klepnutím na text spustíš nebo zastavíš posouvání.</p>';
-  usedNow=used;
-  $('strip').hidden=!st.showStrip||!used.length;
+  usedNow=used;ytLastK=-2;
+  $('strip').hidden=!st.showStrip||!used.length||!$('ytPanel').hidden;
   $('strip').innerHTML=used.map((u,i)=>{const f=shape((u.c.pc+t+120)%12,quality(u.c.suf));
     return`<div class="dg" data-u="${i}"><b>${esc(u.n)}</b>${f?svg(f):'<span class="na">bez hmatu</span>'}</div>`;}).join('');
   $('pads').hidden=!st.showPads||!used.length;
@@ -818,7 +841,7 @@ $('impFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new Fil
       for(const s of d.songs){if(!s||typeof s.text!=='string')continue;
         if(st.songs.some(x=>x.title===s.title&&x.text===s.text))continue;
         const id=byId(s.id)?'p'+Date.now()+'_'+n:s.id||('p'+Date.now()+'_'+n);
-        st.songs.push({id,title:s.title||'Bez názvu',text:s.text,transpose:s.transpose||0,capo:s.capo||0,speed:s.speed||4,fav:!!s.fav,style:s.style,bpm:s.bpm});n++;}
+        st.songs.push({id,title:s.title||'Bez názvu',text:s.text,transpose:s.transpose||0,capo:s.capo||0,speed:s.speed||4,fav:!!s.fav,style:s.style,bpm:s.bpm,yt:s.yt,sync:s.sync});n++;}
       save();renderList();$('bStatus').textContent=n?`Načteno ${n} ${n===1?'nová píseň':n<5?'nové písně':'nových písní'}.`:'Všechny písně ze zálohy už ve zpěvníku jsou.';
     }catch(err){$('bStatus').textContent='Tohle není soubor se zálohou zpěvníku.';}
     e.target.value='';};
@@ -1087,6 +1110,136 @@ $('trainBtn').onclick=()=>{show('vTrain');trainTab(st.train.tab);};
 $('tBack').onclick=()=>{renderList();show('vList');};
 $('ttTun').onclick=()=>trainTab('tun');$('ttChg').onclick=()=>trainTab('chg');$('ttEar').onclick=()=>trainTab('ear');
 
+/* ---------- video z YouTube: akordy pod písní ---------- */
+// Video hraje přes oficiální přehrávač YouTube. Akordy se rozsvěcují podle časování,
+// které si jednou nahraješ ťukáním při každé změně akordu.
+let yt={song:null,player:null,ready:false,timer:null,rec:null,a:null,b:null,rate:1,small:false},ytOcc=[],ytLastK=-2,ytApi=null;
+function ytId(u){u=(u||'').trim();if(/^[\w-]{11}$/.test(u))return u;
+  const m=u.match(/(?:[?&]v=|youtu\.be\/|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/);return m?m[1]:null;}
+function ytLoadApi(){
+  if(window.YT&&window.YT.Player)return Promise.resolve();
+  if(!ytApi)ytApi=new Promise((res,rej)=>{window.onYouTubeIframeAPIReady=res;
+    const sc=document.createElement('script');sc.src='https://www.youtube.com/iframe_api';sc.onerror=rej;document.head.appendChild(sc);
+    setTimeout(()=>rej(new Error('timeout')),15000);});
+  return ytApi;
+}
+const fmt=t=>{t=Math.max(0,t);return Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');};
+function ytT(){try{return yt.player&&yt.ready?yt.player.getCurrentTime():0;}catch(e){return 0;}}
+function ytRender(){
+  const P=$('ytPanel');if(P.hidden)return;P.classList.toggle('small',yt.small);
+  if(!cur.yt){
+    P.innerHTML=`<p class="ymsg">Vlož odkaz na video s touto písní. Na YouTube dej <b>Sdílet → Kopírovat odkaz</b> a sem ho vlož.</p>
+      <div class="ylink"><input id="ytUrl" type="url" inputmode="url" placeholder="https://youtu.be/…" aria-label="Odkaz na YouTube"><button class="primary" id="ytSave" type="button">Uložit</button></div>
+      <p class="ymsg" id="ytErr"></p>`;
+    $('ytSave').onclick=()=>{const id=ytId($('ytUrl').value);if(!id){$('ytErr').textContent='Tohle nevypadá jako odkaz na YouTube. Zkopíruj ho přes Sdílet → Kopírovat odkaz.';$('ytErr').className='ymsg warn';return;}
+      cur.yt=id;cur.sync=[];save();ytRender();};
+    return;
+  }
+  if(!P.querySelector('.ytwrap')){
+    P.innerHTML=`<div class="ytwrap"><div id="ytBox"></div></div><div class="ynow" id="yNow"></div><div id="yCtl"></div><p class="ymsg" id="ytMsg"></p>`;
+    ytMount();
+  }
+  ytCtl();
+}
+function ytMount(){
+  $('ytMsg').textContent='Načítám video…';
+  ytLoadApi().then(()=>{
+    if($('ytPanel').hidden||!document.getElementById('ytBox'))return;
+    yt.song=cur.id;yt.ready=false;
+    yt.player=new YT.Player('ytBox',{videoId:cur.yt,playerVars:{playsinline:1,rel:0,modestbranding:1},
+      events:{onReady:()=>{yt.ready=true;try{yt.player.setPlaybackRate(yt.rate);}catch(e){}$('ytMsg').textContent=ytHint();},
+        onError:e=>{$('ytMsg').className='ymsg warn';$('ytMsg').textContent=(e.data===101||e.data===150)
+          ?'Autor tohoto videa nepovolil přehrávání mimo YouTube. Najdi jinou verzi písně a dej Změnit video.'
+          :'Video se nepodařilo přehrát. Zkontroluj odkaz nebo připojení k internetu.';}}});
+    clearInterval(yt.timer);yt.timer=setInterval(ytTick,100);
+  }).catch(()=>{$('ytMsg').className='ymsg warn';$('ytMsg').textContent='Přehrávač YouTube se nenačetl. Video potřebuje internet a funguje jen v appce z GitHubu.';});
+}
+function ytHint(){
+  const n=(cur.sync||[]).filter(x=>x!=null).length;
+  let h=!n?'Akordy zatím nejsou načasované. Dej ⏺ Časovat a při každé změně akordu ťukni.'
+    :n<ytOcc.length?`Načasováno ${n} z ${ytOcc.length} akordů. Klepnutím na akord v textu skočíš ve videu na jeho místo.`
+    :'Akordy jsou načasované. Klepnutím na akord v textu skočíš ve videu na jeho místo.';
+  if(cur.transpose)h+=' Pozor: máš posunutou tóninu, video hraje v původní.';
+  return h;
+}
+function ytCtl(){
+  const C=$('yCtl');if(!C)return;
+  if(yt.rec){
+    const k=yt.rec.k,nx=ytOcc[k]!=null?usedNow[ytOcc[k]].n:null;
+    C.innerHTML=`<div class="yrow" style="flex-direction:column;align-items:stretch">
+      <button class="primary ytap" id="yTap" type="button">${nx?`👆 Teď! (akord ${k+1}/${ytOcc.length}: ${esc(nx)})`:'Hotovo, všechny akordy načasované'}</button>
+      <div class="yrow"><button id="yUndo" type="button">↶ Zpět o akord</button><span class="sp"></span><button class="primary" id="yDone" type="button">✓ Uložit časování</button></div></div>`;
+    $('yTap').addEventListener('pointerdown',e=>{e.preventDefault();ytMark(yt.rec.k);});
+    $('yUndo').onclick=()=>{if(yt.rec.k>0){yt.rec.k--;cur.sync[yt.rec.k]=null;ytCtl();ytPaint(true);}};
+    $('yDone').onclick=()=>{yt.rec=null;save();ytCtl();ytPaint(true);$('ytMsg').textContent=ytHint();};
+    return;
+  }
+  const r=v=>`aria-pressed="${yt.rate===v}"`;
+  C.innerHTML=`<div class="yrow">
+    <button data-r="0.5" ${r(.5)} type="button">50 %</button><button data-r="0.75" ${r(.75)} type="button">75 %</button><button data-r="1" ${r(1)} type="button">100 %</button>
+    <button id="yA" type="button" aria-pressed="${yt.a!=null}">A${yt.a!=null?' '+fmt(yt.a):''}</button><button id="yB" type="button" aria-pressed="${yt.b!=null}">B${yt.b!=null?' '+fmt(yt.b):''}</button>
+    ${yt.a!=null||yt.b!=null?'<button id="yAB" type="button" aria-label="Zrušit opakování">✕</button>':''}
+    <span class="sp"></span>
+    <button id="yRec" type="button">⏺ Časovat</button><button id="ySize" type="button">${yt.small?'Větší':'Menší'}</button><button id="yChg" type="button">Změnit video</button></div>`;
+  C.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{yt.rate=+b.dataset.r;try{yt.player.setPlaybackRate(yt.rate);}catch(e){}ytCtl();});
+  $('yA').onclick=()=>{yt.a=ytT();if(yt.b!=null&&yt.b<=yt.a)yt.b=null;ytCtl();};
+  $('yB').onclick=()=>{const t=ytT();if(yt.a==null||t<=yt.a)return;yt.b=t;try{yt.player.seekTo(yt.a,true);}catch(e){}ytCtl();};
+  if($('yAB'))$('yAB').onclick=()=>{yt.a=yt.b=null;ytCtl();};
+  $('ySize').onclick=()=>{yt.small=!yt.small;ytRender();};
+  $('yChg').onclick=()=>{ytClose();cur.yt=null;cur.sync=[];save();$('ytPanel').hidden=false;ytRender();};
+  $('yRec').onclick=e=>{const b=e.currentTarget;
+    if((cur.sync||[]).some(x=>x!=null)&&!b.classList.contains('danger')){b.classList.add('danger');b.textContent='Přepsat časování? Klepni znovu';return;}
+    cur.sync=[];yt.rec={k:0};yt.a=yt.b=null;try{yt.player.seekTo(0,true);yt.player.playVideo();}catch(e){}
+    $('ytMsg').textContent='Video běží od začátku. Ťukni na velké tlačítko vždy, když zazní nový akord. Spletl ses? Klepni v textu na správný akord.';
+    ytCtl();ytPaint(true);};
+}
+function ytMark(k){
+  if(!yt.rec||k==null||k>=ytOcc.length)return;
+  cur.sync=cur.sync||[];cur.sync[k]=Math.max(0,ytT()-.12);   // odečtená chvilka za reakci
+  yt.rec.k=k+1;save();ytCtl();ytPaint(true);
+  if(yt.rec.k>=ytOcc.length){yt.rec=null;ytCtl();$('ytMsg').textContent='✓ '+ytHint();}
+}
+// klepnutí na akord v textu: při časování ho načasuje, jinak ve videu skočí na jeho místo
+function ytChordTap(k){
+  if($('ytPanel').hidden||!cur.yt||!yt.player)return false;
+  if(yt.rec){ytMark(k);return true;}
+  const t=(cur.sync||[])[k];if(t==null)return false;
+  try{yt.player.seekTo(t,true);yt.player.playVideo();}catch(e){}ytLastK=-2;return true;
+}
+function ytCurK(t){const sy=cur.sync||[];let k=-1;for(let i=0;i<sy.length;i++)if(sy[i]!=null&&sy[i]<=t+.05)k=i;return k;}
+function ytPaint(force){
+  if(!cur||$('ytPanel').hidden)return;
+  const t=ytT(),k=yt.rec?yt.rec.k-1:ytCurK(t);
+  if(k===ytLastK&&!force)return;ytLastK=k;
+  document.querySelectorAll('#sheet .cp.now,#sheet .cp.done').forEach(x=>x.classList.remove('now','done'));
+  if(yt.rec)document.querySelectorAll('#sheet .cp').forEach(x=>{if(+x.dataset.k<yt.rec.k)x.classList.add('done');});
+  const el=k>=0?document.querySelector(`#sheet .cp[data-k="${k}"]`):null;
+  if(el){el.classList.add('now');
+    const top=document.querySelector('#vSong .top').getBoundingClientRect().bottom,bar=document.querySelector('#vSong .bar').getBoundingClientRect().top,r=el.getBoundingClientRect();
+    if(r.top<top+8||r.bottom>bar-40)window.scrollBy({top:r.top-top-40,behavior:'smooth'});}
+  const N=$('yNow');if(!N)return;
+  const u=k>=0?usedNow[ytOcc[k]]:null,nu=ytOcc[k+1]!=null?usedNow[ytOcc[k+1]]:null;
+  const f=u?shape(mod12(u.c.pc+(cur.transpose||0)-(cur.capo||0)),quality(u.c.suf)):null;
+  N.innerHTML=u?`${f?svg(f):''}<span>Teď <b>${esc(u.n)}</b></span>${nu?`<span class="nx">· další <b>${esc(nu.n)}</b></span>`:''}`
+    :(cur.sync||[]).some(x=>x!=null)?`<span>Za chvíli: <b>${esc(usedNow[ytOcc[0]]?usedNow[ytOcc[0]].n:'')}</b></span>`:'';
+}
+function ytTick(){
+  if(!yt.player||!yt.ready)return;
+  if(yt.a!=null&&yt.b!=null&&ytT()>=yt.b){try{yt.player.seekTo(yt.a,true);}catch(e){}}
+  ytPaint(false);
+}
+function ytClose(){
+  clearInterval(yt.timer);yt.timer=null;try{yt.player&&yt.player.destroy();}catch(e){}
+  yt.player=null;yt.ready=false;yt.song=null;yt.rec=null;yt.a=yt.b=null;
+  const P=$('ytPanel');P.innerHTML='';P.hidden=true;$('ytBtn').setAttribute('aria-expanded','false');
+  document.querySelectorAll('#sheet .cp.now,#sheet .cp.done').forEach(x=>x.classList.remove('now','done'));
+}
+$('ytBtn').onclick=()=>{
+  if(!$('ytPanel').hidden){ytClose();renderSong();return;}
+  $('ytPanel').hidden=false;$('ytBtn').setAttribute('aria-expanded','true');$('fromPanel').hidden=true;
+  renderSong();ytRender();
+};
+
 /* ---------- události ---------- */
 $('songs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const pl=st.playlist;
   if(b.dataset.id)return openSong(b.dataset.id,st.tab==='pl'?'pl':'all');
@@ -1122,6 +1275,7 @@ $('nextBtn').onclick=()=>step(1);
 $('play').onclick=()=>playing?stop():start();
 $('sheet').addEventListener('click',e=>{
   const sp=e.target.closest('.cp');
+  if(sp&&ytChordTap(+sp.dataset.k))return;
   if(sp){playUsed(+sp.dataset.u);sp.classList.add('on');setTimeout(()=>sp.classList.remove('on'),600);return;}  // akord v textu zahraje
   playing?stop():start();});
 $('strip').addEventListener('click',e=>{const d=e.target.closest('.dg');if(d)playUsed(+d.dataset.u);});
