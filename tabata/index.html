@@ -250,7 +250,7 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA <span class="tw">TRENÉR</span> <small>v1.8</small></h1>
+    <h1>TABATA <span class="tw">TRENÉR</span> <small>v1.9</small></h1>
     <button class="hbtn" id="btnSett" title="Ukázat nastavení">⚙️</button>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
@@ -316,7 +316,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v1.8";
+const VERSION="v1.9";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -410,9 +410,11 @@ function speakRaw(t,delay){
     }, Math.max(delay||0, busy?150:0));
   }catch(e){}
 }
-function say(t){
+/* hlas začne až po dozvění gongu, jinak gong přehluší první písmena */
+const GONG_MS={work:750,rest:700,setRest:700,prep:700,done:1250};
+function say(t,type){
   if(!cfg.sound||!cfg.voice) return;
-  speakRaw(t,0);
+  speakRaw(t,GONG_MS[type]||0);
 }
 function soundUI(){ $("btnSound").textContent=cfg.sound?"🔊":"🔇"; $("btnSound").classList.toggle("off",!cfg.sound); }
 $("btnSound").onclick=()=>{ cfg.sound=!cfg.sound; save(); soundUI(); if(cfg.sound) tone(660,.15); };
@@ -511,11 +513,11 @@ function enterSeg(){
   const seg=plan[idx]; lastSec=null;
   if(!seg){ finish(); return; }
   gong(seg.type);
-  if(seg.type==="work") say(seg.round===1&&seg.set>1?word("newSet",seg.set):word("work"));
-  else say(word(seg.type));
+  if(seg.type==="work") say(seg.round===1&&seg.set>1?word("newSet",seg.set):word("work"),"work");
+  else say(word(seg.type),seg.type);
 }
 function nextSeg(now){ idx++; elapsedInSeg=0; segStart=now??performance.now(); enterSeg(); }
-function finish(){ running=false; cancelAnimationFrame(raf); gong("done"); say(word("done")); releaseWake(); render(); }
+function finish(){ running=false; cancelAnimationFrame(raf); gong("done"); say(word("done"),"done"); releaseWake(); render(); }
 function start(){
   ac(); if(idx>=plan.length) reset();
   running=true; const fresh=elapsedInSeg===0;
