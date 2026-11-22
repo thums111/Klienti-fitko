@@ -191,7 +191,7 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA TRENÉR <small>v1.5</small></h1>
+    <h1>TABATA TRENÉR <small>v1.6</small></h1>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
   </div>
@@ -244,7 +244,7 @@
       <details class="words" id="words">
         <summary>🗣️ Vlastní slova hlasových pokynů</summary>
         <div id="wordRows"></div>
-        <div class="whint">Prázdné políčko = výchozí slovo. ▶ přehraje, jak to zní. U „Další série“ se místo {n} řekne číslo série.</div>
+        <div class="whint">Prázdné políčko = výchozí slovo. ▶ přehraje, jak to zní. U „Další série“ se místo (n) řekne číslo série – funguje i [n] nebo {n}.</div>
         <button class="wreset" id="wordsReset">↺ Vrátit výchozí slova</button>
       </details>
       <div class="lockmsg">Nastavení můžeš měnit po pozastavení tréninku.</div>
@@ -254,7 +254,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v1.5";
+const VERSION="v1.6";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -319,11 +319,11 @@ const WORDS=[
   ["work","Práce","--green","Práce!"],
   ["rest","Pauza","--red","Pauza"],
   ["setRest","Mezi sériemi","--blue","Pauza mezi sériemi"],
-  ["newSet","Další série","--purple","Série {n}. Práce!"],
+  ["newSet","Další série","--purple","Série (n). Práce!"],
   ["done","Konec","--teal","Hotovo, skvělá práce!"],
 ];
 cfg.words=cfg.words||{};
-const word=(k,n)=>((cfg.words[k]||"").trim()||WORDS.find(w=>w[0]===k)[3]).replace(/\{n\}/g,n??"");
+const word=(k,n)=>((cfg.words[k]||"").trim()||WORDS.find(w=>w[0]===k)[3]).replace(/[({\[<]\s*n\s*[)}\]>]/gi,n??"");
 /* zkouška slova v nastavení: nejdřív probudit zvuk, pak mluvit */
 function sayNow(t){ wakeAudio(); speakRaw(t,350); }
 try{ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>{}; }catch(e){}
