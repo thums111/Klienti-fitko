@@ -101,6 +101,14 @@
   .opts input{width:20px;height:20px;accent-color:var(--green)}
   .total{margin-left:auto;color:var(--muted)}
   .total b{color:var(--text)}
+  .words{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+  .words summary{cursor:pointer;font-weight:700;color:var(--teal);font-size:16px;padding:4px 0}
+  .wrow{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .wrow span{width:7.5em;flex:none;font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+  .wrow input{flex:1;min-width:0;background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit;font-size:16px}
+  .wrow button{background:var(--btn);border-radius:12px;width:44px;height:44px;flex:none;font-size:16px}
+  .whint{color:var(--muted);font-size:13px;margin-top:8px}
+  .wreset{margin-top:10px;background:transparent;border:1px solid var(--line)!important;color:var(--muted);border-radius:12px;padding:8px 14px;font-size:14px}
   .locked .grid,.locked .chips{opacity:.45;pointer-events:none}
   .lockmsg{display:none;color:var(--orange);font-size:14px;margin-top:10px}
   .locked .lockmsg{display:block}
@@ -183,7 +191,7 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA TRENÉR <small>v1.3</small></h1>
+    <h1>TABATA TRENÉR <small>v1.4</small></h1>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
   </div>
@@ -233,6 +241,12 @@
         <label><input type="checkbox" id="optVoice"> Hlasové pokyny</label>
         <div class="total">Celkem: <b id="total">0:00</b></div>
       </div>
+      <details class="words" id="words">
+        <summary>🗣️ Vlastní slova hlasových pokynů</summary>
+        <div id="wordRows"></div>
+        <div class="whint">Prázdné políčko = výchozí slovo. ▶ přehraje, jak to zní. U „Další série“ se místo {n} řekne číslo série.</div>
+        <button class="wreset" id="wordsReset">↺ Vrátit výchozí slova</button>
+      </details>
       <div class="lockmsg">Nastavení můžeš měnit po pozastavení tréninku.</div>
     </div>
   </div>
@@ -240,7 +254,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v1.3";
+const VERSION="v1.4";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -300,6 +314,17 @@ function gong(type){
   else if(type==="done"){[523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,.45,.35,"triangle"),i*170));}
   else tone(440,.6,.4,"triangle");
 }
+const WORDS=[
+  ["prep","Příprava","--orange","Připrav se"],
+  ["work","Práce","--green","Práce!"],
+  ["rest","Pauza","--red","Pauza"],
+  ["setRest","Mezi sériemi","--blue","Pauza mezi sériemi"],
+  ["newSet","Další série","--purple","Série {n}. Práce!"],
+  ["done","Konec","--teal","Hotovo, skvělá práce!"],
+];
+cfg.words=cfg.words||{};
+const word=(k,n)=>((cfg.words[k]||"").trim()||WORDS.find(w=>w[0]===k)[3]).replace(/\{n\}/g,n??"");
+function sayNow(t){ const keep=cfg.voice; cfg.voice=true; const snd=cfg.sound; cfg.sound=true; say(t); cfg.voice=keep; cfg.sound=snd; }
 function say(t){
   if(!cfg.sound||!cfg.voice||!("speechSynthesis" in window)) return;
   try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="cs-CZ";u.rate=1.05;speechSynthesis.speak(u);}catch(e){}
@@ -401,13 +426,11 @@ function enterSeg(){
   const seg=plan[idx]; lastSec=null;
   if(!seg){ finish(); return; }
   gong(seg.type);
-  if(seg.type==="work") say(seg.round===1&&seg.set>1?`Série ${seg.set}. Práce!`:"Práce!");
-  else if(seg.type==="rest") say("Pauza");
-  else if(seg.type==="setRest") say("Pauza mezi sériemi");
-  else say("Připrav se");
+  if(seg.type==="work") say(seg.round===1&&seg.set>1?word("newSet",seg.set):word("work"));
+  else say(word(seg.type));
 }
 function nextSeg(now){ idx++; elapsedInSeg=0; segStart=now??performance.now(); enterSeg(); }
-function finish(){ running=false; cancelAnimationFrame(raf); gong("done"); say("Hotovo, skvělá práce!"); releaseWake(); render(); }
+function finish(){ running=false; cancelAnimationFrame(raf); gong("done"); say(word("done")); releaseWake(); render(); }
 function start(){
   ac(); if(idx>=plan.length) reset();
   running=true; const fresh=elapsedInSeg===0;
@@ -454,6 +477,15 @@ function buildSettings(){
     const f=FIELDS.find(x=>x[0]===b.dataset.k);
     cfg[f[0]]=Math.min(f[4],Math.max(f[3],cfg[f[0]]+parseInt(b.dataset.d))); changed();
   });
+  $("wordRows").innerHTML=WORDS.map(([k,l,c,d])=>`
+    <div class="wrow"><span style="color:var(${c})">${l}</span>
+    <input id="w_${k}" placeholder="${d}" maxlength="80"><button data-w="${k}" title="Přehrát">▶</button></div>`).join("");
+  WORDS.forEach(([k])=>{
+    const i=$("w_"+k); i.value=cfg.words[k]||"";
+    i.oninput=()=>{ cfg.words[k]=i.value; save(); };
+  });
+  $("wordRows").querySelectorAll("button").forEach(b=>b.onclick=()=>sayNow(word(b.dataset.w,2)));
+  $("wordsReset").onclick=()=>{ cfg.words={}; save(); WORDS.forEach(([k])=>$("w_"+k).value=""); };
   $("optVoice").checked=cfg.voice;
   $("optVoice").onchange=()=>{ cfg.voice=$("optVoice").checked; save(); };
 }
