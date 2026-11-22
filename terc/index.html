@@ -28,6 +28,16 @@
   #cisloKola { flex:1; min-width:0; text-align:center; font-size:1.35em; font-weight:800;
                color:var(--acc); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
   .ver { font-size:.7em; color:var(--muted); font-weight:normal; }
+
+  /* ===== Rádio (malý panel pod hlavičkou vpravo) ===== */
+  #bRadio.hraje { background:#c8302c; color:#fff; }
+  #radioPanel { position:absolute; top:100%; right:.7em; z-index:30; margin-top:.3em;
+                background:#262d36f2; border-radius:12px; padding:.35em .7em;
+                display:flex; align-items:center; gap:.6em; box-shadow:0 4px 14px #000a; font-size:.9em; }
+  #radioPanel[hidden] { display:none; }
+  #radioPlay { background:#c8302c; color:#fff; font-weight:bold; padding:.35em .9em; }
+  #radioStav { min-width:8em; white-space:nowrap; }
+  #radioHlasitost { width:8em; accent-color:#c8302c; }
   header button { padding:.4em .7em; }
 
   .obrazovka { display:none; }
@@ -201,14 +211,21 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.20</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.21</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
   <button id="bUkoncit" style="display:none" title="Ukončit trénink teď (výsledek se nezapočítá do rekordů)">🏁 Konec</button>
   <button id="bZpet" title="Vrátit poslední krok">↶ Zpět</button>
+  <button id="bRadio" title="Rádio Evropa 2 (klávesa R)">📻</button>
   <button id="bCela" title="Celá obrazovka (klávesa F)">⛶</button>
   <button id="bMenu" title="Nastavení hry">☰ Menu</button>
+  <!-- Rádio: malý panel pod hlavičkou -->
+  <div id="radioPanel" hidden>
+    <button id="radioPlay">▶</button>
+    <span id="radioStav">⏹ Evropa 2</span>
+    <input id="radioHlasitost" type="range" min="0" max="100" value="70" title="Hlasitost">
+  </div>
 </header>
 
 <!-- ===================== NASTAVENÍ ===================== -->
@@ -328,7 +345,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.18';
+const VERZE = '1.21';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -1596,6 +1613,8 @@ document.addEventListener('keydown', e => {
     zpet();
   } else if (k === 'f' || k === 'F') {
     prepniCelou();
+  } else if (k === 'r' || k === 'R') {
+    radioChce ? radioZastav() : radioPust();
   } else if (k === 'm' || k === 'M') {
     el('bMimo').click();
   }
@@ -1620,6 +1639,62 @@ el('bInstal').onclick = async () => {
   el('bInstal').style.display = 'none';
 };
 window.addEventListener('appinstalled', () => { el('bInstal').style.display = 'none'; });
+
+// =====================================================================
+//  📻 RÁDIO EVROPA 2  (stejné jako v ostatních appkách)
+//  Internetové rádio = obyčejný zvukový proud (MP3), přehraje ho Audio.
+// =====================================================================
+const STANICE = [
+  { nazev: 'Evropa 2', proudy: ['https://ice.actve.net/fm-evropa2-128',
+                                'https://ice.actve.net/web-e2-csweb'] },
+];
+const radio = new Audio();
+radio.preload = 'none';
+let radioChce = false;        // uživatel chce, aby hrálo
+let radioProud = 0, radioPokusy = 0;
+const radioHlasitost = el('radioHlasitost');
+try { const u = localStorage.getItem('radioHlasitost'); if (u) radioHlasitost.value = u; } catch (e) {}
+radio.volume = radioHlasitost.value / 100;
+
+function radioStav(t) { el('radioStav').textContent = t; }
+function radioTlacitka(hraje) {
+  el('bRadio').classList.toggle('hraje', hraje);
+  el('radioPlay').textContent = hraje ? '⏸' : '▶';
+}
+function radioPust() {
+  radioChce = true;
+  const st = STANICE[0];
+  radio.src = st.proudy[radioProud] + '?t=' + Date.now();   // ?t= ať se nevezme stará mezipaměť
+  radioStav('Ladím ' + st.nazev + '…');
+  radioTlacitka(true);
+  radio.play().catch(radioChyba);
+}
+function radioZastav(text) {
+  radioChce = false;
+  radio.pause();
+  radio.removeAttribute('src'); radio.load();               // úplně odpojit proud – nežere data
+  radioStav(text || '⏹ ' + STANICE[0].nazev);
+  radioTlacitka(false);
+}
+// Výpadek: zkusíme záložní adresu, pak znovu po 5 s. Po 6 neúspěších to vzdáme.
+function radioChyba() {
+  if (!radioChce) return;
+  radioPokusy++;
+  if (radioPokusy > 6) { radioPokusy = 0; radioZastav('Rádio nejde naladit – je internet?'); return; }
+  radioProud = (radioProud + 1) % STANICE[0].proudy.length;
+  radioStav('Spojení vypadlo, zkouším znovu…');
+  setTimeout(() => { if (radioChce) radioPust(); }, radioPokusy <= 2 ? 300 : 5000);
+}
+radio.addEventListener('error', radioChyba);
+radio.addEventListener('stalled', () => { if (radioChce) radioStav('Načítám… (slabý signál?)'); });
+radio.addEventListener('playing', () => { radioPokusy = 0; radioStav('▶ ' + STANICE[0].nazev); });
+
+el('radioPlay').onclick = () => radioChce ? radioZastav() : radioPust();
+radioHlasitost.addEventListener('input', () => {
+  radio.volume = radioHlasitost.value / 100;
+  try { localStorage.setItem('radioHlasitost', radioHlasitost.value); } catch (e) {}
+});
+el('bRadio').onclick = () => { el('radioPanel').hidden = !el('radioPanel').hidden; };
 
 // =====================================================================
 //  START
