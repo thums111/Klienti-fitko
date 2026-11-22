@@ -184,6 +184,65 @@
     .start{font-size:19px;padding:12px}
     .sbtn{font-size:16px;padding:10px}
   }
+
+  /* ================= VELKÝ ODPOČET (nastavení skryté) ================= */
+  .bigbtn{width:100%;margin-top:12px;background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.4);color:var(--teal);
+    border-radius:14px;padding:12px;font-weight:800;font-size:16px}
+  #btnSett{display:none}
+  body.focus #btnSett{display:block}
+  body.focus .sett{display:none}
+  body.focus{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+  body.focus .wrap{flex:1;min-height:0;width:100%;max-width:none;display:flex;flex-direction:column;gap:12px}
+  body.focus .timer{flex:1;min-height:0;display:flex;flex-direction:column}
+  body.focus .stage{flex:1;min-height:0;justify-content:space-evenly;gap:1.5vh}
+  body.focus .right{flex:none}
+  /* na výšku: kruh co největší */
+  body.focus .ringwrap{width:min(92vw,50vh);width:min(92vw,50dvh)}
+  body.focus .tinfo{font-size:max(14px,2vh)}
+  body.focus .tinfo b{font-size:max(22px,3.6vh)}
+  body.focus .badge{font-size:max(26px,4.2vh);padding:.25em 1.2em}
+  body.focus .dot{width:max(14px,1.8vh);height:max(14px,1.8vh)}
+  /* na šířku (PC, TV, tablet): odpočet přes celou plochu, tlačítka v jednom řádku dole */
+  @media (orientation:landscape){
+    body.focus .wrap{padding:calc(var(--u)*1.6) calc(var(--u)*2)}
+    body.focus .timer{display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr;column-gap:calc(var(--u)*4);align-items:center}
+    body.focus .side2 .tinfo{flex-direction:column;align-items:stretch;border:none;padding:0;gap:calc(var(--u)*1.6);width:min(100%,calc(var(--u)*60))}
+    body.focus .side2 .tinfo>div{display:flex;justify-content:space-between;align-items:baseline;gap:1em;
+      background:var(--card2);border:1px solid var(--line);border-radius:18px;padding:.5em 1em}
+    body.focus .stage{display:contents}
+    body.focus .ringwrap{grid-row:1;grid-column:1;align-self:center;width:min(56vw,74vh);width:min(56vw,74dvh)}
+    body.focus .badge,body.focus .dots{grid-column:2}
+    body.focus .timer .side2{grid-row:1;grid-column:2;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:calc(var(--u)*4)}
+    body.focus .tinfo{font-size:max(14px,calc(var(--u)*2.6))}
+    body.focus .tinfo b{font-size:max(22px,calc(var(--u)*5.4))}
+    body.focus .badge{font-size:max(28px,calc(var(--u)*7));border-width:4px}
+    body.focus .dots{max-width:40vw;gap:calc(var(--u)*1.2)}
+    body.focus .dot{width:max(14px,calc(var(--u)*2.6));height:max(14px,calc(var(--u)*2.6))}
+    body.focus .right{flex-direction:row;overflow:visible;gap:calc(var(--u)*1.6)}
+    body.focus .start{flex:2;padding:calc(var(--u)*2)}
+    body.focus .two{flex:1.3;display:flex}
+    body.focus .two .sbtn{flex:1}
+  }
+  /* mobil na šířku: menší okraje, aby se vešlo */
+  @media (orientation:landscape) and (max-height:520px){
+    body.focus .wrap{padding:8px 10px;gap:8px}
+    body.focus .timer{padding:8px 14px}
+    body.focus .ringwrap{width:min(44vw,62vh);width:min(44vw,62dvh)}
+    body.focus .tinfo{font-size:12px}
+    body.focus .tinfo b{font-size:18px}
+    body.focus .side2 .tinfo{gap:6px}
+    body.focus .side2 .tinfo>div{padding:4px 12px;border-radius:12px}
+    body.focus .timer .side2{gap:10px}
+    body.focus .badge{font-size:24px;border-width:3px}
+    body.focus .dots{display:flex}
+    body.focus .dot{width:12px;height:12px}
+    body.focus .start{font-size:18px;padding:10px}
+    body.focus .sbtn{font-size:15px;padding:10px}
+  }
+  @media (max-width:440px){ .tw{display:none} }
+  body.focus .wrap{padding-bottom:max(14px,env(safe-area-inset-bottom))}
+  /* bez skrytých údajů na velké ploše: štítek a tečky vpravo od kruhu */
+  .side2{display:contents}
 </style>
 </head>
 <body>
@@ -191,7 +250,8 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA TRENÉR <small>v1.6</small></h1>
+    <h1>TABATA <span class="tw">TRENÉR</span> <small>v1.7</small></h1>
+    <button class="hbtn" id="btnSett" title="Ukázat nastavení">⚙️</button>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
   </div>
@@ -211,6 +271,7 @@
       <div><span class="l">🕒 ODCVIČENO:</span> <b id="stDone">00:00</b></div>
     </div>
     <div class="stage">
+      <div class="side2" id="side2top"></div>
       <div class="badge" id="badge">Příprava</div>
       <div class="ringwrap">
         <svg class="ring" viewBox="0 0 200 200">
@@ -247,6 +308,7 @@
         <div class="whint">Prázdné políčko = výchozí slovo. ▶ přehraje, jak to zní. U „Další série“ se místo (n) řekne číslo série – funguje i [n] nebo {n}.</div>
         <button class="wreset" id="wordsReset">↺ Vrátit výchozí slova</button>
       </details>
+      <button class="bigbtn" id="btnHide">⤢ Skrýt nastavení a zvětšit odpočet</button>
       <div class="lockmsg">Nastavení můžeš měnit po pozastavení tréninku.</div>
     </div>
   </div>
@@ -254,7 +316,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v1.6";
+const VERSION="v1.7";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -467,6 +529,7 @@ document.addEventListener("keydown",e=>{
   if(e.code==="Space"||e.key==="MediaPlayPause"||(e.key==="Enter"&&!onCtl)){ e.preventDefault(); running?pause():start(); }
   else if(e.key==="ArrowRight"&&!onCtl) $("btnSkip").click();
   else if(e.key==="r"||e.key==="R") reset();
+  else if(e.key==="s"||e.key==="S") setFocus(!cfg.focus);
 });
 
 /* ---------- obrazovka nezhasne, celá obrazovka ---------- */
@@ -513,7 +576,22 @@ function showSettings(){
 }
 function changed(){ save(); showSettings(); reset(); }
 
-buildSettings(); soundUI(); showSettings(); reset();
+/* ---------- velký odpočet: skrytí nastavení ---------- */
+function setFocus(on){
+  cfg.focus=on; save();
+  document.body.classList.toggle("focus",on);
+  // na šířku: štítek fáze a tečky dáme do pravého sloupce vedle kruhu
+  const land=on&&matchMedia("(orientation:landscape)").matches, s2=$("side2top");
+  const ti=document.querySelector(".tinfo"), tc=$("timerCard");
+  if(land){ s2.className="side2"; s2.append($("badge"),ti,$("dots")); }
+  else { const st=document.querySelector(".stage"); tc.insertBefore(ti,st); st.insertBefore($("badge"),st.querySelector(".ringwrap")); st.appendChild($("dots")); }
+  if(!on) window.scrollTo(0,0);
+}
+$("btnHide").onclick=()=>setFocus(true);
+$("btnSett").onclick=()=>setFocus(false);
+matchMedia("(orientation:landscape)").addEventListener?.("change",()=>setFocus(!!cfg.focus));
+
+buildSettings(); soundUI(); showSettings(); reset(); setFocus(!!cfg.focus);
 </script>
 </body>
 </html>
