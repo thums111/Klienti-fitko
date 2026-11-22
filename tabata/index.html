@@ -191,7 +191,7 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA TRENÉR <small>v1.4</small></h1>
+    <h1>TABATA TRENÉR <small>v1.5</small></h1>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
   </div>
@@ -254,7 +254,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v1.4";
+const VERSION="v1.5";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -324,10 +324,27 @@ const WORDS=[
 ];
 cfg.words=cfg.words||{};
 const word=(k,n)=>((cfg.words[k]||"").trim()||WORDS.find(w=>w[0]===k)[3]).replace(/\{n\}/g,n??"");
-function sayNow(t){ const keep=cfg.voice; cfg.voice=true; const snd=cfg.sound; cfg.sound=true; say(t); cfg.voice=keep; cfg.sound=snd; }
+/* zkouška slova v nastavení: nejdřív probudit zvuk, pak mluvit */
+function sayNow(t){ wakeAudio(); speakRaw(t,350); }
+try{ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>{}; }catch(e){}
+/* Probudí zvukový výstup tichým tónem – jinak Android usekne začátek slova */
+function wakeAudio(){ try{ const a=ac(),o=a.createOscillator(),g=a.createGain(); g.gain.value=0.0001; o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime+0.4);}catch(e){} }
+let utt=null;  // držíme odkaz, aby Chrome slovo neukončil předčasně
+function speakRaw(t,delay){
+  if(!("speechSynthesis" in window)) return;
+  try{
+    const busy=speechSynthesis.speaking||speechSynthesis.pending;
+    if(busy) speechSynthesis.cancel();
+    setTimeout(()=>{
+      utt=new SpeechSynthesisUtterance(t); utt.lang="cs-CZ"; utt.rate=1.05;
+      const cz=speechSynthesis.getVoices().find(v=>/^cs/i.test(v.lang)); if(cz) utt.voice=cz;
+      speechSynthesis.speak(utt);
+    }, Math.max(delay||0, busy?150:0));
+  }catch(e){}
+}
 function say(t){
-  if(!cfg.sound||!cfg.voice||!("speechSynthesis" in window)) return;
-  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="cs-CZ";u.rate=1.05;speechSynthesis.speak(u);}catch(e){}
+  if(!cfg.sound||!cfg.voice) return;
+  speakRaw(t,0);
 }
 function soundUI(){ $("btnSound").textContent=cfg.sound?"🔊":"🔇"; $("btnSound").classList.toggle("off",!cfg.sound); }
 $("btnSound").onclick=()=>{ cfg.sound=!cfg.sound; save(); soundUI(); if(cfg.sound) tone(660,.15); };
