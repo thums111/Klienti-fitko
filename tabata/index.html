@@ -62,7 +62,7 @@
   .running .tinfo .dotc{background:var(--accent);box-shadow:0 0 8px var(--accent)}
   .stage{display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:14px}
   .badge{border:3px solid var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent);
-    border-radius:999px;padding:6px 28px;font-weight:900;letter-spacing:4px;font-size:22px;text-transform:uppercase;transition:.3s;white-space:nowrap}
+    border-radius:999px;padding:6px 28px;font-weight:900;letter-spacing:4px;font-size:22px;text-transform:uppercase;transition:.3s;white-space:normal;text-align:center;max-width:94%;overflow-wrap:anywhere;line-height:1.15}
   .ringwrap{position:relative;width:min(74vw,44vh);aspect-ratio:1;container-type:inline-size}
   svg.ring{width:100%;height:100%;transform:rotate(-90deg);display:block;overflow:visible}
   .ring .track{stroke:#1e293b}
@@ -250,7 +250,7 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA <span class="tw">TRENÉR</span> <small>v1.7</small></h1>
+    <h1>TABATA <span class="tw">TRENÉR</span> <small>v1.8</small></h1>
     <button class="hbtn" id="btnSett" title="Ukázat nastavení">⚙️</button>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
@@ -316,7 +316,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v1.7";
+const VERSION="v1.8";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -387,6 +387,12 @@ const WORDS=[
 cfg.words=cfg.words||{};
 const word=(k,n)=>((cfg.words[k]||"").trim()||WORDS.find(w=>w[0]===k)[3]).replace(/[({\[<]\s*n\s*[)}\]>]/gi,n??"");
 /* zkouška slova v nastavení: nejdřív probudit zvuk, pak mluvit */
+/* psaný název fáze: vlastní slovo (bez čísla série a koncových !.,), jinak výchozí krátký název */
+function label(k,small){
+  const own=((cfg.words||{})[k]||"").replace(/[({\[<]\s*n\s*[)}\]>]/gi,"").replace(/[\s!.,?…]+$/,"").trim();
+  if(own) return small?own.toLowerCase():own;
+  return small?PH[k][2]:PH[k][0];
+}
 function sayNow(t){ wakeAudio(); speakRaw(t,350); }
 try{ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>{}; }catch(e){}
 /* Probudí zvukový výstup tichým tónem – jinak Android usekne začátek slova */
@@ -470,17 +476,17 @@ function render(){
   $("stDone").textContent=mmss(before+(seg?elapsedInSeg:0));
   $("stSetMax").textContent=cfg.sets; $("stRoundMax").textContent=cfg.rounds;
   if(!seg){
-    accent(PH.done[1]); $("badge").textContent=PH.done[0];
+    accent(PH.done[1]); $("badge").textContent=label("done");
     $("time").textContent="✓"; $("next").textContent="Skvělá práce!";
     $("prog").style.strokeDashoffset=0;
     [...$("dots").children].forEach(e=>e.className="dot done"); playBtn(); return;
   }
-  accent(PH[seg.type][1]); $("badge").textContent=PH[seg.type][0];
+  accent(PH[seg.type][1]); $("badge").textContent=label(seg.type);
   $("time").textContent=big(seg.dur-elapsedInSeg);
   $("prog").style.strokeDashoffset=RC*(elapsedInSeg/seg.dur);
   $("stSet").textContent=seg.set; $("stRound").textContent=seg.type==="prep"?0:seg.round;
   const nx=plan[idx+1];
-  $("next").textContent=nx?`Další: ${PH[nx.type][2]} (${secTxt(nx.dur)})`:"Poslední úsek!";
+  $("next").textContent=nx?`Další: ${label(nx.type,true)} (${secTxt(nx.dur)})`:"Poslední úsek!";
   const cur=(seg.set-1)*cfg.rounds+seg.round-1;
   [...$("dots").children].forEach((e,i)=>{
     if(seg.type==="prep"){e.className="dot";return;}
@@ -562,7 +568,7 @@ function buildSettings(){
     <input id="w_${k}" placeholder="${d}" maxlength="80"><button data-w="${k}" title="Přehrát">▶</button></div>`).join("");
   WORDS.forEach(([k])=>{
     const i=$("w_"+k); i.value=cfg.words[k]||"";
-    i.oninput=()=>{ cfg.words[k]=i.value; save(); };
+    i.oninput=()=>{ cfg.words[k]=i.value; save(); render(); };
   });
   $("wordRows").querySelectorAll("button").forEach(b=>b.onclick=()=>sayNow(word(b.dataset.w,2)));
   $("wordsReset").onclick=()=>{ cfg.words={}; save(); WORDS.forEach(([k])=>$("w_"+k).value=""); };
