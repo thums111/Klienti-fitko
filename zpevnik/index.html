@@ -175,9 +175,9 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 .jpads.all .jpad{min-height:46px!important;padding:2px!important;border-radius:10px;justify-content:center}
 .jpads.all .jpad .nm{font-family:var(--mono);font-size:.95rem}
 .jpads.all .jpad.m7{border-style:dashed}
-.jnow{display:flex;align-items:center;gap:10px;min-height:66px;color:var(--muted);font-size:.88rem}
-.jnow svg{width:46px;height:auto}
-.jnow b{font-family:var(--display);font-size:1.6rem;color:var(--chord)}
+.jnow{display:flex;align-items:center;justify-content:center;gap:16px;min-height:112px;color:var(--muted);font-size:.95rem;text-align:center}
+.jnow svg{width:84px;height:auto;color:var(--ink)}
+.jnow b{font-family:var(--display);font-size:2.6rem;color:var(--chord)}
 /* trenažér */
 .train{padding-block:14px 60px;display:flex;flex-direction:column;gap:14px;max-width:560px}
 .train p{margin:0;color:var(--muted);font-size:.9rem;max-width:65ch}
@@ -241,6 +241,20 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 .cp.now{background:var(--star);color:var(--ink);border-radius:4px;box-shadow:0 0 0 2px var(--star)}
 .cp.done{opacity:.55}
 
+/* v5.2: na tabletu a PC ovládání písně v pravém sloupci */
+@media (min-width:900px) and (min-height:541px){
+  #vSong{--side:clamp(300px,30vw,380px);padding-right:calc(var(--side) + 16px)}
+  #vSong .sheet{padding-bottom:120px}
+  #vSong .bar{left:auto;top:0;width:var(--side);border-top:0;border-left:1px solid var(--line);
+    align-content:start;overflow-y:auto;gap:12px;
+    padding:calc(14px + env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) 14px}
+  #vSong .pads .pad{min-height:64px}
+  #vSong .bar .rhy{flex-wrap:wrap}
+  #vSong .bar #rPlay{flex:1 1 100%;justify-content:center;min-height:46px}
+  #vSong .bar #rStyle{flex:1 1 0}
+  #vSong .bar .row{flex-wrap:wrap;row-gap:10px}
+}
+
 /* edit */
 .form{display:flex;flex-direction:column;gap:12px;padding-block:14px 40px}
 .form input,.form textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
@@ -256,7 +270,7 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 
 <!-- ===== Seznam ===== -->
 <section id="vList">
-  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.1</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
+  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.2</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
   <div class="tools">
     <button id="jamBtn">🎸 Jamování</button>
     <button id="trainBtn">🎯 Trenažér</button>
