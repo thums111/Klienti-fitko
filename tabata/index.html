@@ -68,10 +68,12 @@
   .ring .track{stroke:#1e293b}
   .ring .prog{stroke:var(--accent);transition:stroke .3s;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--accent) 60%,transparent))}
   .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .time{font-size:30vmin;font-size:34cqw;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+  .time{font-size:34vmin;font-size:46cqw;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
   .time.pulse{animation:pulse .5s ease-out}
   @keyframes pulse{0%{transform:scale(1.12)}100%{transform:scale(1)}}
-  .next{color:var(--muted);font-weight:700;letter-spacing:1.5px;font-size:5vmin;font-size:6cqw;margin-top:.5em;text-transform:uppercase;text-align:center;padding:0 10%}
+  .time.long{font-size:28vmin;font-size:31cqw}
+  .time.xlong{font-size:22vmin;font-size:25cqw}
+  .next{display:none!important;color:var(--muted);font-weight:700;letter-spacing:1.5px;font-size:5vmin;font-size:6cqw;margin-top:.5em;text-transform:uppercase;text-align:center;padding:0 10%}
   .dots{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
   .dot{width:12px;height:12px;border-radius:50%;background:#1e293b;transition:.3s}
   .dot.done{background:var(--green)}
@@ -255,7 +257,7 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA <span class="tw">TRENÉR</span> <small>v2.0</small></h1>
+    <h1>TABATA <span class="tw">TRENÉR</span> <small>v2.1</small></h1>
     <button class="hbtn" id="btnSett" title="Ukázat nastavení">⚙️</button>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
@@ -327,7 +329,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v2.0";
+const VERSION="v2.1";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -500,7 +502,7 @@ function render(){
     [...$("dots").children].forEach(e=>e.className="dot done"); playBtn(); return;
   }
   accent(PH[seg.type][1]); $("badge").textContent=label(seg.type);
-  $("time").textContent=big(seg.dur-elapsedInSeg);
+  const tt=big(seg.dur-elapsedInSeg); $("time").textContent=tt; $("time").classList.toggle("long",tt.length>2); $("time").classList.toggle("xlong",tt.length>4);
   $("prog").style.strokeDashoffset=RC*(elapsedInSeg/seg.dur);
   $("stSet").textContent=seg.set; $("stRound").textContent=seg.type==="prep"?0:seg.round;
   const nx=plan[idx+1];
