@@ -270,7 +270,7 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 
 <!-- ===== Seznam ===== -->
 <section id="vList">
-  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.2</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
+  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.3</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
   <div class="tools">
     <button id="jamBtn">🎸 Jamování</button>
     <button id="trainBtn">🎯 Trenažér</button>
@@ -304,6 +304,12 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
       <button id="nCz" type="button">H a B (české)</button>
       <button id="nEn" type="button">B a Bb (anglické)</button>
     </div>
+    <div class="label">Hmaty akordů</div>
+    <div class="seg" role="group" aria-label="Hmaty akordů">
+      <button id="hbStd" type="button">Klasické</button>
+      <button id="hbEasy" type="button">✋ Bez barré</button>
+    </div>
+    <p>Bez barré: každý akord má hmat nejvýš na tři prsty a bez přeložení ukazováčkem, hraje se prostředníčkem, prsteníčkem a malíčkem. Struny označené × se nehrají, hodí se hlavně pro prstový styl (fingerstyle). Přepnout jde i přímo v písni.</p>
   </div>
 </section>
 
@@ -331,6 +337,7 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
       <button id="autoBtn" type="button"></button>
       <button id="bassBtn" type="button"></button>
       <button id="fromBtn" type="button" aria-expanded="false">🎯 Od akordu</button>
+      <button id="nbBtn" type="button"></button>
       <button id="ytBtn" type="button" aria-expanded="false">📺 Video</button>
     </div>
     <div class="from" id="fromPanel" hidden></div>
@@ -531,7 +538,40 @@ function quality(s){const minor=/^(mi|min|m)(?!aj)/.test(s);const maj7=/maj7/.te
   if(minor)return sev?'m7':'m';if(maj7)return'maj7';if(sev&&/sus4/.test(s))return'7sus4';if(sev)return'7';
   if(/sus4|sus$/.test(s))return'sus4';if(/sus2/.test(s))return'sus2';if(/add9|add2/.test(s))return'add9';
   if(s===''||s==='5')return'';return'?';}
+/* hmaty bez barré: najde hmat na nejvýš 3 prsty (bez ukazováčku a bez přeložení),
+   nejnižší hraná struna je základní tón, ostatní struny jen tóny akordu */
+const IVQ={'':[0,4,7],'m':[0,3,7],'7':[0,4,7,10],'m7':[0,3,7,10],'maj7':[0,4,7,11],'sus4':[0,5,7],'sus2':[0,2,7],'add9':[0,4,7,2],'7sus4':[0,5,7,10]};
+const easyCache={};
+function easyShape(pc,q){
+  const key=pc+q;if(key in easyCache)return easyCache[key];
+  const iv=IVQ[q];if(!iv)return easyCache[key]=null;
+  const OS=[40,45,50,55,59,64],T=iv.map(i=>(pc+i)%12),need=iv.filter(i=>i!==7).map(i=>(pc+i)%12),fifth=(pc+7)%12;
+  let best=null,bs=-1e9;
+  for(let L=0;L<=3;L++)for(let H=Math.max(L+2,4);H<=5;H++){
+    const opts=[];for(let s=L;s<=H;s++){const o=[];for(let f=0;f<=9;f++)if(T.includes((OS[s]+f)%12))o.push(f);opts.push(o);}
+    const cur=[];
+    (function rec(i){
+      if(i===opts.length){
+        const fr=cur.filter(f=>f>0);if(fr.length>3)return;                 // nejvýš 3 prsty
+        if((OS[L]+cur[0])%12!==pc)return;                                   // nejnižší tón = základ akordu
+        const pcs=cur.map((f,k)=>(OS[L+k]+f)%12);if(!need.every(n=>pcs.includes(n)))return;
+        const mx=fr.length?Math.max(...fr):0,mn=fr.length?Math.min(...fr):0;if(mx-mn>3)return;
+        const sc=cur.length*3-fr.length*1.5-mx*.7-(mx-mn)-(mx-mn>2?3:0)+(pcs.includes(fifth)?1.5:0)+cur.filter(f=>f===0).length*.5;
+        if(sc>bs){bs=sc;const f=[-1,-1,-1,-1,-1,-1];cur.forEach((v,k)=>f[L+k]=v);best=f;}
+        return;}
+      for(const f of opts[i]){cur.push(f);rec(i+1);cur.pop();}
+    })(0);
+  }
+  return easyCache[key]=best;
+}
+// klasický hmat bez barré (≤3 prsty, žádné přeložení) se nechá, jinak se použije hmat bez barré
 function shape(pc,q){
+  const f=shapeStd(pc,q);
+  if(!st.noBarre)return f;
+  if(f&&f.filter(v=>v>0).length<=3&&f.includes(0))return f;
+  return easyShape(pc,q)||f;
+}
+function shapeStd(pc,q){
   if(DICT[pc+q])return DICT[pc+q].split('').map(ch=>ch==='x'?-1:+ch);
   if(!['','m','7','m7'].includes(q))return null;
   const rE=(pc-4+12)%12||12,rA=(pc-9+12)%12||12;
@@ -547,7 +587,7 @@ function svg(f){
   for(let n=0;n<=4;n++)s+=`<line x1="8" y1="${Y(n)}" x2="53" y2="${Y(n)}" stroke-width="${n===0&&start===1?3:1}" opacity="${n===0&&start===1?1:.55}"/>`;
   if(start>1)s+=`<text x="57" y="${Y(.5)+4}" font-size="9" fill="currentColor" stroke="none" font-family="sans-serif">${start}</text>`;
   if(f[5]===mn&&mn>0){let j=5;while(j>0&&f[j-1]>=mn)j--;const k=f.slice(j).filter(v=>v===mn).length;
-    if(k>=2&&j<4)s+=`<rect x="${X(j)-3.5}" y="${Y(mn-start+.5)-3.5}" width="${X(5)-X(j)+7}" height="7" rx="3.5" fill="var(--chord)" stroke="none"/>`;}
+    if(k>=2&&j<=1)s+=`<rect x="${X(j)-3.5}" y="${Y(mn-start+.5)-3.5}" width="${X(5)-X(j)+7}" height="7" rx="3.5" fill="var(--chord)" stroke="none"/>`;}
   f.forEach((v,i)=>{if(v<0)s+=`<text x="${X(i)}" y="12" font-size="8" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif">×</text>`;
     else if(v===0)s+=`<circle cx="${X(i)}" cy="9" r="2.6" stroke-width="1.2"/>`;
     else s+=`<circle cx="${X(i)}" cy="${Y(v-start+.5)}" r="3.6" fill="var(--chord)" stroke="none"/>`;});
@@ -958,7 +998,7 @@ const wrap12=v=>{v=mod12(v);return v>6?v-12:v;};
 function songChords(){const set=[];for(const l of parseSong(cur.text))if(l.k==='ch')for(const it of l.items)
   if(it.c&&!set.some(c=>c.pc===it.c.pc&&c.suf===it.c.suf))set.push(it.c);return set;}
 // „těžký“ akord = bez hmatu, nebo hmat bez jediné prázdné struny (barré)
-function hardCount(chs,t){let n=0;for(const c of chs){const f=shape(mod12(c.pc+t),quality(c.suf));if(!f||!f.includes(0))n++;}return n;}
+function hardCount(chs,t){let n=0;for(const c of chs){const f=shapeStd(mod12(c.pc+t),quality(c.suf));if(!f||!f.includes(0))n++;}return n;}
 const barreTxt=n=>n===0?'bez barré':n+'× barré';
 function renderFrom(){
   const P=$('fromPanel'),chs=songChords();
@@ -1268,6 +1308,12 @@ $('plClear').onclick=e=>{const b=e.currentTarget;if(!b.classList.contains('armed
   b.classList.remove('armed');b.textContent='Vyprázdnit';st.playlist=[];save();renderList();};
 $('nCz').onclick=()=>{st.notation='cz';save();renderList();};
 $('nEn').onclick=()=>{st.notation='en';save();renderList();};
+function nbUI(){$('hbStd').setAttribute('aria-pressed',!st.noBarre);$('hbEasy').setAttribute('aria-pressed',!!st.noBarre);
+  $('nbBtn').textContent=(st.noBarre?'✓ ':'')+'✋ Bez barré';$('nbBtn').setAttribute('aria-pressed',!!st.noBarre);}
+$('hbStd').onclick=()=>{st.noBarre=false;save();nbUI();};
+$('hbEasy').onclick=()=>{st.noBarre=true;save();nbUI();};
+$('nbBtn').onclick=()=>{st.noBarre=!st.noBarre;silence();save();nbUI();renderSong();if(!$('fromPanel').hidden)renderFrom();};
+nbUI();
 $('newBtn').onclick=()=>openEdit(null);
 $('backBtn').onclick=()=>{renderList();show('vList');};
 $('favBtn').onclick=()=>{cur.fav=!cur.fav;save();renderSong();};
