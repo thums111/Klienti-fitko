@@ -270,7 +270,7 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 
 <!-- ===== Seznam ===== -->
 <section id="vList">
-  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.3</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
+  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.4</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
   <div class="tools">
     <button id="jamBtn">🎸 Jamování</button>
     <button id="trainBtn">🎯 Trenažér</button>
@@ -309,7 +309,7 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
       <button id="hbStd" type="button">Klasické</button>
       <button id="hbEasy" type="button">✋ Bez barré</button>
     </div>
-    <p>Bez barré: každý akord má hmat nejvýš na tři prsty a bez přeložení ukazováčkem, hraje se prostředníčkem, prsteníčkem a malíčkem. Struny označené × se nehrají, hodí se hlavně pro prstový styl (fingerstyle). Přepnout jde i přímo v písni.</p>
+    <p>Bez barré: žádný akord nemá přeložení. Basové struny (E, A, D) chytá prostředníček, prsteníček a malíček, ukazováček tiskne nejvýš jednu tenkou strunu (G, H nebo e). Struny označené × se nehrají, hodí se hlavně pro prstový styl (fingerstyle). Přepnout jde i přímo v písni.</p>
   </div>
 </section>
 
@@ -552,11 +552,11 @@ function easyShape(pc,q){
     const cur=[];
     (function rec(i){
       if(i===opts.length){
-        const fr=cur.filter(f=>f>0);if(fr.length>3)return;                 // nejvýš 3 prsty
+        const fr=cur.filter(f=>f>0);if(fr.length>4||(fr.length===4&&!idxOk(cur,L)))return;   // ukazováček jen na jedné tenké struně
         if((OS[L]+cur[0])%12!==pc)return;                                   // nejnižší tón = základ akordu
         const pcs=cur.map((f,k)=>(OS[L+k]+f)%12);if(!need.every(n=>pcs.includes(n)))return;
         const mx=fr.length?Math.max(...fr):0,mn=fr.length?Math.min(...fr):0;if(mx-mn>3)return;
-        const sc=cur.length*3-fr.length*1.5-mx*.7-(mx-mn)-(mx-mn>2?3:0)+(pcs.includes(fifth)?1.5:0)+cur.filter(f=>f===0).length*.5;
+        const sc=cur.length*3-fr.length*1.5-mx*.7-(mx-mn)-(mx-mn>2?3:0)+(pcs.includes(fifth)?1.5:0)+cur.filter(f=>f===0).length*.5-(fr.length===4?1:0);
         if(sc>bs){bs=sc;const f=[-1,-1,-1,-1,-1,-1];cur.forEach((v,k)=>f[L+k]=v);best=f;}
         return;}
       for(const f of opts[i]){cur.push(f);rec(i+1);cur.pop();}
@@ -565,10 +565,13 @@ function easyShape(pc,q){
   return easyCache[key]=best;
 }
 // klasický hmat bez barré (≤3 prsty, žádné přeložení) se nechá, jinak se použije hmat bez barré
+// 4 prsty jen tehdy, když ukazováček (nejnižší pražec) tiskne jedinou strunu, a to G, H nebo e
+function idxOk(frets,off){const fr=frets.filter(v=>v>0);if(fr.length<4)return true;
+  const lo=Math.min(...fr),at=[];frets.forEach((v,k)=>{if(v===lo)at.push(k+off);});return at.length===1&&at[0]>=3;}
 function shape(pc,q){
   const f=shapeStd(pc,q);
   if(!st.noBarre)return f;
-  if(f&&f.filter(v=>v>0).length<=3&&f.includes(0))return f;
+  if(f){const n=f.filter(v=>v>0).length;if((n<=3&&f.includes(0))||(n===4&&idxOk(f,0)))return f;}
   return easyShape(pc,q)||f;
 }
 function shapeStd(pc,q){
