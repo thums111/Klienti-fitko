@@ -96,6 +96,11 @@
   .stepper{display:flex;align-items:center;justify-content:space-between;gap:6px}
   .stepper button{background:var(--btn);width:48px;height:48px;border-radius:16px;font-size:26px;font-weight:700;flex:none}
   .stepper .val{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;text-align:center;flex:1}
+  .callout{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;color:var(--muted);font-size:15px}
+  .callout .lbl{flex:1;min-width:12em}
+  .seg{display:flex;background:var(--card2);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .seg button{padding:9px 14px;font-weight:700;font-size:15px;color:var(--muted);background:transparent}
+  .seg button.sel{background:var(--green);color:#052e1f}
   .opts{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;color:var(--muted);font-size:15px;align-items:center}
   .opts label{display:flex;align-items:center;gap:8px;cursor:pointer}
   .opts input{width:20px;height:20px;accent-color:var(--green)}
@@ -250,7 +255,7 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA <span class="tw">TRENÉR</span> <small>v1.9</small></h1>
+    <h1>TABATA <span class="tw">TRENÉR</span> <small>v2.0</small></h1>
     <button class="hbtn" id="btnSett" title="Ukázat nastavení">⚙️</button>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
@@ -298,6 +303,12 @@
       <h2><span>☰</span> Nastavení tréninku</h2>
       <div class="chips" id="chips"></div>
       <div class="grid" id="grid"></div>
+      <div class="callout">
+        <span class="lbl">📢 Hlásit zbývající čas při práci</span>
+        <div class="seg" id="callSeg">
+          <button data-c="0">Vyp</button><button data-c="5">5 s</button><button data-c="10">10 s</button>
+        </div>
+      </div>
       <div class="opts">
         <label><input type="checkbox" id="optVoice"> Hlasové pokyny</label>
         <div class="total">Celkem: <b id="total">0:00</b></div>
@@ -316,7 +327,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v1.9";
+const VERSION="v2.0";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -392,6 +403,11 @@ function label(k,small){
   const own=((cfg.words||{})[k]||"").replace(/[({\[<]\s*n\s*[)}\]>]/gi,"").replace(/[\s!.,?…]+$/,"").trim();
   if(own) return small?own.toLowerCase():own;
   return small?PH[k][2]:PH[k][0];
+}
+/* jak se vysloví zbývající čas */
+function timeWords(sec){
+  if(sec%60===0){ const m=sec/60; return m===1?"minuta":m<5?`${m} minuty`:`${m} minut`; }
+  return `${sec} sekund`;
 }
 function sayNow(t){ wakeAudio(); speakRaw(t,350); }
 try{ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>{}; }catch(e){}
@@ -504,6 +520,8 @@ function tick(now){
   const seg=plan[idx],left=Math.ceil(seg.dur-elapsedInSeg);
   if(left!==lastSec){
     lastSec=left;
+    // průběžné hlášení zbývajícího času při práci (každých 5 / 10 s, ne na začátku a ne při 3-2-1)
+    if(seg.type==="work"&&cfg.callout&&left>=5&&left<seg.dur&&left%cfg.callout===0) say(timeWords(left));
     if(left<=3&&left>=1){ tone(left===1?660:520,.15); const t=$("time"); t.classList.remove("pulse"); void t.offsetWidth; t.classList.add("pulse"); }
   }
   if(elapsedInSeg>=seg.dur){ nextSeg(now); if(!running) return; }
@@ -576,6 +594,10 @@ function buildSettings(){
   $("wordsReset").onclick=()=>{ cfg.words={}; save(); WORDS.forEach(([k])=>$("w_"+k).value=""); };
   $("optVoice").checked=cfg.voice;
   $("optVoice").onchange=()=>{ cfg.voice=$("optVoice").checked; save(); };
+  const segUI=()=>$("callSeg").querySelectorAll("button").forEach(b=>b.classList.toggle("sel",+b.dataset.c===(cfg.callout||0)));
+  $("callSeg").querySelectorAll("button").forEach(b=>b.onclick=()=>{ cfg.callout=+b.dataset.c; save(); segUI();
+    if(cfg.callout) sayNow(timeWords(cfg.callout)); });
+  segUI();
 }
 function showSettings(){
   FIELDS.forEach(([k])=>$("v_"+k).textContent=cfg[k]);
