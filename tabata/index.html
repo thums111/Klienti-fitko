@@ -257,7 +257,7 @@
 <div class="top">
   <div class="head">
     <div class="logo">⏱️</div>
-    <h1>TABATA <span class="tw">TRENÉR</span> <small>v2.1</small></h1>
+    <h1>TABATA <span class="tw">TRENÉR</span> <small>v2.2</small></h1>
     <button class="hbtn" id="btnSett" title="Ukázat nastavení">⚙️</button>
     <button class="hbtn" id="btnSound" title="Zvuk zapnout / vypnout">🔊</button>
     <button class="hbtn" id="btnFull" title="Celá obrazovka">⛶</button>
@@ -329,7 +329,7 @@
 <audio id="radio" preload="none"></audio>
 
 <script>
-const VERSION="v2.1";
+const VERSION="v2.2";
 const DEFAULT_URL="https://ice.actve.net/fm-evropa2-128";
 /* klíč, popisek, barva, min, max, krok */
 const FIELDS=[
@@ -407,10 +407,7 @@ function label(k,small){
   return small?PH[k][2]:PH[k][0];
 }
 /* jak se vysloví zbývající čas */
-function timeWords(sec){
-  if(sec%60===0){ const m=sec/60; return m===1?"minuta":m<5?`${m} minuty`:`${m} minut`; }
-  return `${sec} sekund`;
-}
+function timeWords(sec){ return String(sec); }   // hlásí jen číslo: „dvacet“, „patnáct“…
 function sayNow(t){ wakeAudio(); speakRaw(t,350); }
 try{ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>{}; }catch(e){}
 /* Probudí zvukový výstup tichým tónem – jinak Android usekne začátek slova */
@@ -553,9 +550,14 @@ $("btnSkip").onclick=()=>{ if(idx>=plan.length) return; if(running) nextSeg(); e
 
 /* klávesnice / TV ovladač: mezerník nebo OK = start/pauza, → = přeskočit, R = reset */
 document.addEventListener("keydown",e=>{
-  const onCtl=e.target.tagName==="BUTTON"||e.target.tagName==="INPUT";
-  if(e.code==="Space"||e.key==="MediaPlayPause"||(e.key==="Enter"&&!onCtl)){ e.preventDefault(); running?pause():start(); }
-  else if(e.key==="ArrowRight"&&!onCtl) $("btnSkip").click();
+  const tag=e.target.tagName;
+  // při psaní do políček (vlastní slova) klávesy nic neovládají
+  if(tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||e.target.isContentEditable) return;
+  if(e.key==="MediaPlayPause"){ e.preventDefault(); running?pause():start(); return; }
+  // na vybraném tlačítku (TV ovladač) mezerník/OK zmáčkne to tlačítko, nic navíc
+  if(tag==="BUTTON"&&(e.code==="Space"||e.key==="Enter")) return;
+  if(e.code==="Space"||e.key==="Enter"){ e.preventDefault(); running?pause():start(); }
+  else if(e.key==="ArrowRight"&&tag!=="BUTTON") $("btnSkip").click();
   else if(e.key==="r"||e.key==="R") reset();
   else if(e.key==="s"||e.key==="S") setFocus(!cfg.focus);
 });
