@@ -97,7 +97,7 @@
 
   /* ===== Hra ===== */
   #hra.vidit { display:grid; gap:.7em; padding:.6em; height:calc(100vh - 2.6em);
-               grid-template-columns:minmax(0, .75fr) minmax(0, 1.9fr) minmax(0, .8fr); }
+               grid-template-columns:minmax(0, 1.1fr) minmax(0, 1.9fr) minmax(0, .65fr); }
   #levy, #stred, #pravy { min-height:0; display:flex; flex-direction:column; gap:.5em; }
   #levy { overflow:auto; }
   #pravy { overflow-y:auto; }
@@ -166,7 +166,10 @@
   .kolaTab th { color:var(--muted); font-weight:normal; text-align:right; padding:.15em .35em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:6em; }
   .kolaTab th.tah { color:var(--acc); font-weight:bold; }
   .kolaTab td { text-align:right; padding:.15em .35em; border-top:1px solid #2c3640; white-space:nowrap; }
-  .kolaTab td.c, .kolaTab th.c { text-align:left; color:var(--muted); width:2.2em; }
+  .kolaTab td.c, .kolaTab th.c { text-align:left; color:var(--muted); }
+  .kolaTab tr.st td { color:var(--text); }
+  .kolaTab tr.st td.c { color:var(--muted); white-space:normal; }
+  .kolaTab tr.oddil td { color:var(--acc); padding-top:.5em; border-top:0; text-align:left; }
   .kolaTab td small { color:var(--muted); font-size:.8em; margin-left:.35em; }
   .kolaTab td.bust { color:#ff9a9a; }
   .kolaTab td.top { color:var(--acc); font-weight:bold; }
@@ -226,7 +229,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.24</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.25</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
@@ -330,10 +333,6 @@
   <!-- vpravo: kolo, ovládání a klávesnice -->
   <div id="pravy">
     <div id="kolo"></div>
-    <div id="statBox">
-      <div class="statNadpis">📊 Statistika</div>
-      <div id="statTab"></div>
-    </div>
     <div id="psani"></div>
     <div id="rada"></div>
     <div id="hlaska"></div>
@@ -372,7 +371,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.24';
+const VERZE = '1.25';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -955,22 +954,21 @@ function statRadky() {
   if (stav.typ === 'x01') {
     r.push(['Ø na 3 šipky', H.map(h => prumerX01(h))]);
     r.push(['Na double', H.map((h, i) => { const t = stav.konec && stav.vitez === i && !stav.rozhozVyhra ? 1 : 0; return t + '/' + h.dPokusu + (h.dPokusu ? ' (' + proc(t, h.dPokusu) + ')' : ''); })]);
-    r.push(['Zavřel/a', H.map((h, i) => !(stav.konec && stav.vitez === i) ? '–' : stav.rozhozVyhra ? 'rozhozem' : h.zavreni + ' v ' + h.zavrenoKolo + '. kole')]);
+    r.push(['Zavřel/a', H.map((h, i) => !(stav.konec && stav.vitez === i) ? '–' : stav.rozhozVyhra ? 'rozhozem' : h.zavreni + ' (' + h.zavrenoKolo + '. kolo)')]);
     if (H.some(h => h.zapas.legy.length)) {
       r.push([null, 'Celý zápas']);
       r.push(['Ø na 3 šipky', H.map(h => { const l = vse(h); return pr(l.reduce((a, x) => a + x.body, 0), l.reduce((a, x) => a + x.sipek, 0)); })]);
       r.push(['Legy', H.map(h => h.legy)]);
       r.push(['Nejlepší leg', H.map(h => { const v = h.zapas.legy.filter(x => x.vyhral && !x.rozhoz); return v.length ? Math.min(...v.map(x => x.sipek)) + ' šipek' : '–'; })]);
-      r.push(['Nejvyšší zavření', H.map(h => { const v = h.zapas.legy.filter(x => x.vyhral && !x.rozhoz); return v.length ? Math.max(...v.map(x => x.zavreni)) : '–'; })]);
-      r.push(['Úspěšnost na double', H.map(h => { const l = vse(h); return proc(h.zapas.legy.filter(x => x.vyhral && !x.rozhoz).length, l.reduce((a, x) => a + x.dPokusu, 0)); })]);
+      r.push(['Nejv. zavření', H.map(h => { const v = h.zapas.legy.filter(x => x.vyhral && !x.rozhoz); return v.length ? Math.max(...v.map(x => x.zavreni)) : '–'; })]);
+      r.push(['Double %', H.map(h => { const l = vse(h); return proc(h.zapas.legy.filter(x => x.vyhral && !x.rozhoz).length, l.reduce((a, x) => a + x.dPokusu, 0)); })]);
     }
   } else if (stav.typ === 'kriket') {
-    r.push(['MPR (marky/kolo)', H.map(h => mpr(h))]);
-    r.push(['Nejvíc marků v kole', H.map(h => kk(h).length ? Math.max(...kk(h).map(x => x.mk)) : '–')]);
+    r.push(['MPR', H.map(h => mpr(h))]);
+    r.push(['Nejvíc marků', H.map(h => kk(h).length ? Math.max(...kk(h).map(x => x.mk)) : '–')]);
     r.push(['Kola 5+ marků', H.map(h => kk(h).filter(x => x.mk >= 5).length)]);
     r.push(['Triply', H.map(h => h.kola.concat([{ s: h === stav.hraci[stav.tah] ? stav.kolo.map(x => x.t) : [] }])
                               .reduce((a, k) => a + k.s.filter(t => /^T(1[5-9]|20)$/.test(t)).length, 0))]);
-    r.push(['Kol', H.map(h => h.kola.length)]);
     r.push([null, 'Zavřeno v kole']);
     for (const c of KRIKET_CISLA) r.push([c === 25 ? 'Bull' : String(c), H.map(h => h.zavrenoV[c] ? h.zavrenoV[c] + '.' : '–')]);
     if (H.some(h => h.zapas.legy.length)) {
@@ -1000,12 +998,17 @@ function statTabulkaHTML() {
 function kolaHTML() {
   const H = stav.hraci.map(hracStat);
   const pocet = Math.max(0, ...H.map(h => h.kola.length));
-  if (!pocet) return '';
   const x01 = stav.typ === 'x01', kr = stav.typ === 'kriket';
   const od = Math.max(0, pocet - 15);
-  let html = '<table class="kolaTab"><tr><th class="c">Kolo</th>';
+  let html = '<table class="kolaTab"><tr><th class="c">📊</th>';
   H.forEach((h, i) => { html += '<th class="' + (i === stav.tah && !stav.konec ? 'tah' : '') + '" title="' + esc(h.jmeno) + '">' + esc(h.jmeno) + '</th>'; });
   html += '</tr>';
+  // nahoře statistika
+  for (const [popis, hodnoty] of statRadky()) {
+    if (popis === null) { html += '<tr class="oddil"><td colspan="' + (H.length + 1) + '">' + esc(hodnoty) + '</td></tr>'; continue; }
+    html += '<tr class="st"><td class="c">' + esc(popis) + '</td>' + hodnoty.map(v => '<td>' + esc(v) + '</td>').join('') + '</tr>';
+  }
+  if (pocet) html += '<tr class="oddil"><td colspan="' + (H.length + 1) + '">Kola</td></tr>';
   for (let r = od; r < pocet; r++) {
     html += '<tr' + (r === pocet - 1 ? ' class="ted"' : '') + '><td class="c">' + (r + 1) + '.</td>';
     H.forEach((h, i) => {
@@ -1026,7 +1029,6 @@ function kolaHTML() {
 }
 
 function kresliStatistiku() {
-  el('statTab').innerHTML = statTabulkaHTML();
   el('statKola').innerHTML = kolaHTML();
 }
 
