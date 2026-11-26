@@ -226,7 +226,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.23</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.24</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
@@ -337,9 +337,6 @@
     <div id="psani"></div>
     <div id="rada"></div>
     <div id="hlaska"></div>
-    <div class="ovladani">
-      <button id="bMimo">Mimo (0)</button>
-    </div>
     <button id="bDalsi" class="hlavni">Další hráč ➜</button>
 
     <div id="napovedaBox">
@@ -375,7 +372,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.23';
+const VERZE = '1.24';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -1033,7 +1030,7 @@ function kresliStatistiku() {
   el('statKola').innerHTML = kolaHTML();
 }
 
-el('bMimo').onclick = () => hod({ t:'0', b:0, n:0, m:0 });
+function mimo() { hod({ t:'0', b:0, n:0, m:0 }); }   // klávesa M; myší = ťuknout do černého okraje terče
 el('bDalsi').onclick = () => dalsiHrac(false);
 el('bDalsiLeg').onclick = () => novaHra(false);
 el('bNastaveniVysl').onclick = () => { el('vysledek').classList.remove('vidit'); kresliNastaveni(); ukazObrazovku('nastaveni'); };
@@ -1737,13 +1734,12 @@ function prekresli() {
   else if (tren) hlaska((stav.trInfo ? stav.trInfo + ' · ' : '') + 'Hází ' + h.jmeno + ' – ' + trUkol(h) + '.');
   else if (stav.prehoz) hlaska('💥 Přehoz! ' + h.jmeno + ' zůstává na ' + stav.zacatek + '.' + (autoDalsi ? ' Další hráč…' : ''));
   else if (stav.koloHotovo) hlaska(autoDalsi ? '✔ Kolo hotovo – další hráč…' : 'Kolo hotovo. Pokračuj tlačítkem Další hráč (mezerník), nebo opravuj ↶ Zpět.');
-  else hlaska('Hází ' + h.jmeno + ' – ťukni do terče, nebo napiš šipku.');
+  else hlaska('');
 
   el('bDalsi').style.display = (stav.koloHotovo && !stav.konec) ? 'block' : 'none';
   ukazOdpocet();
   kresliStatistiku();
   el('bDalsi').classList.toggle('pulz', true);
-  el('bMimo').disabled = stav.konec || stav.koloHotovo;
   el('bZpet').disabled = !historie.length;
 
   ukazDisplej();
@@ -1887,7 +1883,7 @@ document.addEventListener('keydown', e => {
   } else if (k === 'r' || k === 'R') {
     radioChce ? radioZastav() : radioPust();
   } else if (k === 'm' || k === 'M') {
-    el('bMimo').click();
+    mimo();
   }
 });
 
