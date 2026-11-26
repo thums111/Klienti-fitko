@@ -92,7 +92,7 @@
   .hrac .krizek { padding:.15em .45em; font-size:.75em; border-radius:6px; align-self:flex-start; opacity:.6; }
   .hrac .krizek:hover { opacity:1; }
   #kriket th .krizek { margin-left:.3em; padding:0 .35em; font-size:.7em; border-radius:5px; background:#3a2226; color:#ff9a9a; opacity:.6; }
-  #bStart { width:100%; padding:1em; font-size:1.2em; }
+  #bStart { width:100%; padding:1em; font-size:1.2em; margin-bottom:1em; }
   #bPokracovat { width:100%; padding:.8em; margin-bottom:1em; background:#24507a; }
 
   /* ===== Hra ===== */
@@ -160,11 +160,17 @@
   .statTab th.tah { color:var(--acc); font-weight:bold; }
   .statTab td:first-child, .statTab th:first-child { text-align:left; color:var(--muted); }
   .statTab tr.oddil td { color:var(--acc) !important; font-size:.95em; padding-top:.5em; border-top:0; }
-  #statKola { margin-top:.45em; font-size:.72em; color:var(--muted); }
-  #statKola .ch { display:inline-block; background:#2a333d; color:var(--text); border-radius:6px; padding:.1em .4em; margin:.12em .1em; font-variant-numeric:tabular-nums; }
-  #statKola .ch.top { background:#3a3215; color:var(--acc); font-weight:bold; }
-  #statKola .ch.bust { background:#3a2226; color:#ff9a9a; }
-  #statKola .ch i { font-style:normal; color:var(--muted); font-size:.85em; margin-right:.25em; }
+  #statKola { background:var(--panel); border-radius:10px; padding:.4em .55em; }
+  #statKola:empty { display:none; }
+  .kolaTab { width:100%; border-collapse:collapse; font-size:.78em; font-variant-numeric:tabular-nums; }
+  .kolaTab th { color:var(--muted); font-weight:normal; text-align:right; padding:.15em .35em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:6em; }
+  .kolaTab th.tah { color:var(--acc); font-weight:bold; }
+  .kolaTab td { text-align:right; padding:.15em .35em; border-top:1px solid #2c3640; white-space:nowrap; }
+  .kolaTab td.c, .kolaTab th.c { text-align:left; color:var(--muted); width:2.2em; }
+  .kolaTab td small { color:var(--muted); font-size:.8em; margin-left:.35em; }
+  .kolaTab td.bust { color:#ff9a9a; }
+  .kolaTab td.top { color:var(--acc); font-weight:bold; }
+  .kolaTab tr.ted td.c { color:var(--acc); }
   .karta { max-height:92vh; overflow:auto; }
   .karta .statTab { font-size:.8em; margin:0 0 1em; }
 
@@ -220,7 +226,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.22</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.23</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
@@ -240,6 +246,7 @@
 <!-- ===================== NASTAVENÍ ===================== -->
 <div id="nastaveni" class="obrazovka vidit">
   <button id="bPokracovat" style="display:none">▶ Pokračovat v rozehrané hře</button>
+  <button id="bStart" class="hlavni">▶ Začít hru</button>
 
   <div class="sekce">
     <h2>Hra</h2>
@@ -304,7 +311,6 @@
     </details>
   </div>
 
-  <button id="bStart" class="hlavni">▶ Začít hru</button>
 </div>
 
 <!-- ===================== HRA ===================== -->
@@ -313,6 +319,7 @@
   <div id="levy">
     <div id="tabule"></div>
     <table id="kriket" style="display:none"></table>
+    <div id="statKola"></div>
   </div>
 
   <!-- uprostřed: terč (pořád vidět) -->
@@ -323,6 +330,10 @@
   <!-- vpravo: kolo, ovládání a klávesnice -->
   <div id="pravy">
     <div id="kolo"></div>
+    <div id="statBox">
+      <div class="statNadpis">📊 Statistika</div>
+      <div id="statTab"></div>
+    </div>
     <div id="psani"></div>
     <div id="rada"></div>
     <div id="hlaska"></div>
@@ -330,12 +341,6 @@
       <button id="bMimo">Mimo (0)</button>
     </div>
     <button id="bDalsi" class="hlavni">Další hráč ➜</button>
-
-    <div id="statBox">
-      <div class="statNadpis">📊 Statistika</div>
-      <div id="statTab"></div>
-      <div id="statKola"></div>
-    </div>
 
     <div id="napovedaBox">
       <div id="napoveda" style="display:none">
@@ -370,7 +375,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.22';
+const VERZE = '1.23';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -640,6 +645,7 @@ function odeberHrace(i) {
   }
   if (stav.zacinal > i) stav.zacinal--;
   if (stav.zacinal >= stav.hraci.length) stav.zacinal = 0;
+  if (stav.rozhoz) zahajRozhoz(stav.hraci.map((_, k) => (stav.zacinal + k) % stav.hraci.length));
   if (stav.typ === 'trenink') {
     if (stav.hraci.every(x => x.t.hotovo)) trDokonci();
     else if (stav.hraci[stav.tah].t.hotovo) { stav.tah = trDalsiHrac(); stav.kolo = []; stav.koloHotovo = false; }
@@ -781,10 +787,46 @@ function mpr(h) { return h.sipek ? (h.zasahu / h.sipek * 3).toFixed(2) : '–'; 
 // =====================================================================
 //  SPOLEČNÉ
 // =====================================================================
+// 301 / 501 / 701 (a vlastní do 701) se hrají nejvýš 15 kol, pak rozhoz na střed
+const LIMIT_KOL = 15;
+function limitKol() { return stav.typ === 'x01' && stav.start <= 701 ? LIMIT_KOL : 0; }
+
+// Rozhoz na střed: každý hodí 1 šipku, kdo je nejblíž středu, vyhrává leg. Při shodě hází znovu jen oni.
+function zahajRozhoz(kdo) {
+  stav.rozhoz = { kdo, i:0, hody:[] };
+  stav.tah = kdo[0];
+  stav.kolo = []; stav.koloHotovo = false; stav.prehoz = false;
+}
+function hodRozhoz(s) {
+  const d = s.x === undefined ? 9999 : Math.hypot(s.x, s.y);      // vzdálenost od středu (mm)
+  stav.kolo.push(s);
+  stav.rozhoz.hody.push({ i: stav.tah, x: s.x, y: s.y, d });
+  stav.koloHotovo = true;
+}
+function dalsiRozhoz() {
+  const r = stav.rozhoz;
+  r.i++;
+  stav.kolo = []; stav.koloHotovo = false;
+  if (r.i < r.kdo.length) { stav.tah = r.kdo[r.i]; return; }
+  // všichni hodili: kdo je nejblíž?
+  const kolo = r.hody.slice(-r.kdo.length);
+  const nej = Math.min(...kolo.map(x => x.d));
+  const vitezove = kolo.filter(x => Math.abs(x.d - nej) < 0.5).map(x => x.i);
+  if (vitezove.length > 1 || nej >= 9999) {
+    const znovu = nej >= 9999 ? r.kdo : vitezove;
+    r.kdo = znovu; r.i = 0; stav.tah = znovu[0];
+    r.zprava = 'Shoda – házejí znovu: ' + znovu.map(i => stav.hraci[i].jmeno).join(', ');
+    return;
+  }
+  stav.tah = vitezove[0];
+  stav.rozhozVyhra = true;
+  vyhra(true);
+}
 function hod(s) {
   if (!stav || stav.konec || stav.koloHotovo) return;
   zapamatuj();
-  if (stav.typ === 'x01') hodX01(s);
+  if (stav.rozhoz) hodRozhoz(s);
+  else if (stav.typ === 'x01') hodX01(s);
   else if (stav.typ === 'trenink') hodTrenink(s);
   else hodKriket(s);
   ulozStav();
@@ -818,6 +860,12 @@ function dalsiHrac(uzZapamatovano) {
   if (!stav || stav.konec) return;
   if (!uzZapamatovano) zapamatuj();
   const h = stav.hraci[stav.tah];
+  if (stav.rozhoz) {
+    if (!stav.koloHotovo) hodRozhoz({ t:'0', b:0, n:0, m:0 });   // nehodil = mimo
+    dalsiRozhoz();
+    psaniSmaz(); ulozStav(); prekresli();
+    return;
+  }
   if (stav.typ === 'trenink') {
     if (!stav.koloHotovo) trKonecKola(h, 3 - stav.kolo.length);   // nedohozené šipky = minely
     if (stav.hraci.every(x => x.t.hotovo)) { trDokonci(); ulozStav(); prekresli(); return; }
@@ -844,25 +892,32 @@ function dalsiHrac(uzZapamatovano) {
   stav.koloHotovo = false;
   stav.prehoz = false;
   stav.zacatek = stav.hraci[stav.tah].zbyva;
+  if (limitKol() && stav.cisloKola > limitKol()) {
+    // po 15. kole nikdo nezavřel → rozhoz na střed, začíná ten, kdo začínal leg
+    const kdo = stav.hraci.map((_, i) => (stav.zacinal + i) % stav.hraci.length);
+    zahajRozhoz(kdo);
+  }
   psaniSmaz();
   ulozStav();
   prekresli();
 }
 
-function vyhra() {
+function vyhra(rozhozem) {
   const h = stav.hraci[stav.tah];
   stav.konec = true;
   stav.vitez = stav.tah;
   h.legy++;
   stav.koloHotovo = true;
-  zapisKolo(h, stav.kolo.length);
-  h.zavrenoKolo = h.kola.length;                   // v kolikátém kole zavřel
-  if (stav.typ === 'x01') h.zavreni = stav.zacatek; // kolik zavřel (checkout)
+  if (!rozhozem) {
+    zapisKolo(h, stav.kolo.length);
+    h.zavrenoKolo = h.kola.length;                   // v kolikátém kole zavřel
+    if (stav.typ === 'x01') h.zavreni = stav.zacatek; // kolik zavřel (checkout)
+  } else h.zavreni = 0;
   // souhrn legu do statistiky zápasu
   stav.hraci.forEach((o, i) => {
     hracStat(o);
     o.zapas.legy.push({ vyhral: i === stav.tah, sipek: o.sipek, body: stav.start - o.zbyva,
-                        mk: o.zasahu, dPokusu: o.dPokusu, zavreni: i === stav.tah ? (o.zavreni || 0) : 0 });
+                        mk: o.zasahu, dPokusu: o.dPokusu, zavreni: i === stav.tah ? (o.zavreni || 0) : 0, rozhoz: !!rozhozem });
   });
 }
 
@@ -879,7 +934,7 @@ function hracStat(h) {               // starší uložená hra nemá statistiky 
 function zapisKolo(h, n) {
   hracStat(h);
   const k = { s: stav.kolo.map(x => x.t), n };
-  if (stav.typ === 'x01') { k.b = stav.prehoz ? 0 : stav.zacatek - h.zbyva; k.p = stav.prehoz; }
+  if (stav.typ === 'x01') { k.b = stav.prehoz ? 0 : stav.zacatek - h.zbyva; k.p = stav.prehoz; k.z = h.zbyva; }
   if (stav.typ === 'kriket') k.mk = stav.kolo.reduce((a, x) => a + (KRIKET_CISLA.includes(x.n) ? x.m : 0), 0);
   h.kola.push(k);
 }
@@ -902,21 +957,15 @@ function statRadky() {
   const r = [];
   if (stav.typ === 'x01') {
     r.push(['Ø na 3 šipky', H.map(h => prumerX01(h))]);
-    r.push(['Ø prvních 9', H.map(h => { const k = kk(h).slice(0, 3); return pr(k.reduce((a, x) => a + x.b, 0), k.reduce((a, x) => a + x.n, 0)); })]);
-    r.push(['Nejvyšší kolo', H.map(h => kk(h).length ? Math.max(...kk(h).map(x => x.b)) : '–')]);
-    r.push(['100+ · 140+ · 180', H.map(h => {
-      const c = (od, doo) => kk(h).filter(x => x.b >= od && x.b <= doo).length;
-      return c(100, 139) + ' · ' + c(140, 179) + ' · ' + c(180, 180);
-    })]);
-    r.push(['Na double', H.map((h, i) => { const t = stav.konec && stav.vitez === i ? 1 : 0; return t + '/' + h.dPokusu + (h.dPokusu ? ' (' + proc(t, h.dPokusu) + ')' : ''); })]);
-    r.push(['Zavřel/a', H.map((h, i) => stav.konec && stav.vitez === i ? h.zavreni + ' v ' + h.zavrenoKolo + '. kole' : '–')]);
+    r.push(['Na double', H.map((h, i) => { const t = stav.konec && stav.vitez === i && !stav.rozhozVyhra ? 1 : 0; return t + '/' + h.dPokusu + (h.dPokusu ? ' (' + proc(t, h.dPokusu) + ')' : ''); })]);
+    r.push(['Zavřel/a', H.map((h, i) => !(stav.konec && stav.vitez === i) ? '–' : stav.rozhozVyhra ? 'rozhozem' : h.zavreni + ' v ' + h.zavrenoKolo + '. kole')]);
     if (H.some(h => h.zapas.legy.length)) {
       r.push([null, 'Celý zápas']);
       r.push(['Ø na 3 šipky', H.map(h => { const l = vse(h); return pr(l.reduce((a, x) => a + x.body, 0), l.reduce((a, x) => a + x.sipek, 0)); })]);
       r.push(['Legy', H.map(h => h.legy)]);
-      r.push(['Nejlepší leg', H.map(h => { const v = h.zapas.legy.filter(x => x.vyhral); return v.length ? Math.min(...v.map(x => x.sipek)) + ' šipek' : '–'; })]);
-      r.push(['Nejvyšší zavření', H.map(h => { const v = h.zapas.legy.filter(x => x.vyhral); return v.length ? Math.max(...v.map(x => x.zavreni)) : '–'; })]);
-      r.push(['Úspěšnost na double', H.map(h => { const l = vse(h); return proc(h.zapas.legy.filter(x => x.vyhral).length, l.reduce((a, x) => a + x.dPokusu, 0)); })]);
+      r.push(['Nejlepší leg', H.map(h => { const v = h.zapas.legy.filter(x => x.vyhral && !x.rozhoz); return v.length ? Math.min(...v.map(x => x.sipek)) + ' šipek' : '–'; })]);
+      r.push(['Nejvyšší zavření', H.map(h => { const v = h.zapas.legy.filter(x => x.vyhral && !x.rozhoz); return v.length ? Math.max(...v.map(x => x.zavreni)) : '–'; })]);
+      r.push(['Úspěšnost na double', H.map(h => { const l = vse(h); return proc(h.zapas.legy.filter(x => x.vyhral && !x.rozhoz).length, l.reduce((a, x) => a + x.dPokusu, 0)); })]);
     }
   } else if (stav.typ === 'kriket') {
     r.push(['MPR (marky/kolo)', H.map(h => mpr(h))]);
@@ -950,20 +999,33 @@ function statTabulkaHTML() {
   return html + '</table>';
 }
 
-// Jednotlivá kola hráče, který je na řadě (nebo vítěze po konci legu)
+// Zápis kol pod sebe: řádek = kolo, sloupec = hráč (nejvýš posledních 15 kol)
 function kolaHTML() {
-  const h = hracStat(stav.hraci[stav.konec && stav.vitez >= 0 ? stav.vitez : stav.tah]);
-  if (!h.kola.length) return '';
-  let html = 'Kola – ' + esc(h.jmeno) + ':<br>';
-  const max = stav.typ === 'x01' ? Math.max(...h.kola.map(x => x.b)) : stav.typ === 'kriket' ? Math.max(...h.kola.map(x => x.mk)) : -1;
-  h.kola.forEach((k, i) => {
-    let txt, cls = 'ch';
-    if (stav.typ === 'x01') { txt = k.p ? '💥 0' : String(k.b); if (k.p) cls += ' bust'; else if (k.b === max && k.b > 0) cls += ' top'; }
-    else if (stav.typ === 'kriket') { txt = k.mk + ' m'; if (k.mk === max && k.mk > 0) cls += ' top'; }
-    else txt = k.s.join(' ') || '–';
-    html += '<span class="' + cls + '" title="' + esc(k.s.join(' · ')) + '"><i>' + (i + 1) + '.</i>' + esc(txt) + '</span>';
-  });
-  return html;
+  const H = stav.hraci.map(hracStat);
+  const pocet = Math.max(0, ...H.map(h => h.kola.length));
+  if (!pocet) return '';
+  const x01 = stav.typ === 'x01', kr = stav.typ === 'kriket';
+  const od = Math.max(0, pocet - 15);
+  let html = '<table class="kolaTab"><tr><th class="c">Kolo</th>';
+  H.forEach((h, i) => { html += '<th class="' + (i === stav.tah && !stav.konec ? 'tah' : '') + '" title="' + esc(h.jmeno) + '">' + esc(h.jmeno) + '</th>'; });
+  html += '</tr>';
+  for (let r = od; r < pocet; r++) {
+    html += '<tr' + (r === pocet - 1 ? ' class="ted"' : '') + '><td class="c">' + (r + 1) + '.</td>';
+    H.forEach((h, i) => {
+      const k = h.kola[r];
+      if (!k) { html += '<td></td>'; return; }
+      let txt, cls = '', zb = '';
+      if (x01) {
+        txt = k.p ? '💥 0' : String(k.b);
+        cls = k.p ? 'bust' : (k.b >= 100 ? 'top' : '');
+        if (k.z !== undefined) zb = '<small>' + k.z + '</small>';     // kolik zbylo
+      } else if (kr) { txt = k.mk + ' m'; cls = k.mk >= 5 ? 'top' : ''; }
+      else txt = k.s.join(' ') || '–';
+      html += '<td class="' + cls + '" title="' + esc(k.s.join(' · ')) + '">' + esc(txt) + zb + '</td>';
+    });
+    html += '</tr>';
+  }
+  return html + '</table>';
 }
 
 function kresliStatistiku() {
@@ -1093,7 +1155,10 @@ function kresliZnacky() {
   const g = el('znacky');
   if (!g) return;
   g.innerHTML = '';
-  (stav ? stav.kolo : []).forEach((s, i) => {
+  // při rozhozu jsou vidět šipky všech, kdo už hodili (číslo = pořadí hráče)
+  const sipky = stav && stav.rozhoz ? stav.rozhoz.hody.slice(stav.rozhoz.hody.length - (stav.rozhoz.i + (stav.koloHotovo ? 1 : 0)))
+                                    : (stav ? stav.kolo : []);
+  sipky.forEach((s, i) => {
     if (s.x === undefined) return;
     svg('circle', { cx:s.x, cy:s.y, r:7, fill:'#00e5ff', stroke:'#000', 'stroke-width':2 }, g);
     const tx = svg('text', { x:s.x, y:s.y + 0.5, 'font-size':9, 'font-weight':800, fill:'#000',
@@ -1454,6 +1519,10 @@ function kresliCil() {
   const g = el('cil');
   if (!g) return;
   g.innerHTML = '';
+  if (stav && stav.rozhoz && !stav.konec) {
+    svg('circle', { cx:0, cy:0, r:R.outerBull, fill:'rgba(255,214,10,.42)', stroke:'#ffd60a', 'stroke-width':2.5 }, g);
+    return;
+  }
   if (!stav || stav.typ !== 'trenink' || stav.konec) return;
   const c = trCilTerce(stav.hraci[stav.tah]);
   if (!c) return;
@@ -1625,7 +1694,9 @@ function prekresli() {
     const t = stav.hraci[stav.tah].t, max = { t20:10, shanghai:7 }[stav.trenink];
     el('cisloKola').textContent = TRENINKY[stav.trenink].kratce + ' · Kolo ' + (max ? Math.min(t.kola + 1, max) : t.kola + 1) + sipkyText;
   } else {
-    el('cisloKola').textContent = 'Leg ' + (stav.cisloLegu || 1) + ' · Kolo ' + (stav.cisloKola || 1) + sipkyText;
+    const lim = limitKol();
+    el('cisloKola').textContent = stav.rozhoz && !stav.konec ? 'Leg ' + (stav.cisloLegu || 1) + ' · 🎯 Rozhoz na střed'
+      : 'Leg ' + (stav.cisloLegu || 1) + ' · Kolo ' + Math.min(stav.cisloKola || 1, lim || 9999) + (lim ? '/' + lim : '') + sipkyText;
   }
 
   // levý sloupec
@@ -1645,7 +1716,7 @@ function prekresli() {
   // rada a hláška
   const h = stav.hraci[stav.tah];
   let rada = '';
-  if (x01 && !stav.konec && !stav.koloHotovo) {
+  if (x01 && !stav.konec && !stav.koloHotovo && !stav.rozhoz) {
     const n = navrhZavreni(h.zbyva, 3 - stav.kolo.length);
     if (n) rada = '🎯 Zavření: ' + n;
   }
@@ -1656,6 +1727,12 @@ function prekresli() {
   el('rada').textContent = rada;
 
   if (stav.konec) hlaska('');
+  else if (stav.rozhoz) {
+    const r = stav.rozhoz, hody = r.hody.slice(r.hody.length - (r.i + (stav.koloHotovo ? 1 : 0)));
+    const vys = hody.map(x => stav.hraci[x.i].jmeno + ' ' + (x.d >= 9999 ? 'mimo' : Math.round(x.d) + ' mm')).join(' · ');
+    hlaska('🎯 Po 15 kolech nikdo nezavřel – rozhoz na střed. ' + (r.zprava && r.i === 0 && !stav.koloHotovo ? r.zprava + '. ' : '') +
+           (stav.koloHotovo ? '' : 'Hází ' + h.jmeno + ' – 1 šipka co nejblíž středu. ') + (vys ? 'Zatím: ' + vys : ''));
+  }
   else if (tren && stav.koloHotovo) hlaska((stav.trInfo || '✔ Kolo hotovo') + (autoDalsi ? ' – další…' : ' Pokračuj tlačítkem Další hráč (mezerník), nebo opravuj ↶ Zpět.'));
   else if (tren) hlaska((stav.trInfo ? stav.trInfo + ' · ' : '') + 'Hází ' + h.jmeno + ' – ' + trUkol(h) + '.');
   else if (stav.prehoz) hlaska('💥 Přehoz! ' + h.jmeno + ' zůstává na ' + stav.zacatek + '.' + (autoDalsi ? ' Další hráč…' : ''));
@@ -1758,7 +1835,7 @@ function ukazVysledek() {
     el('vysledek').classList.add('vidit');
     return;
   }
-  el('vitezJm').textContent = v.jmeno + ' vyhrál/a leg!';
+  el('vitezJm').textContent = v.jmeno + (stav.rozhozVyhra ? ' vyhrál/a leg rozhozem na střed!' : ' vyhrál/a leg!');
   const x01 = stav.typ === 'x01';
   let html = '<tr><td></td><td>' + (x01 ? 'Ø na 3 šipky' : 'Body') + '</td><td>Šipek</td><td>Legy</td></tr>';
   stav.hraci.forEach(h => {
