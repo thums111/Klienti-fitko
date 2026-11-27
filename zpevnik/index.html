@@ -270,7 +270,7 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 
 <!-- ===== Seznam ===== -->
 <section id="vList">
-  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.6</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
+  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.7</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
   <div class="tools">
     <button id="jamBtn">🎸 Jamování</button>
     <button id="trainBtn">🎯 Trenažér</button>
@@ -1319,6 +1319,7 @@ function dopSrc(){
 function dopNotes(k){const u=usedNow[ytOcc[k]];return voicing(u.c,cur.transpose||0,cur.capo||0);}
 function dopStep(t){   // volá se každou šestnáctinu z rytmu
   if(dop.pos===dop.next){
+    if(dop.k>=ytOcc.length&&st.dopLoop)dop.k=0;   // dokola: plynule zase od prvního akordu
     if(dop.k>=ytOcc.length){later(t,()=>{rhyStop();silence();});dop.pos++;return;}
     const k=dop.k,ui=ytOcc[k],notes=dopNotes(k);
     curIdx=ui;
@@ -1384,6 +1385,7 @@ function dopUI(){
   const bars=cur.bars||1,opt=(v,t)=>`<option value="${v}"${v===bars?' selected':''}>${t}</option>`;
   P.innerHTML=`<p class="ymsg">Appka hraje akordy písně sama podle tempa a stylu dole (Rytmus), ty doprovázíš na kytaru. Jen varhany bez bicích: zvol styl Metronom nebo v ⋯ ztlum bicí. Klepnutím na akord v textu skočíš jinam.</p>
     <div class="yrow"><button class="primary" id="dopGo" type="button">${dop.on?'■ Zastavit':'▶ Hrát od začátku'}</button>
+      <button id="dopLoop" type="button" aria-pressed="${!!st.dopLoop}">${st.dopLoop?'✓ ':''}🔁 Dokola</button>
       <span class="sp"></span><span class="ymsg">Akord trvá</span>
       <select id="dopBars" aria-label="Výchozí délka akordu" style="min-height:34px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit;color:inherit">
         ${opt(.5,'½ taktu')}${opt(1,'1 takt')}${opt(2,'2 takty')}${opt(4,'4 takty')}</select></div>
@@ -1392,6 +1394,7 @@ function dopUI(){
     <p class="ymsg">${dopSrc()}</p>`;
   $('dopGo').onclick=()=>dop.on?(rhyStop(),silence()):dopStart(0);
   $('dopBars').onchange=e=>{cur.bars=+e.target.value;save();dopUI();};
+  $('dopLoop').onclick=()=>{st.dopLoop=!st.dopLoop;save();dopUI();};
   $('dtGo').onclick=()=>dtStart();
   if($('dtClr'))$('dtClr').onclick=()=>{cur.len=[];save();dopUI();};
 }
