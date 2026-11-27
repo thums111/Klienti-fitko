@@ -270,7 +270,7 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 
 <!-- ===== Seznam ===== -->
 <section id="vList">
-  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.7</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
+  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.8</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
   <div class="tools">
     <button id="jamBtn">🎸 Jamování</button>
     <button id="trainBtn">🎯 Trenažér</button>
@@ -1331,7 +1331,7 @@ function dopStep(t){   // volá se každou šestnáctinu z rytmu
   dop.pos++;
 }
 function dopStart(k0){
-  if(!ytOcc.length)return;dtStop(false);if(rhy.on)rhyStop();silence();
+  if(!ytOcc.length)return;dtStop(false);if(rhy.on)rhyStop();silence();if(playing)stop();
   dop={on:true,k:k0||0,pos:0,next:0};rhyStart();dopUI();
 }
 function dopJump(k){dop.k=k;dop.next=dop.pos;}
@@ -1339,7 +1339,8 @@ function dopOff(){dop.on=false;document.querySelectorAll('#sheet .cp.now').forEa
 function dopPaint(k){
   document.querySelectorAll('#sheet .cp.now').forEach(x=>x.classList.remove('now'));
   const el=document.querySelector(`#sheet .cp[data-k="${k}"]`);
-  if(el){el.classList.add('now');
+  if(el&&k===0){el.classList.add('now');window.scrollTo({top:0,behavior:'smooth'});}   // nové kolo: zpátky na začátek textu
+  else if(el){el.classList.add('now');
     const top=document.querySelector('#vSong .top').getBoundingClientRect().bottom,bar=document.querySelector('#vSong .bar').getBoundingClientRect(),r=el.getBoundingClientRect();
     const bottom=bar.left>innerWidth/2?innerHeight:bar.top;
     if(r.top<top+8||r.bottom>bottom-40)window.scrollBy({top:r.top-top-40,behavior:'smooth'});}
