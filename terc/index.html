@@ -166,7 +166,8 @@
   .kolaTab { width:100%; border-collapse:collapse; font-size:.78em; font-variant-numeric:tabular-nums; }
   .kolaTab th { color:var(--muted); font-weight:normal; text-align:right; padding:.15em .35em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:6em; }
   .kolaTab th.tah { color:var(--acc); font-weight:bold; }
-  .kolaTab td { text-align:right; padding:.15em .35em; border-top:1px solid #2c3640; white-space:nowrap; }
+  .kolaTab tr.predel td { border-top:2px solid #3a4652; padding:0; height:.25em; }
+  .kolaTab td { text-align:right; padding:.08em .35em; border-top:1px solid #2c3640; white-space:nowrap; }
   .kolaTab td.c, .kolaTab th.c { text-align:left; color:var(--muted); }
   .kolaTab tr.st td { color:var(--text); }
   .kolaTab tr.st td.c { color:var(--muted); white-space:normal; }
@@ -230,7 +231,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.26</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.27</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
@@ -368,7 +369,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.26';
+const VERZE = '1.27';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -957,17 +958,12 @@ function statRadky() {
   };
   const r = [];
   if (stav.typ === 'x01') {
-    r.push(['Ø na 3 šipky', H.map(h => prumerX01(h))]);
-    r.push(['Na double', H.map((h, i) => { const t = stav.konec && stav.vitez === i && !stav.rozhozVyhra ? 1 : 0; return t + '/' + h.dPokusu + (h.dPokusu ? ' (' + proc(t, h.dPokusu) + ')' : ''); })]);
-    r.push(['Zavřel/a', H.map((h, i) => !(stav.konec && stav.vitez === i) ? '–' : stav.rozhozVyhra ? 'rozhozem' : h.zavreni + ' (' + h.zavrenoKolo + '. kolo)')]);
-    if (H.some(h => h.zapas.legy.length)) {
-      r.push([null, 'Celý zápas']);
-      r.push(['Ø na 3 šipky', H.map(h => { const l = vse(h); return pr(l.reduce((a, x) => a + x.body, 0), l.reduce((a, x) => a + x.sipek, 0)); })]);
-      r.push(['Legy', H.map(h => h.legy)]);
-      r.push(['Nejlepší leg', H.map(h => { const v = h.zapas.legy.filter(x => x.vyhral && !x.rozhoz); return v.length ? Math.min(...v.map(x => x.sipek)) + ' šipek' : '–'; })]);
-      r.push(['Nejv. zavření', H.map(h => { const v = h.zapas.legy.filter(x => x.vyhral && !x.rozhoz); return v.length ? Math.max(...v.map(x => x.zavreni)) : '–'; })]);
-      r.push(['Double %', H.map(h => { const l = vse(h); return proc(h.zapas.legy.filter(x => x.vyhral && !x.rozhoz).length, l.reduce((a, x) => a + x.dPokusu, 0)); })]);
-    }
+    // osekaná statistika – ať se vše vejde na obrazovku
+    r.push(['Ø', H.map(h => prumerX01(h))]);
+    if (H.some(h => h.zapas.legy.length))
+      r.push(['Ø zápas', H.map(h => { const l = vse(h); return pr(l.reduce((a, x) => a + x.body, 0), l.reduce((a, x) => a + x.sipek, 0)); })]);
+    r.push(['Double', H.map((h, i) => (stav.konec && stav.vitez === i && !stav.rozhozVyhra ? 1 : 0) + '/' + h.dPokusu)]);
+    r.push(['Legy', H.map(h => h.legy)]);
   } else if (stav.typ === 'kriket') {
     r.push(['MPR', H.map(h => mpr(h))]);
     r.push(['Nejvíc marků', H.map(h => kk(h).length ? Math.max(...kk(h).map(x => x.mk)) : '–')]);
@@ -982,8 +978,7 @@ function statRadky() {
       r.push(['Legy', H.map(h => h.legy)]);
     }
   } else {
-    r.push(['Šipek', H.map(h => h.sipek)]);
-    r.push(['Kol', H.map(h => (h.kola || []).length)]);
+
   }
   return r;
 }
@@ -1005,7 +1000,7 @@ function kolaHTML() {
   const pocet = Math.max(0, ...H.map(h => h.kola.length));
   const x01 = stav.typ === 'x01', kr = stav.typ === 'kriket';
   const od = Math.max(0, pocet - 15);
-  let html = '<table class="kolaTab"><tr><th class="c">📊</th>';
+  let html = '<table class="kolaTab"><tr><th class="c"></th>';
   H.forEach((h, i) => { html += '<th class="' + (i === stav.tah && !stav.konec ? 'tah' : '') + '" title="' + esc(h.jmeno) + '">' + esc(h.jmeno) + '</th>'; });
   html += '</tr>';
   // nahoře statistika
@@ -1013,7 +1008,7 @@ function kolaHTML() {
     if (popis === null) { html += '<tr class="oddil"><td colspan="' + (H.length + 1) + '">' + esc(hodnoty) + '</td></tr>'; continue; }
     html += '<tr class="st"><td class="c">' + esc(popis) + '</td>' + hodnoty.map(v => '<td>' + esc(v) + '</td>').join('') + '</tr>';
   }
-  if (pocet) html += '<tr class="oddil"><td colspan="' + (H.length + 1) + '">Kola</td></tr>';
+  if (pocet) html += '<tr class="predel"><td colspan="' + (H.length + 1) + '"></td></tr>';
   for (let r = od; r < pocet; r++) {
     html += '<tr' + (r === pocet - 1 ? ' class="ted"' : '') + '><td class="c">' + (r + 1) + '.</td>';
     H.forEach((h, i) => {
@@ -1769,7 +1764,8 @@ function kresliTabuliX01() {
     d.appendChild(x);
     tab.appendChild(d);
   });
-  // Stav legů pod hráči (jako řádek Legy v kriketu)
+  // Stav legů pod hráči – u X01 jsou legy v tabulce statistiky, panel netřeba
+  if (stav.typ === 'x01') return;
   const lp = document.createElement('div');
   lp.className = 'legyPanel';
   lp.innerHTML = '<div class="nad">Legy</div>';
