@@ -1,6 +1,6 @@
 // Service worker zpěvníku – appka jde otevřít i bez internetu.
 // Nejdřív zkusí internet (abys měl vždy nejnovější verzi), bez internetu vezme uloženou kopii.
-const CACHE = 'zpevnik-v5.5';
+const CACHE = 'zpevnik-v5.6';
 const FILES = ['./', './index.html', './manifest.webmanifest', './ikona-192.png', './ikona-512.png', './favicon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => {

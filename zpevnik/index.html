@@ -270,7 +270,7 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
 
 <!-- ===== Seznam ===== -->
 <section id="vList">
-  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.5</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
+  <div class="top"><header><h1>Můj zpěvník <small class="ver">v5.6</small></h1><button class="primary" id="newBtn">+ Nová</button></header></div>
   <div class="tools">
     <button id="jamBtn">🎸 Jamování</button>
     <button id="trainBtn">🎯 Trenažér</button>
@@ -339,9 +339,11 @@ header h1{flex:1;min-width:0;margin:0;font-family:var(--display);font-weight:800
       <button id="fromBtn" type="button" aria-expanded="false">🎯 Od akordu</button>
       <button id="nbBtn" type="button"></button>
       <button id="ytBtn" type="button" aria-expanded="false">📺 Video</button>
+      <button id="dopBtn" type="button" aria-expanded="false">🎼 Doprovod</button>
     </div>
     <div class="from" id="fromPanel" hidden></div>
     <div class="yt" id="ytPanel" hidden></div>
+    <div class="yt" id="dopPanel" hidden></div>
     <div class="strip" id="strip"></div>
     <div class="capnote" id="capNote" hidden></div>
   </div>
@@ -743,6 +745,7 @@ function playStep(t){
     if(rhy.count%4===0){click(t,rhy.count===0);beatUI(t,rhy.count/4,true);}
     rhy.count++;return;
   }
+  if(dop.on)dopStep(t);
   const s=rhy.step%S.len,acc=s===0;
   if(acc&&jamRec&&cur===st.jam&&curIdx>=0&&usedNow[curIdx])jamAdd(usedNow[curIdx].n);   // jamování: zapsat akord taktu
   if(S.k.includes(s))kick(t);
@@ -781,6 +784,7 @@ async function rhyStart(){
 }
 function rhyStop(){
   if(!rhy.on)return;rhy.on=false;clearInterval(rhy.timer);rhy.timer=null;
+  if(dop.on)dopOff();
   if(st.sound==='guitar')release(.3);
   try{wl&&wl.release();}catch(e){}wl=null;rhyUI();
 }
@@ -800,7 +804,7 @@ function rhyUI(){
 
 /* ---------- seznam ---------- */
 let cur=null,ctx='all';
-function show(v){['vList','vSong','vEdit','vJam','vTrain'].forEach(id=>$(id).hidden=id!==v);window.scrollTo(0,0);if(v!=='vSong')stop();if(v!=='vTrain')trainStop();rhyStop();silence();$('menu').hidden=true;$('fromPanel').hidden=true;if(v!=='vSong'||!cur||cur.id!==yt.song)ytClose();}
+function show(v){['vList','vSong','vEdit','vJam','vTrain'].forEach(id=>$(id).hidden=id!==v);window.scrollTo(0,0);if(v!=='vSong')stop();if(v!=='vTrain')trainStop();rhyStop();silence();$('menu').hidden=true;$('fromPanel').hidden=true;dtStop(false);$('dopPanel').hidden=true;$('dopBtn').setAttribute('aria-expanded','false');if(v!=='vSong'||!cur||cur.id!==yt.song)ytClose();}
 function firstChords(t){const set=[];for(const l of parseSong(t))if(l.k==='ch')for(const it of l.items)if(it.c){const n=nameOf(it.c,0);if(!set.includes(n))set.push(n);}return set.slice(0,8).join(' ');}
 function renderList(){
   st.playlist=st.playlist.filter(id=>byId(id));
@@ -899,7 +903,7 @@ $('impFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new Fil
       for(const s of d.songs){if(!s||typeof s.text!=='string')continue;
         if(st.songs.some(x=>x.title===s.title&&x.text===s.text))continue;
         const id=byId(s.id)?'p'+Date.now()+'_'+n:s.id||('p'+Date.now()+'_'+n);
-        st.songs.push({id,title:s.title||'Bez názvu',text:s.text,transpose:s.transpose||0,capo:s.capo||0,speed:s.speed||4,fav:!!s.fav,style:s.style,bpm:s.bpm,yt:s.yt,sync:s.sync});n++;}
+        st.songs.push({id,title:s.title||'Bez názvu',text:s.text,transpose:s.transpose||0,capo:s.capo||0,speed:s.speed||4,fav:!!s.fav,style:s.style,bpm:s.bpm,yt:s.yt,sync:s.sync,len:s.len,bars:s.bars});n++;}
       save();renderList();$('bStatus').textContent=n?`Načteno ${n} ${n===1?'nová píseň':n<5?'nové písně':'nových písní'}.`:'Všechny písně ze zálohy už ve zpěvníku jsou.';
     }catch(err){$('bStatus').textContent='Tohle není soubor se zálohou zpěvníku.';}
     e.target.value='';};
@@ -1298,6 +1302,105 @@ $('ytBtn').onclick=()=>{
   renderSong();ytRender();
 };
 
+/* ---------- doprovod: appka hraje akordy písně sama podle tempa ---------- */
+// Délka každého akordu (v dobách): naťukaná > z načasování videa > výchozí (takt na akord).
+let dop={on:false,k:0,pos:0,next:0},dt=null;
+const later=(t,fn)=>setTimeout(fn,Math.max(0,(t-actx.currentTime)*1000));
+function dopLen(k){
+  if(cur.len&&cur.len[k]>0)return cur.len[k];
+  const sy=cur.sync||[];if(sy[k]!=null&&sy[k+1]!=null)return Math.max(1,Math.round((sy[k+1]-sy[k])/(60/bpm())));
+  return Math.max(1,Math.round((cur.bars||1)*sty().beats));
+}
+function dopSrc(){
+  if(cur.len&&cur.len.length)return 'Délky akordů: naťukané (uložené u písně).';
+  if((cur.sync||[]).filter(x=>x!=null).length>1)return 'Délky akordů: podle načasování videa.';
+  return 'Délky akordů: každý akord stejně dlouho. Přesnější to bude, když délky jednou naťukáš.';
+}
+function dopNotes(k){const u=usedNow[ytOcc[k]];return voicing(u.c,cur.transpose||0,cur.capo||0);}
+function dopStep(t){   // volá se každou šestnáctinu z rytmu
+  if(dop.pos===dop.next){
+    if(dop.k>=ytOcc.length){later(t,()=>{rhyStop();silence();});dop.pos++;return;}
+    const k=dop.k,ui=ytOcc[k],notes=dopNotes(k);
+    curIdx=ui;
+    if(st.sound==='organ')later(t,()=>{if(dop.on)organ(notes);});
+    else if(!st.auto)strum(notes,'down',t,1);
+    later(t,()=>{if(dop.on){markPads(ui);dopPaint(k);}});
+    dop.next+=dopLen(k)*4;dop.k++;
+  }
+  dop.pos++;
+}
+function dopStart(k0){
+  if(!ytOcc.length)return;dtStop(false);if(rhy.on)rhyStop();silence();
+  dop={on:true,k:k0||0,pos:0,next:0};rhyStart();dopUI();
+}
+function dopJump(k){dop.k=k;dop.next=dop.pos;}
+function dopOff(){dop.on=false;document.querySelectorAll('#sheet .cp.now').forEach(x=>x.classList.remove('now'));dopUI();}
+function dopPaint(k){
+  document.querySelectorAll('#sheet .cp.now').forEach(x=>x.classList.remove('now'));
+  const el=document.querySelector(`#sheet .cp[data-k="${k}"]`);
+  if(el){el.classList.add('now');
+    const top=document.querySelector('#vSong .top').getBoundingClientRect().bottom,bar=document.querySelector('#vSong .bar').getBoundingClientRect(),r=el.getBoundingClientRect();
+    const bottom=bar.left>innerWidth/2?innerHeight:bar.top;
+    if(r.top<top+8||r.bottom>bottom-40)window.scrollBy({top:r.top-top-40,behavior:'smooth'});}
+  const N=$('dopNow');if(!N)return;
+  const u=usedNow[ytOcc[k]],nu=ytOcc[k+1]!=null?usedNow[ytOcc[k+1]]:null;
+  N.innerHTML=`<span>Teď <b>${esc(u.n)}</b></span>${nu?`<span class="nx">· další <b>${esc(nu.n)}</b></span>`:'<span class="nx">· poslední akord</span>'}<span class="nx">· ${dopLen(k)} ${dopLen(k)===1?'doba':dopLen(k)<5?'doby':'dob'}</span>`;
+}
+// naťukání délek: běží metronom, na každou změnu akordu ťukneš
+function dtPlay(k){const ui=ytOcc[k],notes=dopNotes(k);if(st.sound==='organ')organ(notes);else strum(notes,'down',0,1);curIdx=ui;markPads(ui);dopPaint(k);}
+function dtStart(){
+  if(!ytOcc.length||!audio())return;drums();if(rhy.on)rhyStop();silence();
+  const B=sty().beats,beat=60/bpm(),t0=actx.currentTime+.15+B*beat;
+  dt={k:0,b:[0],beat,t0,beats:B,next:actx.currentTime+.15,i:0,timer:null,started:false};
+  dt.timer=setInterval(()=>{if(!dt)return;while(dt.next<actx.currentTime+.12){click(dt.next,dt.i%dt.beats===0);dt.next+=dt.beat;dt.i++;}},25);
+  later(t0,()=>{if(dt){dt.started=true;dtPlay(0);dopUI();}});
+  dopUI();
+}
+function dtTap(){
+  if(!dt||!dt.started)return;
+  const b=Math.max(dt.b[dt.k]+1,Math.round((actx.currentTime-dt.t0)/dt.beat));
+  dt.k++;dt.b[dt.k]=b;
+  if(dt.k>=ytOcc.length){dtStop(true);return;}
+  dtPlay(dt.k);dopUI();
+}
+function dtStop(saveIt){
+  if(!dt)return;clearInterval(dt.timer);
+  if(saveIt){const len=[];for(let k=0;k<ytOcc.length;k++)len[k]=dt.b[k+1]!=null?dt.b[k+1]-dt.b[k]:Math.max(1,Math.round((cur.bars||1)*dt.beats));cur.len=len;save();}
+  dt=null;silence();document.querySelectorAll('#sheet .cp.now').forEach(x=>x.classList.remove('now'));dopUI();
+}
+function dopUI(){
+  const P=$('dopPanel');if(P.hidden)return;
+  if(dt){
+    const n=ytOcc.length,k=dt.k,nx=k+1<n?usedNow[ytOcc[k+1]].n:null;
+    P.innerHTML=`<p class="ymsg">${dt.started?'Hraj a zpívej. Vždy když má přijít další akord, ťukni na velké tlačítko, ideálně do rytmu metronomu.':'Za chvíli to začne, poslouchej nápočet…'}</p>
+      <button class="primary ytap" id="dtTap" type="button">${!dt.started?'1, 2, 3, 4…':nx?`👆 Další akord: ${esc(nx)} (${k+2}/${n})`:'👆 Konec písně'}</button>
+      <div class="yrow"><button id="dtSave" type="button">✓ Uložit, co mám</button><button id="dtCancel" type="button">Zrušit</button></div>
+      <div class="ynow" id="dopNow"></div>`;
+    $('dtTap').addEventListener('pointerdown',e=>{e.preventDefault();dtTap();});
+    $('dtSave').onclick=()=>dtStop(true);$('dtCancel').onclick=()=>dtStop(false);
+    if(dt.started)dopPaint(Math.min(dt.k,ytOcc.length-1));
+    return;
+  }
+  const bars=cur.bars||1,opt=(v,t)=>`<option value="${v}"${v===bars?' selected':''}>${t}</option>`;
+  P.innerHTML=`<p class="ymsg">Appka hraje akordy písně sama podle tempa a stylu dole (Rytmus), ty doprovázíš na kytaru. Jen varhany bez bicích: zvol styl Metronom nebo v ⋯ ztlum bicí. Klepnutím na akord v textu skočíš jinam.</p>
+    <div class="yrow"><button class="primary" id="dopGo" type="button">${dop.on?'■ Zastavit':'▶ Hrát od začátku'}</button>
+      <span class="sp"></span><span class="ymsg">Akord trvá</span>
+      <select id="dopBars" aria-label="Výchozí délka akordu" style="min-height:34px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit;color:inherit">
+        ${opt(.5,'½ taktu')}${opt(1,'1 takt')}${opt(2,'2 takty')}${opt(4,'4 takty')}</select></div>
+    <div class="ynow" id="dopNow"></div>
+    <div class="yrow"><button id="dtGo" type="button">👆 Naťukat délky akordů</button>${cur.len&&cur.len.length?'<button id="dtClr" type="button">Smazat naťukané</button>':''}</div>
+    <p class="ymsg">${dopSrc()}</p>`;
+  $('dopGo').onclick=()=>dop.on?(rhyStop(),silence()):dopStart(0);
+  $('dopBars').onchange=e=>{cur.bars=+e.target.value;save();dopUI();};
+  $('dtGo').onclick=()=>dtStart();
+  if($('dtClr'))$('dtClr').onclick=()=>{cur.len=[];save();dopUI();};
+}
+$('dopBtn').onclick=()=>{
+  const P=$('dopPanel');
+  if(!P.hidden){P.hidden=true;$('dopBtn').setAttribute('aria-expanded','false');return;}
+  P.hidden=false;$('dopBtn').setAttribute('aria-expanded','true');$('fromPanel').hidden=true;dopUI();
+};
+
 /* ---------- události ---------- */
 $('songs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const pl=st.playlist;
   if(b.dataset.id)return openSong(b.dataset.id,st.tab==='pl'?'pl':'all');
@@ -1339,6 +1442,7 @@ $('nextBtn').onclick=()=>step(1);
 $('play').onclick=()=>playing?stop():start();
 $('sheet').addEventListener('click',e=>{
   const sp=e.target.closest('.cp');
+  if(sp&&dop.on){dopJump(+sp.dataset.k);return;}
   if(sp&&ytChordTap(+sp.dataset.k))return;
   if(sp){playUsed(+sp.dataset.u);sp.classList.add('on');setTimeout(()=>sp.classList.remove('on'),600);return;}  // akord v textu zahraje
   playing?stop():start();});
