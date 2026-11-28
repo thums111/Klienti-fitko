@@ -231,7 +231,7 @@
 </head>
 <body>
 <header>
-  <h1>🎯 Šipky – počítadlo <span class="ver">v1.28</span></h1>
+  <h1>🎯 Šipky – počítadlo <span class="ver">v1.29</span></h1>
   <div id="cisloKola"></div>
   <button id="bInstal" class="hlavni" style="display:none" title="Nainstalovat jako aplikaci">📲 Nainstalovat</button>
   <button id="bRestart" title="Začít rozehranou hru znovu od začátku">⟲ Restart</button>
@@ -369,7 +369,7 @@
 // =====================================================================
 //  Šipky – počítadlo   (X01 double out, Kriket, libovolný počet hráčů)
 // =====================================================================
-const VERZE = '1.28';
+const VERZE = '1.29';
 const KLIC_STAV = 'terc_stav';
 const KLIC_NAST = 'terc_nastaveni';
 
@@ -1022,6 +1022,17 @@ function kolaHTML() {
         cls = k.p ? 'bust' : (k.b >= 100 ? 'top' : '');
         if (k.z !== undefined) zb = '<small>' + k.z + '</small>';     // kolik zbylo
       } else if (kr) { txt = k.mk + ' m'; cls = k.mk >= 5 ? 'top' : ''; }
+      else if (stav.trenink === 'cil' && h.t) {
+        // Trénink cíle: zapisuje se jen zásah cíle, cokoli jiného = 0
+        const cil = cilNazev(h.t.cn, h.t.cm);
+        const zas = t => h.t.cn === 25 ? (t === 'Bull' || t === '25') : t === cil;
+        const z = k.s.map(t => zas(t) ? (h.t.cn === 25 ? t : cil) : '0');
+        while (z.length < 3) z.push('0');                     // nehozené šipky = mimo
+        const pocet = k.s.reduce((a, t) => a + (!zas(t) ? 0 : t === 'Bull' ? 2 : 1), 0);
+        txt = z.join(' ');
+        zb = '<small>' + pocet + '</small>';
+        if (pocet) cls = 'top';
+      }
       else txt = k.s.join(' ') || '–';
       html += '<td class="' + cls + '" title="' + esc(k.s.join(' · ')) + '">' + esc(txt) + zb + '</td>';
     });
